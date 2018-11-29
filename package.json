@@ -1,8 +1,8 @@
 {
-  "name": "throttled-queue",
-  "version": "1.0.5",
-  "description": "Throttles arbitrary code to execute a maximum number of times per interval. Best for making throttled API requests.",
-  "main": "throttled-queue.js",
+  "name": "dynamic-throttled-queue",
+  "version": "1.0.0",
+  "description": "Forked from shaunpersad/throttled-queue. Dynamically throttles arbitrary code to execute a minimum/maximum number of times per interval. Best for making throttled API requests.",
+  "main": "dynamic-throttled-queue.js",
   "directories": {
     "test": "test"
   },
@@ -11,7 +11,7 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/shaunpersad/throttled-queue.git"
+    "url": "git+https://github.com/adrianbrowning/dynamic-throttled-queue.git"
   },
   "keywords": [
     "node",
@@ -21,16 +21,20 @@
     "throttled",
     "request"
   ],
-  "author": "Shaun Persad <shaunpersad@gmail.com>",
+  "author": "Adrian Elton-Browning <gingacodemonkey@gmail.com>",
   "license": "MIT",
   "bugs": {
-    "url": "https://github.com/shaunpersad/throttled-queue/issues"
+    "url": "https://github.com/adrianbrowning/dynamic-throttled-queue/issues"
   },
   "devDependencies": {
-    "gulp": "^3.9.1",
-    "gulp-concat": "^2.6.0",
-    "gulp-rename": "^1.2.2",
-    "gulp-uglify": "^1.5.2",
-    "mocha": "^2.4.5"
-  }
+    "@babel/core": "^7.1.6",
+    "@babel/preset-env": "^7.1.6",
+    "gulp": "^4.0.0",
+    "gulp-babel": "^8.0.0",
+    "gulp-concat": "^2.6.1",
+    "gulp-rename": "^1.4.0",
+    "gulp-uglify": "^3.0.1",
+    "mocha": "^5.2.0"
+  },
+  "dependencies": {}
 }

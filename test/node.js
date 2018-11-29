@@ -1,2 +1,2 @@
-GLOBAL.throttledQueue = require('../throttled-queue');
+global.throttledQueue = require('../dynamic-throttled-queue');
 

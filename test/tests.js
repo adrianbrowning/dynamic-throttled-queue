@@ -4,13 +4,13 @@ function calculateRPMS(num_requests, time_started) {
 
 }
 
-describe('throttled-queue', function() {
+describe('dynamic-throttled-queue', function() {
 
     it('should queue all callbacks', function(done) {
 
         var requests_per_interval = 1;
         var interval = 200;
-        var throttle = throttledQueue(requests_per_interval, interval);
+        var throttle = throttledQueue({min_rpi:requests_per_interval, interval:interval});
         var num_requests = 0;
         var request_limit = 100;
         for (var x = 0; x < request_limit; x++) {
@@ -31,7 +31,7 @@ describe('throttled-queue', function() {
 
         var requests_per_interval = 1;
         var interval = 200;
-        var throttle = throttledQueue(requests_per_interval, interval);
+        var throttle = throttledQueue({min_rpi:requests_per_interval, interval:interval});
         var last_executed = Date.now();
 
         var num_requests = 0;
@@ -61,7 +61,7 @@ describe('throttled-queue', function() {
 
         var requests_per_interval = 1;
         var interval = 500;
-        var throttle = throttledQueue(requests_per_interval, interval);
+        var throttle = throttledQueue({min_rpi:requests_per_interval, interval:interval});
         var time_started = Date.now();
         var max_rpms = requests_per_interval / interval;
 
@@ -89,7 +89,7 @@ describe('throttled-queue', function() {
 
         var requests_per_interval = 3;
         var interval = 1000;
-        var throttle = throttledQueue(requests_per_interval, interval);
+        var throttle = throttledQueue({min_rpi:requests_per_interval, interval:interval});
         var time_started = Date.now();
         var max_rpms = requests_per_interval / interval;
 
@@ -117,7 +117,7 @@ describe('throttled-queue', function() {
 
         var requests_per_interval = 3;
         var interval = 1000;
-        var throttle = throttledQueue(requests_per_interval, interval, true);
+        var throttle = throttledQueue({min_rpi:requests_per_interval, interval:interval}, true);
         var time_started = Date.now();
         var max_rpms = requests_per_interval / interval;
 

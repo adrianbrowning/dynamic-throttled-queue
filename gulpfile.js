@@ -1,18 +1,13 @@
 var gulp = require('gulp');
 
-var concat = require('gulp-concat');
 var uglify = require('gulp-uglify');
 var rename = require('gulp-rename');
+babel = require('gulp-babel');
 
-gulp.task('scripts', function() {
-    return gulp.src('throttled-queue.js')
-        .pipe(rename('throttled-queue.min.js'))
+gulp.task('default', function() {
+    return gulp.src('./dynamic-throttled-queue.js')
+        .pipe(rename('dynamic-throttled-queue.min.js'))
+        .pipe(babel({presets: ['@babel/env']}))
         .pipe(uglify())
         .pipe(gulp.dest('./'));
 });
-
-gulp.task('watch', function() {
-    gulp.watch('factory.js', ['scripts']);
-});
-
-gulp.task('default', ['scripts', 'watch']);

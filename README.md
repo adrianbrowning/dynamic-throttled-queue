@@ -9,9 +9,11 @@ For example, making network calls to popular APIs such as Twitter is subject to 
 Unlike the `throttle` functions of popular libraries like lodash and underscore, `dynamic-throttled-queue` will not prevent any executions. Instead, every execution is placed into a queue, which will be drained at the desired rate limit.
 
 ## Release Notes
-v1.0.0 - Initial Release
+v1.1.1 - Add default for option object
 
 v1.1.0 - Adding Retry ability, if returning false, function will be added back to the master queue to be retired.
+
+v1.0.0 - Initial Release
 
 ## Installation
 Can be used in a Node.js environment, or directly in the browser.

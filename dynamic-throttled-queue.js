@@ -36,7 +36,7 @@
    *
    * @returns {Function}
    */
-  const throttledQueue = function (options) {
+  const throttledQueue = function (options = {}) {
 
     const {
             min_rpi,

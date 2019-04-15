@@ -8,12 +8,30 @@ For example, making network calls to popular APIs such as Twitter is subject to 
 
 Unlike the `throttle` functions of popular libraries like lodash and underscore, `dynamic-throttled-queue` will not prevent any executions. Instead, every execution is placed into a queue, which will be drained at the desired rate limit.
 
+## Release Notes
+v1.0.0 - Initial Release
+
+v1.1.0 - Adding Retry ability, if returning false, function will be added back to the master queue to be retired.
+
 ## Installation
 Can be used in a Node.js environment, or directly in the browser.
 ### Node.js
 `npm install dynamic-throttled-queue`
 ### Browser
 `<script src="dynamic-throttled-queue.min.js"></script>`
+
+##Options
+
+| Param  | Type                | Description  |
+| ------ | ------------------- | ------------ |
+| min_rpi | <code>{number}</code> | Minimum requests per interval |
+| max_rpi | <code>[number=min_rpi]</code> | Maximum requests per interval |
+| interval | <code>{number}</code> | Number of milliseconds between each batch of requests |
+| evenly_spaced | <code>[boolean=true]</code> | If true requests will be distributed throughout the interval time |
+| errors\_per\_second | <code>[number=5]</code> | Number of errors per second before deciding to either increase or decrease the current rpi |
+| back_off | <code>[boolean=true]</code> | If true and we hit the errors_per_interval watermark, we will back off for 1 interval |
+| retry | <code>[number=0]</code> | If greater than 0, any failed callbacks, will be put back onto the queue to retry upto X times |
+
 
 ## Usage
 1) If in node.js, `require` the factory function:

@@ -140,4 +140,60 @@ describe('dynamic-throttled-queue', function() {
             done();
         });
     });
+
+    it('should add items back to the queue if return false', function(done){
+        const requests_per_interval = 5;
+        const interval = 200;
+        const retry = 2;
+        const throttle = throttledQueue({min_rpi:requests_per_interval, interval:interval,evenly_spaced:false, retry}, true);
+
+        let num_requests = 0;
+        const request_limit = 5;
+        const max_requests = request_limit * (retry + 1);
+
+        const callBacks = {};
+
+        for (let x = 0; x < request_limit; x++) {
+            throttle(function() {
+                callBacks[x] = callBacks[x] || 0;
+                callBacks[x]++;
+                num_requests++;
+
+
+                if (num_requests === max_requests ) {
+                    done();
+                }
+
+                return false;
+            });
+        }
+    });
+
+    it('should add half items back to the queue if return false mod 2', function(done){
+        const requests_per_interval = 5;
+        const interval = 200;
+        const retry = 2;
+        const throttle = throttledQueue({min_rpi:requests_per_interval, interval:interval,evenly_spaced:false, retry}, true);
+
+        let num_requests = 0;
+        const request_limit = 5;
+        const max_requests = (request_limit * retry) + 1;
+
+        const callBacks = {};
+
+        for (let x = 0; x < request_limit; x++) {
+            throttle(function() {
+                callBacks[x] = callBacks[x] || 0;
+                callBacks[x]++;
+                num_requests++;
+
+
+                if (num_requests === max_requests ) {
+                    done();
+                }
+
+                return !!(x % 2);
+            });
+        }
+    });
 });

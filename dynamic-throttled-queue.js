@@ -27,11 +27,12 @@
    * Factory function.
    *
    * @param min_rpi {number} - Minimum requests per interval
-   * @param max_rpi {number=min_rpi} - Maximum requests per interval
+   * @param max_rpi [number=min_rpi] - Maximum requests per interval
    * @param interval {number} - Number of milliseconds between each batch of requests
-   * @param evenly_spaced {boolean=true} - If true requests will be distributed throughout the interval time
-   * @param errors_per_second {number=5} - Number of errors per second before deciding to either increase or decrease the current rpi
-   * @param back_off {boolean=true} - If true and we hit the errors_per_interval watermark, we will back off for 1 interval
+   * @param evenly_spaced [boolean=true] - If true requests will be distributed throughout the interval time
+   * @param errors_per_second [number=5] - Number of errors per second before deciding to either increase or decrease the current rpi
+   * @param back_off [boolean=true] - If true and we hit the errors_per_interval watermark, we will back off for 1 interval
+   * @param retry [number=0] - If greater than 0, any failed callbacks, will be put back onto the queue to retry upto X times
    *
    * @returns {Function}
    */
@@ -43,7 +44,8 @@
             max_rpi           = min_rpi,
             evenly_spaced     = true,
             errors_per_second = 5,
-            back_off          = false
+            back_off          = false,
+            retry = 0
           } = options;
 
     debug = typeOf(options.debug) !== "undefined" ? options.debug === true : false;
@@ -77,6 +79,9 @@
     }
     if (typeOf(back_off) !== "boolean") {
       throw new Error("back_off must be a boolean");
+    }
+    if (typeOf(retry) !== "number") {
+      throw new Error("retry must be a number");
     }
 
     var dyn_interval              = interval,
@@ -121,9 +126,17 @@
       }
       const callbacks = queue.splice(0, dyn_requests_per_interval);
       for (let x = 0; x < callbacks.length; x++) {
-        let result = callbacks[ x ]();
+        let cb =  callbacks[ x ];
+        let result = typeOf(cb) === "function" ? cb() : cb.fn();
         if (result === false) {
           error_count++;
+          if (retry > 0) {
+            if (typeOf(cb) === "function") {
+              queue.push({retry, fn : cb});
+            } else if (typeOf(cb) === "object" && (--cb.retry) !== 0) {
+              queue.push(cb);
+            }
+          }
         }
       }
       bSkippedLast = false;

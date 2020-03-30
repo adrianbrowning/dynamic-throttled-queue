@@ -1,6 +1,6 @@
 {
   "name": "dynamic-throttled-queue",
-  "version": "1.1.1",
+  "version": "1.1.2",
   "description": "Forked from shaunpersad/throttled-queue. Dynamically throttles arbitrary code to execute a minimum/maximum number of times per interval. Best for making throttled API requests.",
   "main": "dynamic-throttled-queue.js",
   "directories": {

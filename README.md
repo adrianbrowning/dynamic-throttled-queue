@@ -78,7 +78,7 @@ Wherever the `throttle` instance is used, your action will be placed into the sa
 and be subject to the same rate limits.
 
 ```js
-const throttledQueue = require('throttled-queue');
+const throttledQueue = require('dynamic-throttled-queue');
 const throttle = throttledQueue({min_rpi:1, interval:60 * 1000}); // at most make 1 request every minute.
 
 for (let x = 0; x < 50; x++) {
@@ -100,7 +100,7 @@ for (let y = 0; y < 50; y++) {
 By specifying a number higher than 1 for the min_rpi, and setting `evenly_spaced: false` you can dequeue multiple actions within the given interval:
 
 ```js
-var throttledQueue = require('throttled-queue');
+var throttledQueue = require('dynamic-throttled-queue');
 var throttle = throttledQueue({min_rpi:10, interval:1000, evenly_spaced: true}); // at most make 10 requests every second.
 
 for (let x = 0; x < 100; x++) {
@@ -115,7 +115,7 @@ for (let x = 0; x < 100; x++) {
 By default your actions are evenly distributed over the interval `evenly_spaced: true`:
 
 ```js
-const throttledQueue = require('throttled-queue');
+const throttledQueue = require('dynamic-throttled-queue');
 const throttle = throttledQueue({min_rpi: 10, interval: 1000, evenly_spaced:true}); // at most make 10 requests every second, but evenly spaced.
 
 for (let x = 0; x < 100; x++) {
@@ -133,7 +133,7 @@ By suppling a `min_rpi` & `max_rpi` value to the options object, you will be abl
 The second part of this is the `errors_per_second` option. This is set by default to 5 errors per second. Every X seconds, a check is made to see how many errors we have seen (through the use of `return false`) and if we see X or more, then the current requests per interval will decrease until we hit the `min_rpi` value. If between 0 - X errors are seen then we keep with the current requests per interval as is. Finally if there are 0 errors in the last check period then we will increase the current requests per interval until we reach `max_rpi`.
 
 ```js
-const throttledQueue = require('throttled-queue');
+const throttledQueue = require('dynamic-throttled-queue');
 const throttle = throttledQueue({min_rpi: 1, max_rpi:5, interval: 1000}); // at most make 5 requests every second.
 
 for (let x = 0; x < 100; x++) {
@@ -148,7 +148,7 @@ for (let x = 0; x < 100; x++) {
 By suppling `backoff:true` in the options, every time we hit the `errors_per_second` mark, we will backoff from the next batch of calls for 1 inteveral 
 
 ```js
-const throttledQueue = require('throttled-queue');
+const throttledQueue = require('dynamic-throttled-queue');
 const throttle = throttledQueue({min_rpi: 10, interval: 1000, backoff:true, errors_per_second:2}); 
 // at most make 10 requests every second, if more than 2 errors per second, then back off for 1 full interval of 1 second.
 

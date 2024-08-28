@@ -33,6 +33,7 @@
    * @param errors_per_second [number=5] - Number of errors per second before deciding to either increase or decrease the current rpi
    * @param back_off [boolean=true] - If true and we hit the errors_per_interval watermark, we will back off for 1 interval
    * @param retry [number=0] - If greater than 0, any failed callbacks, will be put back onto the queue to retry upto X times
+   * @param cb [Function] - Sends back the current rate
    *
    * @returns {Function}
    */
@@ -45,7 +46,8 @@
             evenly_spaced     = true,
             errors_per_second = 5,
             back_off          = false,
-            retry = 0
+            retry = 0,
+            cb = (rate) => undefined
           } = options;
 
     debug = typeOf(options.debug) !== "undefined" ? options.debug === true : false;
@@ -156,6 +158,7 @@
       if (error_count >= errors_per_second) {
         debugFn('Decreasing rate limit');
         current_rpi = Math.max(min_rpi, current_rpi - 1);
+        cb && cb(current_rpi);
         //decrease dyn count by 1
         if (evenly_spaced) {
           dyn_interval = interval / current_rpi;
@@ -180,6 +183,7 @@
       } else if (!bSkippedLast && error_count === 0 && queue.length > 0) {
         debugFn('Increasing rate limit');
         current_rpi = Math.min(max_rpi, current_rpi + 1);
+        cb && cb(current_rpi);
         //increase dyn count by 1
         if (evenly_spaced) {
           dyn_interval = interval / current_rpi;
@@ -188,6 +192,7 @@
         }
       }
       error_count = 0;
+      cb && cb(current_rpi);
       debugFn(`current_rpi: ${current_rpi}`);
       dyn_timeout = setTimeout(alterDYN_rpi, interval);
     };

@@ -4,13 +4,17 @@ function calculateRPMS(num_requests, time_started) {
 
 }
 
+function cb(rate) {
+    console.log('Rate:', rate);
+}
+
 describe('dynamic-throttled-queue', function() {
 
     it('should queue all callbacks', function(done) {
 
         var requests_per_interval = 1;
         var interval = 200;
-        var throttle = throttledQueue({min_rpi:requests_per_interval, interval:interval});
+        var throttle = throttledQueue({min_rpi:requests_per_interval, interval:interval, cb});
         var num_requests = 0;
         var request_limit = 100;
         for (var x = 0; x < request_limit; x++) {
@@ -31,7 +35,7 @@ describe('dynamic-throttled-queue', function() {
 
         var requests_per_interval = 1;
         var interval = 200;
-        var throttle = throttledQueue({min_rpi:requests_per_interval, interval:interval});
+        var throttle = throttledQueue({min_rpi:requests_per_interval, interval:interval, cb});
         var last_executed = Date.now();
 
         var num_requests = 0;
@@ -61,7 +65,7 @@ describe('dynamic-throttled-queue', function() {
 
         var requests_per_interval = 1;
         var interval = 500;
-        var throttle = throttledQueue({min_rpi:requests_per_interval, interval:interval});
+        var throttle = throttledQueue({min_rpi:requests_per_interval, interval:interval, cb});
         var time_started = Date.now();
         var max_rpms = requests_per_interval / interval;
 
@@ -89,7 +93,7 @@ describe('dynamic-throttled-queue', function() {
 
         var requests_per_interval = 3;
         var interval = 1000;
-        var throttle = throttledQueue({min_rpi:requests_per_interval, interval:interval});
+        var throttle = throttledQueue({min_rpi:requests_per_interval, interval:interval, cb});
         var time_started = Date.now();
         var max_rpms = requests_per_interval / interval;
 
@@ -117,7 +121,7 @@ describe('dynamic-throttled-queue', function() {
 
         var requests_per_interval = 3;
         var interval = 1000;
-        var throttle = throttledQueue({min_rpi:requests_per_interval, interval:interval}, true);
+        var throttle = throttledQueue({min_rpi:requests_per_interval, interval:interval, cb}, true);
         var time_started = Date.now();
         var max_rpms = requests_per_interval / interval;
 
@@ -145,7 +149,7 @@ describe('dynamic-throttled-queue', function() {
         const requests_per_interval = 5;
         const interval = 200;
         const retry = 2;
-        const throttle = throttledQueue({min_rpi:requests_per_interval, interval:interval,evenly_spaced:false, retry}, true);
+        const throttle = throttledQueue({min_rpi:requests_per_interval, interval:interval,evenly_spaced:false, retry, cb}, true);
 
         let num_requests = 0;
         const request_limit = 5;
@@ -173,7 +177,7 @@ describe('dynamic-throttled-queue', function() {
         const requests_per_interval = 5;
         const interval = 200;
         const retry = 2;
-        const throttle = throttledQueue({min_rpi:requests_per_interval, interval:interval,evenly_spaced:false, retry}, true);
+        const throttle = throttledQueue({min_rpi:requests_per_interval, interval:interval,evenly_spaced:false, retry, cb}, true);
 
         let num_requests = 0;
         const request_limit = 5;

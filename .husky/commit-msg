@@ -1,0 +1,18 @@
+#!/bin/sh
+# Skip hook for semantic-release commits
+MESSAGE=$(cat "$1")
+if echo "$MESSAGE" | grep -q "\[skip ci\]"; then
+  exit 0
+fi
+
+pnpm exec commitlint --edit "$1";
+FILE=$1
+TICKET=[$(git rev-parse --abbrev-ref HEAD | grep -Eo '^(\w+/)?(\w+[-_])?[0-9]+' | grep -Eo '(\w+[-])?[0-9]+' | tr "[:lower:]" "[:upper:]")]
+if [[ $TICKET == "[]" || "$MESSAGE" == "$TICKET"* ]];then
+  exit 0;
+fi
+# Strip leading '['
+TICKET="${TICKET#[}"
+# Strip trailing ']'
+TICKET="${TICKET%]}"
+echo $"$TICKET\n\n$MESSAGE" > $FILE

@@ -1,0 +1,10 @@
+{
+  "entry": [
+    "src/**/*.{js,ts}"
+  ],
+  "project": [
+    "**/*.{js,ts}"
+  ],
+  "ignoreBinaries": [],
+  "ignoreDependencies": []
+}

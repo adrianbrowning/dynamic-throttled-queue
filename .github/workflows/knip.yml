@@ -1,0 +1,110 @@
+name: Knip
+
+on:
+  pull_request:
+    branches:
+      - main
+    types: [ opened, synchronize, reopened ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  knip:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # 1. Checkout the repository with credentials persisted for push
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+          ref: ${{ github.head_ref }}
+
+      # 2. Set up pnpm
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      # 2.1. Cache pnpm store
+      - name: Get pnpm store
+        id: pnpm-cache-store
+        run: echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+
+      # 2.2. Cache pnpm store
+      - name: Cache pnpm store
+        uses: actions/cache@v3
+        with:
+          path: ${{ steps.pnpm-cache-store.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
+
+      # 3. Set up Node.js
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      # 4. Install dependencies using pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # 5. Run Knip
+      - name: Run knip
+        id: knip-check
+        continue-on-error: true
+        run: |
+          # Disable immediate exit on error
+          set +e
+
+          # Enable pipefail to capture exit code from piped commands
+          set -o pipefail
+
+          pnpm knip 2>&1 | tee knip-output.txt
+          KNIP_EXIT_CODE=$?
+
+          # Save exit code for later steps
+          echo "exit_code=$KNIP_EXIT_CODE" >> $GITHUB_OUTPUT
+
+          if [ $KNIP_EXIT_CODE -ne 0 ]; then
+            echo "Knip checks failed. KNIP_EXIT_CODE=$KNIP_EXIT_CODE"
+            exit 1
+          fi
+
+      # 6. Post knip results to PR on failure
+      - name: Comment knip results on PR
+        if: github.event_name == 'pull_request' && steps.knip-check.outputs.exit_code != '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const output = fs.readFileSync('knip-output.txt', 'utf8');
+            const comment = `## 🔍 Knip Check Failed
+
+            <details>
+            <summary>Click to see knip errors</summary>
+
+            \`\`\`
+            ${output}
+            \`\`\`
+
+            </details>
+
+            [View workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})`;
+
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: comment
+            });
+
+      # 7. Fail the workflow if knip failed
+      - name: Fail if knip failed
+        if: steps.knip-check.outputs.exit_code != '0'
+        run: exit 1

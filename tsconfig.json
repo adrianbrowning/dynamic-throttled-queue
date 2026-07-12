@@ -1,0 +1,14 @@
+{
+  "extends": "@gingacodemonkey/config/tsc/no-dom/library",
+  "compilerOptions": {
+    "outDir": "dist",
+    "rootDir": "src"
+  },
+  "include": [
+    "src/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules",
+    "dist"
+  ]
+}

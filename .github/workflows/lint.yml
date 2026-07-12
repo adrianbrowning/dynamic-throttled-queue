@@ -1,0 +1,148 @@
+name: ESLint Check
+
+on:
+  pull_request:
+    branches:
+      - main
+    types: [ opened, synchronize, reopened ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  eslint:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # 0. Stop infinite loop
+      - name: Check if commit is made by bot
+        if: github.actor == 'github-actions[bot]'
+        run: echo "Commit made by bot. Exiting workflow." && exit 0
+
+      # 1. Checkout the repository with credentials persisted for push
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+          ref: ${{ github.head_ref }}
+
+      # 2. Set up pnpm
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      # 2.1. Cache pnpm store
+      - name: Get pnpm store
+        id: pnpm-cache-store
+        run: echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+
+      # 2.2. Cache pnpm store
+      - name: Cache pnpm store
+        uses: actions/cache@v3
+        with:
+          path: ${{ steps.pnpm-cache-store.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
+
+      # 3. Set up Node.js
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      # 4. Install dependencies using pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # 5. Run ESLint and check for errors
+      - name: Run ESLint Check for Errors
+        id: lint-check
+        continue-on-error: true
+        shell: bash
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Disable immediate exit on error
+          set +e
+          
+          # Enable pipefail to capture exit code from piped commands
+          set -o pipefail
+
+          # Run ESLint
+          pnpm run lint:s 2>&1 | tee lint-output.txt
+          LINT_EXIT_CODE=$?
+
+          # Save exit code for later steps
+          echo "exit_code=$LINT_EXIT_CODE" >> $GITHUB_OUTPUT
+
+          # Check if output file exists and has content
+          if [ ! -s lint-output.txt ]; then
+            echo "No lint output generated"
+            echo "has_issues=false" >> $GITHUB_OUTPUT
+            echo "has_errors=false" >> $GITHUB_OUTPUT
+            exit 0
+          fi
+          
+          # Check if there are any warnings or errors in the output
+          if grep -qiE "(warning|error)" lint-output.txt; then
+            echo "has_issues=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_issues=false" >> $GITHUB_OUTPUT
+          fi
+          
+          # Determine if output contains errors (not just warnings)
+
+          # Match only actual error lines (format: "  92:8  error"), not summary line
+          if grep -E "^\s+[0-9]+:[0-9]+\s+error\s" lint-output.txt; then
+
+            echo "has_errors=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_errors=false" >> $GITHUB_OUTPUT
+          fi
+
+      # 6a. Fail workflow only on errors
+      - name: Fail on ESLint errors
+        if: steps.lint-check.outputs.has_errors == 'true'
+        run: |
+          echo "ESLint found errors. Failing workflow."
+            exit 1
+
+      # 7. Post lint results to PR if there are any issues (warnings or errors)
+      - name: Comment lint results on PR
+        if: always() && github.event_name == 'pull_request' && steps.lint-check.outputs.has_issues == 'true'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const output = fs.readFileSync('lint-output.txt', 'utf8');
+            const hasErrors = '${{ steps.lint-check.outputs.has_errors }}' === 'true';
+            const exitCode = '${{ steps.lint-check.outputs.exit_code }}';
+
+            const icon = hasErrors ? '❌' : '⚠️';
+            const status = hasErrors ? 'Failed' : 'Warnings';
+            const summary = hasErrors ? 'linting errors' : 'linting warnings';
+
+            const comment = `## ${icon} ESLint Check ${status}
+
+            <details>
+            <summary>Click to see ${summary}</summary>
+
+            \`\`\`
+            ${output}
+            \`\`\`
+
+            </details>
+
+            [View workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})`;
+
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: comment
+            });

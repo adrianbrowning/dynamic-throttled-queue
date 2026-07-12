@@ -1,0 +1,112 @@
+name: TS Check
+
+on:
+  pull_request:
+    branches:
+      - main
+    types: [ opened, synchronize, reopened ]
+  workflow_dispatch:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  tscheck:
+    runs-on: ubuntu-latest
+
+    steps:
+
+      # 1. Checkout the repository with credentials persisted for push
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          fetch-depth: 0
+          ref: ${{ github.head_ref }}
+
+      # 2. Set up pnpm
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      # 2.1. Cache pnpm store
+      - name: Get pnpm store
+        id: pnpm-cache-store
+        run: echo "STORE_PATH=$(pnpm store path)" >> $GITHUB_OUTPUT
+
+      # 2.2. Cache pnpm store
+      - name: Cache pnpm store
+        uses: actions/cache@v3
+        with:
+          path: ${{ steps.pnpm-cache-store.outputs.STORE_PATH }}
+          key: ${{ runner.os }}-pnpm-${{ hashFiles('**/pnpm-lock.yaml') }}
+          restore-keys: |
+            ${{ runner.os }}-pnpm-
+
+      # 3. Set up Node.js
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      # 4. Install dependencies using pnpm
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # 5. Run TS check
+      - name: Run TypeScript Check
+        id: ts-check
+        continue-on-error: true
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Disable immediate exit on error
+          set +e
+
+          # Enable pipefail to capture exit code from piped commands
+          set -o pipefail
+
+          pnpm run lint:ts 2>&1 | tee ts-check-output.txt
+          TS_EXIT_CODE=$?
+
+          # Save exit code for later steps
+          echo "exit_code=$TS_EXIT_CODE" >> $GITHUB_OUTPUT
+
+          if [ $TS_EXIT_CODE -ne 0 ]; then
+            echo "TypeScript checks failed. TS_EXIT_CODE=$TS_EXIT_CODE"
+            exit 1
+          fi
+
+      # 7. Post TS check results to PR on failure
+      - name: Comment TS check results on PR
+        if: github.event_name == 'pull_request' && steps.ts-check.outputs.exit_code != '0'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const fs = require('fs');
+            const output = fs.readFileSync('ts-check-output.txt', 'utf8');
+            const comment = `## ❌ TypeScript Check Failed
+
+            <details>
+            <summary>Click to see type errors</summary>
+
+            \`\`\`
+            ${output}
+            \`\`\`
+
+            </details>
+
+            [View workflow run](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})`;
+
+            github.rest.issues.createComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+              body: comment
+            });
+
+      # 8. Fail the workflow if TS check failed
+      - name: Fail if TS check failed
+        if: steps.ts-check.outputs.exit_code != '0'
+        run: exit 1

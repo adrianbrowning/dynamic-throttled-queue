@@ -1,13 +1,31 @@
 {
   "name": "dynamic-throttled-queue",
-  "version": "1.1.3",
-  "description": "Forked from shaunpersad/throttled-queue. Dynamically throttles arbitrary code to execute a minimum/maximum number of times per interval. Best for making throttled API requests.",
-  "main": "dynamic-throttled-queue.js",
-  "directories": {
-    "test": "test"
+  "version": "2.0.0",
+  "type": "module",
+  "description": "Dynamically throttles arbitrary code to execute between a minimum and maximum number of times per interval. Best for making throttled API requests.",
+  "files": [
+    "dist"
+  ],
+  "zshy": {
+    "exports": {
+      ".": "./src/dynamic-throttled-queue.ts"
+    },
+    "cjs": false
   },
   "scripts": {
-    "test": "./node_modules/mocha/bin/mocha --recursive --timeout 200000"
+    "build": "zshy",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint:ts": "tsc --noEmit -p tsconfig.json",
+    "lint:esl": "eslint --config eslint.config.ts \"src/**/*.{j,t}s{,x}\" --cache --max-warnings=0",
+    "lint:esl:fix": "pnpm lint:esl --fix",
+    "lint:s": "eslint --config eslint.config.style.ts \"src/**/*.{j,t}s{,x}\" --cache --max-warnings=0",
+    "lint:fix": "pnpm lint:s --fix",
+    "lint:knip": "knip",
+    "lint:jscpd": "jscpd .",
+    "lint": "pnpm lint:ts",
+    "lint:e18e": "pnpm dlx @e18e/cli analyze",
+    "preinstall": "only-allow pnpm"
   },
   "repository": {
     "type": "git",
@@ -27,13 +45,30 @@
     "url": "https://github.com/adrianbrowning/dynamic-throttled-queue/issues"
   },
   "devDependencies": {
-    "@babel/core": "^7.1.6",
-    "@babel/preset-env": "^7.1.6",
-    "gulp": "^4.0.0",
-    "gulp-babel": "^8.0.0",
-    "gulp-concat": "^2.6.1",
-    "gulp-rename": "^1.4.0",
-    "gulp-uglify": "^3.0.1",
-    "mocha": "^5.2.0"
+    "@commitlint/cli": "20.0.0",
+    "@commitlint/config-conventional": "20.0.0",
+    "@gingacodemonkey/config": "^0.0.36",
+    "@types/node": "^24.13.3",
+    "eslint": "^9.39.5",
+    "husky": "9.0.6",
+    "jscpd": "^4.2.5",
+    "knip": "5.70.1",
+    "lint-staged": "15.2.10",
+    "only-allow": "^1.2.2",
+    "typescript": "^6.0.3",
+    "vitest": "^3.0.0",
+    "zshy": "^0.7.0"
+  },
+  "engines": {
+    "node": ">=24.0.0",
+    "pnpm": ">=10.0.0"
+  },
+  "module": "./dist/dynamic-throttled-queue.js",
+  "types": "./dist/dynamic-throttled-queue.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/dynamic-throttled-queue.d.ts",
+      "default": "./dist/dynamic-throttled-queue.js"
+    }
   }
 }

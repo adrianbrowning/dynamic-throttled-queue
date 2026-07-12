@@ -1,0 +1,12 @@
+name: Dummy CI
+
+on:
+  pull_request:
+  push:
+
+jobs:
+  ci_tests:
+    runs-on: ubuntu-latest
+    name: ci tests
+    steps:
+      - run: echo "CI passed"

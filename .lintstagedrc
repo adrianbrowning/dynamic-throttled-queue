@@ -1,0 +1,5 @@
+{
+  "*.{js,ts,jsx,tsx}": [
+    "eslint --config eslint.config.style.ts --fix --cache --no-warn-ignored"
+  ]
+}

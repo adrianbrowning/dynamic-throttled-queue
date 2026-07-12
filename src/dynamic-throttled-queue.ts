@@ -6,6 +6,7 @@ export type ThrottleOptions = {
   interval: number;
   max_rpi?: number;
   evenly_spaced?: boolean;
+  /** Max errors per interval before rate decrease. Default 5. */
   errors_per_interval?: number;
   back_off?: boolean;
   retry?: number;
@@ -60,6 +61,7 @@ export function createThrottledQueue(options: ThrottleOptions): ThrottleHandle {
   const queue: Array<QueueItem> = [];
   let head = 0;
 
+  /** Halts timers. Retains unprocessed queue items; next enqueue resumes from where it left off. */
   function stop() {
     isRunning = false;
     skippedLast = false;
@@ -190,6 +192,7 @@ export function createThrottledQueue(options: ThrottleOptions): ThrottleHandle {
   }
 
   enqueue.stop = stop;
+  // ponytail: defineProperty needed for getter; stop is plain assignment
   Object.defineProperty(enqueue, "pending", { get: () => queue.length - head });
 
   return enqueue as ThrottleHandle;

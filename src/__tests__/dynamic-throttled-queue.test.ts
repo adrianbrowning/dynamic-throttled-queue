@@ -180,7 +180,7 @@ describe("createThrottledQueue", () => {
 
   describe("async/promise support", () => {
     it("treats rejected promises as errors", async () => {
-      expect.assertions(1);
+      expect.assertions(2);
       const rates: Array<number> = [];
       const throttle = createThrottledQueue({
         min_rpi: 1,
@@ -197,6 +197,7 @@ describe("createThrottledQueue", () => {
       await vi.advanceTimersByTimeAsync(1000);
 
       expect(rates.length).toBeGreaterThan(0);
+      expect(rates[0]).toBeLessThan(3);
     });
 
     it("treats promise resolving to false as error", async () => {
@@ -547,8 +548,7 @@ describe("createThrottledQueue", () => {
       vi.advanceTimersByTime(1000);
       throttle.stop();
       const countAtStop = count;
-      expect(countAtStop).toBeGreaterThan(0);
-      expect(countAtStop).toBeLessThan(10);
+      expect(countAtStop).toBe(2);
 
       // No more processing after stop
       vi.advanceTimersByTime(5000);
@@ -568,8 +568,40 @@ describe("createThrottledQueue", () => {
         throttle(() => {});
       }
 
-      expect(throttle.pending).toBeGreaterThan(0);
-      expect(throttle.pending).toBeLessThanOrEqual(5);
+      expect(throttle.pending).toBe(5);
+    });
+
+    it("pending reflects count after partial processing", () => {
+      const throttle = createThrottledQueue({ min_rpi: 2, interval: 1000, evenly_spaced: false });
+      for (let i = 0; i < 5; i++) throttle(() => {});
+      vi.advanceTimersByTime(1000);
+      expect(throttle.pending).toBe(3);
+    });
+
+    it("pending decreases as items are processed", () => {
+      const throttle = createThrottledQueue({
+        min_rpi: 3,
+        interval: 1000,
+        evenly_spaced: false,
+      });
+
+      for (let i = 0; i < 10; i++) {
+        throttle(() => {});
+      }
+
+      expect(throttle.pending).toBe(10);
+
+      vi.advanceTimersByTime(1000);
+      expect(throttle.pending).toBe(7);
+
+      vi.advanceTimersByTime(1000);
+      expect(throttle.pending).toBe(4);
+
+      vi.advanceTimersByTime(1000);
+      expect(throttle.pending).toBe(1);
+
+      vi.advanceTimersByTime(1000);
+      expect(throttle.pending).toBe(0);
     });
 
     it("enqueue after stop() resumes processing with old + new items", () => {
@@ -585,6 +617,7 @@ describe("createThrottledQueue", () => {
       }
 
       vi.advanceTimersByTime(500);
+      expect(count).toBe(0); // batch mode: first dequeue at 1000ms, nothing fired yet
       throttle.stop();
 
       // Enqueue more — should resume
@@ -593,6 +626,37 @@ describe("createThrottledQueue", () => {
 
       // All 4 items should have processed (3 original + 1 new, minus any already done)
       expect(count).toBe(4);
+    });
+  });
+
+  describe("evenly_spaced rate dynamics", () => {
+    it("adjusts request spacing when rate changes", () => {
+      const rates: Array<number> = [];
+      const throttle = createThrottledQueue({
+        min_rpi: 1,
+        max_rpi: 4,
+        interval: 1000,
+        onRateChange: r => rates.push(r),
+      });
+
+      let count = 0;
+      for (let i = 0; i < 20; i++) {
+        throttle(() => { count++; });
+      }
+
+      // Starting rpi=ceil((4+1)/2)=3, dyn_interval=333ms.
+      // Items fire at ~333, ~666, ~999ms
+      vi.advanceTimersByTime(999);
+
+      // adjustRate fires at 1000ms, sees 0 errors + items in queue → increases to rpi=4
+      vi.advanceTimersByTime(1);
+      expect(rates[0]).toBe(4);
+
+      // After rate change: dyn_interval = 1000/4 = 250ms
+      // Next 4 items should fire in 1000ms (at 250ms spacing)
+      const countAfterAdjust = count;
+      vi.advanceTimersByTime(1000);
+      expect(count - countAfterAdjust).toBe(4);
     });
   });
 
@@ -633,8 +697,8 @@ describe("createThrottledQueue", () => {
       // Process through several intervals to allow retries to accumulate
       vi.advanceTimersByTime(5000);
 
-      // Should have triggered at least one rate decrease (starting rpi=3)
-      expect(rates.some(r => r < 3)).toBe(true);
+      // Starting rpi=3, first decrease goes to 2
+      expect(rates[0]).toBe(2);
     });
   });
 });

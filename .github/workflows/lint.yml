@@ -59,6 +59,13 @@ jobs:
           pnpm run lint:esl 2>&1 | tee lint-correctness-output.txt
           LINT_EXIT_CODE=$?
           echo "exit_code=$LINT_EXIT_CODE" >> $GITHUB_OUTPUT
+          if [ -s lint-correctness-output.txt ]; then
+            echo "has_issues=true" >> $GITHUB_OUTPUT
+          elif [ $LINT_EXIT_CODE -ne 0 ]; then
+            echo "has_issues=true" >> $GITHUB_OUTPUT
+          else
+            echo "has_issues=false" >> $GITHUB_OUTPUT
+          fi
           if [ $LINT_EXIT_CODE -ne 0 ]; then
             echo "has_errors=true" >> $GITHUB_OUTPUT
           else
@@ -70,7 +77,7 @@ jobs:
         run: exit 1
 
       - name: Comment lint results on PR
-        if: always() && github.event_name == 'pull_request' && (steps.lint-style.outputs.has_issues == 'true' || steps.lint-correctness.outputs.has_errors == 'true')
+        if: always() && github.event_name == 'pull_request' && (steps.lint-style.outputs.has_issues == 'true' || steps.lint-correctness.outputs.has_issues == 'true' || steps.lint-correctness.outputs.has_errors == 'true')
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         env:
           LINT_STYLE_FILE: lint-output.txt
@@ -89,6 +96,7 @@ jobs:
             if (fs.existsSync(process.env.LINT_CORRECTNESS_FILE) && fs.statSync(process.env.LINT_CORRECTNESS_FILE).size > 0) {
               sections.push(`### Correctness\n\`\`\`\n${escape(fs.readFileSync(process.env.LINT_CORRECTNESS_FILE, 'utf8'))}\n\`\`\``);
             }
+            if (sections.length === 0) return;
             const hasErrors = process.env.HAS_STYLE_ERRORS === 'true' || process.env.HAS_CORRECTNESS_ERRORS === 'true';
             const icon = hasErrors ? '❌' : '⚠️';
             const status = hasErrors ? 'Failed' : 'Warnings';

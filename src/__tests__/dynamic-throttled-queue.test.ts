@@ -140,8 +140,8 @@ describe("createThrottledQueue", () => {
       const countAt1s = (() => { vi.advanceTimersByTime(1000); return count; })();
       const countAt2s = (() => { vi.advanceTimersByTime(1000); return count; })();
 
-      // With backoff, there should be a gap where no new items are processed
-      expect(countAt2s - countAt1s).toBeLessThanOrEqual(countAt1s);
+      // With backoff, no items should process during the pause interval
+      expect(countAt2s).toBe(countAt1s);
     });
   });
 
@@ -180,6 +180,7 @@ describe("createThrottledQueue", () => {
 
   describe("async/promise support", () => {
     it("treats rejected promises as errors", async () => {
+      expect.assertions(1);
       const rates: Array<number> = [];
       const throttle = createThrottledQueue({
         min_rpi: 1,
@@ -193,13 +194,13 @@ describe("createThrottledQueue", () => {
         throttle(async () => { throw new Error("fail"); });
       }
 
-      vi.advanceTimersByTime(1000);
-      await vi.advanceTimersByTimeAsync(0); // flush microtasks
+      await vi.advanceTimersByTimeAsync(1000);
 
       expect(rates.length).toBeGreaterThan(0);
     });
 
     it("treats promise resolving to false as error", async () => {
+      expect.assertions(1);
       const throttle = createThrottledQueue({
         min_rpi: 5,
         interval: 1000,
@@ -234,6 +235,183 @@ describe("createThrottledQueue", () => {
       throttle(() => { count++; });
       vi.advanceTimersByTime(1000);
       expect(count).toBe(2);
+    });
+  });
+
+  describe("deprecated alias", () => {
+    it("errors_per_second is used when errors_per_interval is not set", () => {
+      const rates: Array<number> = [];
+      const throttle = createThrottledQueue({
+        min_rpi: 1,
+        max_rpi: 5,
+        interval: 1000,
+        errors_per_second: 3,
+        evenly_spaced: false,
+        onRateChange: r => rates.push(r),
+      });
+
+      for (let i = 0; i < 20; i++) {
+        throttle(() => false);
+      }
+
+      // With errors_per_second: 3, need 3+ errors before rate decreases
+      // First interval: 3 items processed (starting rpi=3), all fail → 3 errors >= 3 threshold
+      vi.advanceTimersByTime(1000);
+      expect(rates).toContain(2); // decreased from 3
+    });
+  });
+
+  describe("regression: skippedLast race", () => {
+    it("back_off pauses processing for a full extra interval", () => {
+      const throttle = createThrottledQueue({
+        min_rpi: 1,
+        max_rpi: 3,
+        interval: 1000,
+        errors_per_interval: 1,
+        back_off: true,
+      });
+
+      let count = 0;
+      for (let i = 0; i < 10; i++) {
+        throttle(() => { count++; return false; });
+      }
+
+      // Starting rpi=2, dyn_interval=500ms. First dequeue at 500ms.
+      vi.advanceTimersByTime(500);
+      expect(count).toBeGreaterThan(0);
+
+      // adjustRate fires at 1000ms, sees errors >= 1, triggers back_off
+      vi.advanceTimersByTime(500);
+      const countAtAdjust = count;
+
+      // back_off schedules dequeue at dyn_interval + interval from now
+      // During that pause, no new items should process
+      vi.advanceTimersByTime(500);
+      const countDuringPause = count;
+
+      expect(countDuringPause).toBe(countAtAdjust);
+    });
+  });
+
+  describe("regression: ghost dequeue after stop", () => {
+    it("stop() prevents back_off from scheduling further work", () => {
+      const throttle = createThrottledQueue({
+        min_rpi: 1,
+        max_rpi: 3,
+        interval: 1000,
+        errors_per_interval: 1,
+        back_off: true,
+        evenly_spaced: false,
+      });
+
+      let count = 0;
+      // Exactly 2 items: first batch drains → stop()
+      throttle(() => { count++; return false; });
+      throttle(() => { count++; return false; });
+
+      // Process all items, queue drains, stop() called
+      vi.advanceTimersByTime(2000);
+      const countAfterDrain = count;
+
+      // Even after many intervals, no ghost dequeue should fire
+      vi.advanceTimersByTime(10000);
+      expect(count).toBe(countAfterDrain);
+    });
+  });
+
+  describe("regression: double adjustRate", () => {
+    it("async retry restart does not create duplicate rate adjustments", async () => {
+      expect.assertions(1);
+      const rates: Array<number> = [];
+      const throttle = createThrottledQueue({
+        min_rpi: 1,
+        max_rpi: 5,
+        interval: 1000,
+        errors_per_interval: 2,
+        retry: 1,
+        onRateChange: r => rates.push(r),
+      });
+
+      // Single async failing callback — will trigger retry after resolution
+      throttle(async () => false);
+
+      // Advance to fire dequeue + let promise resolve
+      await vi.advanceTimersByTimeAsync(500);
+
+      // adjustRate fires at 1000ms
+      await vi.advanceTimersByTimeAsync(500);
+
+      // Retry enqueued + restart happens here. Second adjustRate window.
+      await vi.advanceTimersByTimeAsync(1000);
+
+      // If double adjustRate existed, we'd see more rate changes than expected.
+      // With rpi starting at 3, errors_per_interval=2: at most 1 decrease per interval
+      const decreases = rates.filter((r, i) => i > 0 && r < rates[i - 1]!);
+      expect(decreases.length).toBeLessThanOrEqual(1);
+    });
+  });
+
+  describe("regression: head-pointer dequeue", () => {
+    it("processes every item exactly once with large batch", () => {
+      const throttle = createThrottledQueue({
+        min_rpi: 10,
+        interval: 1000,
+        evenly_spaced: false,
+      });
+
+      const called = new Set<number>();
+      for (let i = 0; i < 200; i++) {
+        const id = i;
+        throttle(() => { called.add(id); });
+      }
+
+      vi.advanceTimersByTime(30_000);
+      expect(called.size).toBe(200);
+    });
+
+    it("reclaims queue memory after drain", () => {
+      const throttle = createThrottledQueue({
+        min_rpi: 5,
+        interval: 1000,
+        evenly_spaced: false,
+      });
+
+      for (let i = 0; i < 50; i++) {
+        throttle(() => {});
+      }
+
+      vi.advanceTimersByTime(20_000);
+
+      // After drain, enqueue one more — should work fine (queue reset)
+      let ran = false;
+      throttle(() => { ran = true; });
+      vi.advanceTimersByTime(1000);
+      expect(ran).toBe(true);
+    });
+  });
+
+  describe("regression: async retry preserves error_count", () => {
+    it("error_count accumulates from retried failures and triggers rate decrease", () => {
+      const rates: Array<number> = [];
+      const throttle = createThrottledQueue({
+        min_rpi: 1,
+        max_rpi: 5,
+        interval: 1000,
+        errors_per_interval: 2,
+        retry: 2,
+        evenly_spaced: false,
+        onRateChange: r => rates.push(r),
+      });
+
+      // Sync failing callbacks — retries push back into queue as errors
+      throttle(() => false);
+      throttle(() => false);
+
+      // Process through several intervals to allow retries to accumulate
+      vi.advanceTimersByTime(5000);
+
+      // Should have triggered at least one rate decrease (starting rpi=3)
+      expect(rates.some(r => r < 3)).toBe(true);
     });
   });
 });

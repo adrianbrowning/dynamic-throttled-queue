@@ -177,5 +177,3 @@ export function createThrottledQueue(options: ThrottleOptions): ThrottleFn {
     }
   };
 }
-
-export default createThrottledQueue;

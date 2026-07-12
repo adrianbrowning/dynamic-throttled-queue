@@ -1,3 +1,4 @@
+/** Return `false` to signal failure (increments error count, triggers retry if configured). */
 export type ThrottleCallback = () => boolean | void | Promise<boolean | void>;
 
 export type ThrottleOptions = {
@@ -5,23 +6,25 @@ export type ThrottleOptions = {
   interval: number;
   max_rpi?: number;
   evenly_spaced?: boolean;
-  /** Errors per interval before decreasing rate. Formerly "errors_per_second". */
+  /** Max errors per interval before rate decrease. Default 5. */
   errors_per_interval?: number;
-  /** @deprecated Use errors_per_interval */
-  errors_per_second?: number;
   back_off?: boolean;
   retry?: number;
   /** Minimum dead slots before queue compaction triggers. Default 512. */
   compact_threshold?: number;
   onRateChange?: (rate: number) => void;
-  debug?: boolean;
 };
 
 type QueueItem = { fn: ThrottleCallback; retries: number; };
 
 export type ThrottleFn = (callback: ThrottleCallback) => void;
 
-export function createThrottledQueue(options: ThrottleOptions): ThrottleFn {
+export type ThrottleHandle = ThrottleFn & {
+  stop: () => void;
+  readonly pending: number;
+};
+
+export function createThrottledQueue(options: ThrottleOptions): ThrottleHandle {
   const {
     min_rpi,
     interval,
@@ -31,11 +34,9 @@ export function createThrottledQueue(options: ThrottleOptions): ThrottleFn {
     retry = 0,
     compact_threshold = 512,
     onRateChange,
-    debug = false,
   } = options;
 
-  // eslint-disable-next-line @typescript-eslint/no-deprecated
-  const errors_per_interval = options.errors_per_interval ?? options.errors_per_second ?? 5;
+  const errors_per_interval = options.errors_per_interval ?? 5;
 
   if (!Number.isInteger(min_rpi) || min_rpi < 1) {
     throw new Error("min_rpi must be a positive integer");
@@ -47,7 +48,7 @@ export function createThrottledQueue(options: ThrottleOptions): ThrottleFn {
     throw new Error("interval must be a positive number");
   }
 
-  let current_rpi = Math.ceil(max_rpi - (max_rpi - min_rpi) / 2);
+  let current_rpi = Math.ceil((max_rpi + min_rpi) / 2);
   let dyn_interval = evenly_spaced ? interval / current_rpi : interval;
   let dyn_requests_per_interval = evenly_spaced ? 1 : current_rpi;
   let error_count = 0;
@@ -60,14 +61,12 @@ export function createThrottledQueue(options: ThrottleOptions): ThrottleFn {
   const queue: Array<QueueItem> = [];
   let head = 0;
 
-  function log(...msgs: Array<unknown>) {
-    // eslint-disable-next-line no-console
-    if (debug) console.log(...msgs);
-  }
-
+  /** Halts timers. Retains unprocessed queue items; next enqueue resumes from where it left off. */
   function stop() {
     isRunning = false;
+    skippedLast = false;
     clearTimeout(timeout);
+    timeout = undefined;
     clearTimeout(dynTimeout);
     dynTimeout = undefined;
     if (head >= queue.length) {
@@ -137,6 +136,7 @@ export function createThrottledQueue(options: ThrottleOptions): ThrottleFn {
   }
 
   function applyRate(newRpi: number) {
+    if (newRpi === current_rpi) return;
     current_rpi = newRpi;
     onRateChange?.(current_rpi);
     if (evenly_spaced) {
@@ -150,12 +150,10 @@ export function createThrottledQueue(options: ThrottleOptions): ThrottleFn {
   // ponytail: async callbacks resolve after adjustRate fires — error_count may lag by one interval under async load
   function adjustRate() {
     dynTimeout = undefined;
-    log("Error Count:", error_count);
     const wasSkipped = skippedLast;
     skippedLast = false;
 
     if (error_count >= errors_per_interval) {
-      log("Decreasing rate limit");
       applyRate(Math.max(min_rpi, current_rpi - 1));
 
       if (isRunning && back_off && !wasSkipped) {
@@ -165,12 +163,10 @@ export function createThrottledQueue(options: ThrottleOptions): ThrottleFn {
       }
     }
     else if (!wasSkipped && error_count === 0 && queue.length > head) {
-      log("Increasing rate limit");
       applyRate(Math.min(max_rpi, current_rpi + 1));
     }
 
     error_count = 0;
-    log(`current_rpi: ${current_rpi}`);
 
     if (isRunning) {
       dynTimeout = setTimeout(adjustRate, interval);
@@ -188,10 +184,16 @@ export function createThrottledQueue(options: ThrottleOptions): ThrottleFn {
     }
   }
 
-  return function enqueue(callback: ThrottleCallback) {
+  function enqueue(callback: ThrottleCallback) {
     queue.push({ fn: callback, retries: retry });
     if (!isRunning) {
       start();
     }
-  };
+  }
+
+  enqueue.stop = stop;
+  // ponytail: defineProperty needed for getter; stop is plain assignment
+  Object.defineProperty(enqueue, "pending", { get: () => queue.length - head });
+
+  return enqueue as ThrottleHandle;
 }

@@ -41,9 +41,24 @@ Callbacks can return `false` to signal an error (used for dynamic rate adjustmen
 | `retry` | `number` | `0` | Number of times to retry failed callbacks |
 | `compact_threshold` | `number` | `512` | Minimum dead slots before internal queue compaction triggers |
 | `onRateChange` | `(rate: number) => void` | — | Called when the current rate changes |
-| `debug` | `boolean` | `false` | Log internal state to console |
 
-> **Deprecated:** `errors_per_second` still works as an alias for `errors_per_interval` but will be removed in a future major version.
+## Handle API
+
+`createThrottledQueue` returns a function with additional properties:
+
+| Property | Type | Description |
+| -------- | ---- | ----------- |
+| `stop()` | `() => void` | Stop processing the queue immediately |
+| `pending` | `number` (readonly) | Number of callbacks still waiting in the queue |
+
+```ts
+const throttle = createThrottledQueue({ min_rpi: 5, interval: 1000 });
+
+throttle(() => fetch("/api/data"));
+console.log(throttle.pending); // number of queued callbacks
+
+throttle.stop(); // halt processing
+```
 
 ## Examples
 
@@ -120,6 +135,11 @@ throttle(async () => {
   if (!res.ok) return false; // will be retried
 });
 ```
+
+## Migration from v1
+
+- `errors_per_second` removed — use `errors_per_interval` (counts errors per full interval window, not per second).
+- `debug` option removed — use `onRateChange` callback for observability.
 
 ## Development
 

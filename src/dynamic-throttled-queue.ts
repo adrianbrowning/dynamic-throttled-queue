@@ -11,11 +11,13 @@ export type ThrottleOptions = {
   errors_per_second?: number;
   back_off?: boolean;
   retry?: number;
+  /** Minimum dead slots before queue compaction triggers. Default 512. */
+  compact_threshold?: number;
   onRateChange?: (rate: number) => void;
   debug?: boolean;
 };
 
-type QueueItem = ThrottleCallback | { fn: ThrottleCallback; retries: number; };
+type QueueItem = { fn: ThrottleCallback; retries: number; };
 
 export type ThrottleFn = (callback: ThrottleCallback) => void;
 
@@ -27,6 +29,7 @@ export function createThrottledQueue(options: ThrottleOptions): ThrottleFn {
     evenly_spaced = true,
     back_off = false,
     retry = 0,
+    compact_threshold = 512,
     onRateChange,
     debug = false,
   } = options;
@@ -55,6 +58,7 @@ export function createThrottledQueue(options: ThrottleOptions): ThrottleFn {
   let dynTimeout: ReturnType<typeof setTimeout> | undefined;
 
   const queue: Array<QueueItem> = [];
+  let head = 0;
 
   function log(...msgs: Array<unknown>) {
     // eslint-disable-next-line no-console
@@ -65,20 +69,19 @@ export function createThrottledQueue(options: ThrottleOptions): ThrottleFn {
     isRunning = false;
     clearTimeout(timeout);
     clearTimeout(dynTimeout);
+    dynTimeout = undefined;
+    if (head >= queue.length) {
+      queue.length = 0;
+      head = 0;
+    }
   }
 
   function handleResult(item: QueueItem, result: boolean | void) {
     if (result === false) {
       error_count++;
-      if (retry > 0) {
-        if (typeof item === "function") {
-          queue.push({ fn: item, retries: retry - 1 });
-        }
-        else if (item.retries > 0) {
-          queue.push({ fn: item.fn, retries: item.retries - 1 });
-        }
-        // Restart if queue was idle (async results arrive after dequeue stops)
-        if (!isRunning && queue.length > 0) {
+      if (item.retries > 0) {
+        queue.push({ fn: item.fn, retries: item.retries - 1 });
+        if (!isRunning && queue.length > head) {
           start();
         }
       }
@@ -95,13 +98,19 @@ export function createThrottledQueue(options: ThrottleOptions): ThrottleFn {
       return;
     }
 
-    const batch = queue.splice(0, dyn_requests_per_interval);
-    for (const item of batch) {
-      const fn = typeof item === "function" ? item : item.fn;
-      const result = fn();
-      // ponytail: async support — if promise, handle async. No await in loop to keep batch parallel.
-      if (result && typeof result === "object" && "then" in result) {
-        (result).then(
+    const end = Math.min(head + dyn_requests_per_interval, queue.length);
+    for (let i = head; i < end; i++) {
+      const item = queue[i]!;
+      let result: ReturnType<ThrottleCallback>;
+      try {
+        result = item.fn();
+      }
+      catch {
+        handleResult(item, false);
+        continue;
+      }
+      if (result instanceof Promise) {
+        void result.then(
           v => handleResult(item, v),
           () => handleResult(item, false)
         );
@@ -110,49 +119,54 @@ export function createThrottledQueue(options: ThrottleOptions): ThrottleFn {
         handleResult(item, result);
       }
     }
+    head = end;
 
-    skippedLast = false;
     last_called = Date.now();
 
-    if (queue.length === 0) {
+    // ponytail: splice is O(n), amortized by only firing when head > half array length
+    if (head > compact_threshold && head > queue.length / 2) {
+      queue.splice(0, head);
+      head = 0;
+    }
+
+    if (head >= queue.length) {
       stop();
       return;
     }
     timeout = setTimeout(dequeue, dyn_interval);
   }
 
+  function applyRate(newRpi: number) {
+    current_rpi = newRpi;
+    onRateChange?.(current_rpi);
+    if (evenly_spaced) {
+      dyn_interval = interval / current_rpi;
+    }
+    else {
+      dyn_requests_per_interval = current_rpi;
+    }
+  }
+
+  // ponytail: async callbacks resolve after adjustRate fires — error_count may lag by one interval under async load
   function adjustRate() {
+    dynTimeout = undefined;
     log("Error Count:", error_count);
+    const wasSkipped = skippedLast;
+    skippedLast = false;
 
     if (error_count >= errors_per_interval) {
       log("Decreasing rate limit");
-      current_rpi = Math.max(min_rpi, current_rpi - 1);
-      onRateChange?.(current_rpi);
+      applyRate(Math.max(min_rpi, current_rpi - 1));
 
-      if (evenly_spaced) {
-        dyn_interval = interval / current_rpi;
-      }
-      else {
-        dyn_requests_per_interval = current_rpi;
-      }
-
-      if (back_off && !skippedLast) {
+      if (isRunning && back_off && !wasSkipped) {
         clearTimeout(timeout);
         skippedLast = true;
         timeout = setTimeout(dequeue, dyn_interval + interval);
       }
     }
-    else if (!skippedLast && error_count === 0 && queue.length > 0) {
+    else if (!wasSkipped && error_count === 0 && queue.length > head) {
       log("Increasing rate limit");
-      current_rpi = Math.min(max_rpi, current_rpi + 1);
-      onRateChange?.(current_rpi);
-
-      if (evenly_spaced) {
-        dyn_interval = interval / current_rpi;
-      }
-      else {
-        dyn_requests_per_interval = current_rpi;
-      }
+      applyRate(Math.min(max_rpi, current_rpi + 1));
     }
 
     error_count = 0;
@@ -164,14 +178,18 @@ export function createThrottledQueue(options: ThrottleOptions): ThrottleFn {
   }
 
   function start() {
+    if (skippedLast) return;
     isRunning = true;
     last_called = Date.now();
+    clearTimeout(timeout);
     timeout = setTimeout(dequeue, dyn_interval);
-    dynTimeout = setTimeout(adjustRate, interval);
+    if (!dynTimeout) {
+      dynTimeout = setTimeout(adjustRate, interval);
+    }
   }
 
   return function enqueue(callback: ThrottleCallback) {
-    queue.push(callback);
+    queue.push({ fn: callback, retries: retry });
     if (!isRunning) {
       start();
     }

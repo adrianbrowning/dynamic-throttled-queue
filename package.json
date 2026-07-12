@@ -23,7 +23,7 @@
     "lint:fix": "pnpm lint:s --fix",
     "lint:knip": "knip",
     "lint:jscpd": "jscpd .",
-    "lint": "pnpm lint:ts",
+    "lint": "pnpm lint:ts && pnpm lint:esl",
     "lint:e18e": "pnpm dlx @e18e/cli analyze",
     "preinstall": "only-allow pnpm"
   },

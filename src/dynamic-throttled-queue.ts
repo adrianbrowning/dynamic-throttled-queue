@@ -1,3 +1,4 @@
+/** Return `false` to signal failure (increments error count, triggers retry if configured). */
 export type ThrottleCallback = () => boolean | void | Promise<boolean | void>;
 
 export type ThrottleOptions = {
@@ -34,7 +35,7 @@ export function createThrottledQueue(options: ThrottleOptions): ThrottleFn {
     debug = false,
   } = options;
 
-  // eslint-disable-next-line @typescript-eslint/no-deprecated
+  // eslint-disable-next-line @typescript-eslint/no-deprecated, sonarjs/deprecation
   const errors_per_interval = options.errors_per_interval ?? options.errors_per_second ?? 5;
 
   if (!Number.isInteger(min_rpi) || min_rpi < 1) {
@@ -67,7 +68,9 @@ export function createThrottledQueue(options: ThrottleOptions): ThrottleFn {
 
   function stop() {
     isRunning = false;
+    skippedLast = false;
     clearTimeout(timeout);
+    timeout = undefined;
     clearTimeout(dynTimeout);
     dynTimeout = undefined;
     if (head >= queue.length) {

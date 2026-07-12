@@ -390,6 +390,59 @@ describe("createThrottledQueue", () => {
     });
   });
 
+  describe("compact_threshold", () => {
+    it("compacts queue when head exceeds threshold and half length", () => {
+      const throttle = createThrottledQueue({
+        min_rpi: 10,
+        interval: 1000,
+        evenly_spaced: false,
+        compact_threshold: 5,
+      });
+
+      let count = 0;
+      for (let i = 0; i < 20; i++) {
+        throttle(() => { count++; });
+      }
+
+      vi.advanceTimersByTime(5000);
+      expect(count).toBe(20);
+    });
+
+    it("does not compact when head is below threshold", () => {
+      const throttle = createThrottledQueue({
+        min_rpi: 2,
+        interval: 1000,
+        evenly_spaced: false,
+        compact_threshold: 100,
+      });
+
+      let count = 0;
+      for (let i = 0; i < 4; i++) {
+        throttle(() => { count++; });
+      }
+
+      vi.advanceTimersByTime(3000);
+      expect(count).toBe(4);
+    });
+  });
+
+  describe("retry: 0", () => {
+    it("does not retry failed callbacks when retry is 0", () => {
+      const throttle = createThrottledQueue({
+        min_rpi: 5,
+        interval: 1000,
+        evenly_spaced: false,
+        retry: 0,
+      });
+
+      let callCount = 0;
+      throttle(() => { callCount++; return false; });
+
+      vi.advanceTimersByTime(5000);
+      expect(callCount).toBe(1);
+    });
+  });
+
   describe("regression: async retry preserves error_count", () => {
     it("error_count accumulates from retried failures and triggers rate decrease", () => {
       const rates: Array<number> = [];

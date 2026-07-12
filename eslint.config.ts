@@ -1,11 +1,7 @@
 import defaultConfig from "@gingacodemonkey/config/eslint";
 import type { Linter } from "eslint";
 
-export const extraRules: Array<Linter.Config> = [{
-  rules: {
-    "sonarjs/deprecation":"off",
-  },
-}];
+export const extraRules: Array<Linter.Config> = [];
 
 const config: Array<Linter.Config> = [
   { ignores: [ "commitlint.config.js" ] },

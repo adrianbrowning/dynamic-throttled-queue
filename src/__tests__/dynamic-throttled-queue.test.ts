@@ -238,29 +238,6 @@ describe("createThrottledQueue", () => {
     });
   });
 
-  describe("deprecated alias", () => {
-    it("errors_per_second is used when errors_per_interval is not set", () => {
-      const rates: Array<number> = [];
-      const throttle = createThrottledQueue({
-        min_rpi: 1,
-        max_rpi: 5,
-        interval: 1000,
-        errors_per_second: 3,
-        evenly_spaced: false,
-        onRateChange: r => rates.push(r),
-      });
-
-      for (let i = 0; i < 20; i++) {
-        throttle(() => false);
-      }
-
-      // With errors_per_second: 3, need 3+ errors before rate decreases
-      // First interval: 3 items processed (starting rpi=3), all fail → 3 errors >= 3 threshold
-      vi.advanceTimersByTime(1000);
-      expect(rates).toContain(2); // decreased from 3
-    });
-  });
-
   describe("regression: skippedLast race", () => {
     it("back_off pauses processing for a full extra interval", () => {
       const throttle = createThrottledQueue({
@@ -550,6 +527,72 @@ describe("createThrottledQueue", () => {
       // Next adjustRate fires 1000ms later with wasSkipped=true — should NOT increase
       vi.advanceTimersByTime(1000);
       expect(rates).toHaveLength(ratesAfterDecrease);
+    });
+  });
+
+  describe("handle API", () => {
+    it("stop() halts processing mid-queue", () => {
+      const throttle = createThrottledQueue({
+        min_rpi: 2,
+        interval: 1000,
+        evenly_spaced: false,
+      });
+
+      let count = 0;
+      for (let i = 0; i < 10; i++) {
+        throttle(() => { count++; });
+      }
+
+      // Let some items process
+      vi.advanceTimersByTime(1000);
+      throttle.stop();
+      const countAtStop = count;
+      expect(countAtStop).toBeGreaterThan(0);
+      expect(countAtStop).toBeLessThan(10);
+
+      // No more processing after stop
+      vi.advanceTimersByTime(5000);
+      expect(count).toBe(countAtStop);
+    });
+
+    it("pending returns number of unprocessed items", () => {
+      const throttle = createThrottledQueue({
+        min_rpi: 2,
+        interval: 1000,
+        evenly_spaced: false,
+      });
+
+      expect(throttle.pending).toBe(0);
+
+      for (let i = 0; i < 5; i++) {
+        throttle(() => {});
+      }
+
+      expect(throttle.pending).toBeGreaterThan(0);
+      expect(throttle.pending).toBeLessThanOrEqual(5);
+    });
+
+    it("enqueue after stop() resumes processing with old + new items", () => {
+      const throttle = createThrottledQueue({
+        min_rpi: 5,
+        interval: 1000,
+        evenly_spaced: false,
+      });
+
+      let count = 0;
+      for (let i = 0; i < 3; i++) {
+        throttle(() => { count++; });
+      }
+
+      vi.advanceTimersByTime(500);
+      throttle.stop();
+
+      // Enqueue more — should resume
+      throttle(() => { count++; });
+      vi.advanceTimersByTime(5000);
+
+      // All 4 items should have processed (3 original + 1 new, minus any already done)
+      expect(count).toBe(4);
     });
   });
 

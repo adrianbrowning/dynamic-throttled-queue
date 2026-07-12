@@ -1,12 +1,26 @@
-name: Dummy CI
+name: CI
 
 on:
   pull_request:
+    branches: [master]
   push:
+    branches: [master]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: true
 
 jobs:
-  ci_tests:
+  test:
     runs-on: ubuntu-latest
-    name: ci tests
+    timeout-minutes: 10
+
     steps:
-      - run: echo "CI passed"
+      - uses: actions/checkout@v4
+
+      - uses: ./.github/actions/setup
+
+      - run: pnpm test

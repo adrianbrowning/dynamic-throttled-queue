@@ -39,6 +39,7 @@ Callbacks can return `false` to signal an error (used for dynamic rate adjustmen
 | `errors_per_interval` | `number` | `5` | Error threshold per interval before adjusting rate |
 | `back_off` | `boolean` | `false` | Back off for 1 full interval when error threshold is hit |
 | `retry` | `number` | `0` | Number of times to retry failed callbacks |
+| `compact_threshold` | `number` | `512` | Minimum dead slots before internal queue compaction triggers |
 | `onRateChange` | `(rate: number) => void` | — | Called when the current rate changes |
 | `debug` | `boolean` | `false` | Log internal state to console |
 

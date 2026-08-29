@@ -223,7 +223,7 @@ describe("createThrottledQueue", () => {
 
   describe("async feedback timing across adjustment windows", () => {
     function delayedResult(delay: number, result: boolean | void) {
-      return () => new Promise<boolean | void>(resolve => {
+      return async () => new Promise<boolean | void>(resolve => {
         setTimeout(() => resolve(result), delay);
       });
     }
@@ -239,7 +239,10 @@ describe("createThrottledQueue", () => {
     ])("attributes a $outcome settling before the interval to the first window", async ({ result, expectedRate }) => {
       const rates: Array<number> = [];
       const throttle = createThrottledQueue({
-        min_rpi: 9, max_rpi: 11, interval: 1000, errors_per_interval: 1,
+        min_rpi: 9,
+        max_rpi: 11,
+        interval: 1000,
+        errors_per_interval: 1,
         onRateChange: rate => rates.push(rate),
       });
 
@@ -248,13 +251,16 @@ describe("createThrottledQueue", () => {
       enqueueKeepAlive(throttle);
 
       await vi.advanceTimersByTimeAsync(1000);
-      expect(rates).toEqual([expectedRate]);
+      expect(rates).toEqual([ expectedRate ]);
     });
 
     it("attributes a failure settling at the adjustment boundary to the later window", async () => {
       const rates: Array<number> = [];
       const throttle = createThrottledQueue({
-        min_rpi: 9, max_rpi: 11, interval: 1000, errors_per_interval: 1,
+        min_rpi: 9,
+        max_rpi: 11,
+        interval: 1000,
+        errors_per_interval: 1,
         onRateChange: rate => rates.push(rate),
       });
 
@@ -264,16 +270,19 @@ describe("createThrottledQueue", () => {
       enqueueKeepAlive(throttle);
 
       await vi.advanceTimersByTimeAsync(1000);
-      expect(rates).toEqual([11]);
+      expect(rates).toEqual([ 11 ]);
 
       await vi.advanceTimersByTimeAsync(1000);
-      expect(rates).toEqual([11, 10]);
+      expect(rates).toEqual([ 11, 10 ]);
     });
 
     it("increases at 1000 ms before attributing a 1500 ms task failure to the later window", async () => {
       const rates: Array<number> = [];
       const throttle = createThrottledQueue({
-        min_rpi: 9, max_rpi: 11, interval: 1000, errors_per_interval: 1,
+        min_rpi: 9,
+        max_rpi: 11,
+        interval: 1000,
+        errors_per_interval: 1,
         onRateChange: rate => rates.push(rate),
       });
 
@@ -283,16 +292,19 @@ describe("createThrottledQueue", () => {
       enqueueKeepAlive(throttle);
 
       await vi.advanceTimersByTimeAsync(1000);
-      expect(rates).toEqual([11]);
+      expect(rates).toEqual([ 11 ]);
 
       await vi.advanceTimersByTimeAsync(1000);
-      expect(rates).toEqual([11, 10]);
+      expect(rates).toEqual([ 11, 10 ]);
     });
 
     it("groups variable async results by settlement window rather than invocation window", async () => {
       const rates: Array<number> = [];
       const throttle = createThrottledQueue({
-        min_rpi: 8, max_rpi: 12, interval: 1000, errors_per_interval: 1,
+        min_rpi: 8,
+        max_rpi: 12,
+        interval: 1000,
+        errors_per_interval: 1,
         onRateChange: rate => rates.push(rate),
       });
 
@@ -305,10 +317,10 @@ describe("createThrottledQueue", () => {
       enqueueKeepAlive(throttle);
 
       await vi.advanceTimersByTimeAsync(1000);
-      expect(rates).toEqual([9]);
+      expect(rates).toEqual([ 9 ]);
 
       await vi.advanceTimersByTimeAsync(1000);
-      expect(rates).toEqual([9, 8]);
+      expect(rates).toEqual([ 9, 8 ]);
     });
   });
 

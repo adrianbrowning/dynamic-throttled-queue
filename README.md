@@ -28,6 +28,8 @@ throttle(() => {
 
 Callbacks can return `false` to signal an error (used for dynamic rate adjustment and retry). Async callbacks (returning a Promise) are also supported — rejections and `false` resolutions count as errors.
 
+Set `concurrency` to bound callbacks that are still awaiting asynchronous completion. This limit is independent of the request-start rate; omitting it preserves the existing unlimited in-flight behavior.
+
 ## Options
 
 | Param | Type | Default | Description |
@@ -39,6 +41,7 @@ Callbacks can return `false` to signal an error (used for dynamic rate adjustmen
 | `errors_per_interval` | `number` | `5` | Error threshold per interval before adjusting rate |
 | `back_off` | `boolean` | `false` | Back off for 1 full interval when error threshold is hit |
 | `retry` | `number` | `0` | Number of times to retry failed callbacks |
+| `concurrency` | `number` | — | Maximum callbacks awaiting asynchronous completion; omit for no limit |
 | `compact_threshold` | `number` | `512` | Minimum dead slots before internal queue compaction triggers |
 | `onRateChange` | `(rate: number) => void` | — | Called when the current rate changes |
 

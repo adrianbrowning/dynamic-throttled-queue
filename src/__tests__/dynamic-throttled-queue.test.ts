@@ -1,6 +1,12 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createThrottledQueue } from "../dynamic-throttled-queue.ts";
 
+function deferred() {
+  let settle!: () => void;
+  const promise = new Promise<void>(resolve => { settle = resolve; });
+  return { promise, resolve: settle };
+}
+
 beforeEach(() => {
   vi.useFakeTimers();
 });
@@ -25,8 +31,14 @@ describe("createThrottledQueue", () => {
       expect(() => createThrottledQueue({ min_rpi: 1, interval: 0 })).toThrow("interval");
       expect(() => createThrottledQueue({ min_rpi: 1, interval: -100 })).toThrow("interval");
     });
-  });
 
+    it("throws if concurrency is not a positive integer", () => {
+      expect(() => createThrottledQueue({ min_rpi: 1, interval: 1000, concurrency: 0 })).toThrow("concurrency");
+      expect(() => createThrottledQueue({ min_rpi: 1, interval: 1000, concurrency: 1.5 })).toThrow("concurrency");
+      expect(() => createThrottledQueue({ min_rpi: 1, interval: 1000, concurrency: -1 })).toThrow("concurrency");
+    });
+
+  });
   describe("basic throttling", () => {
     it("executes all queued callbacks", () => {
       const throttle = createThrottledQueue({ min_rpi: 1, interval: 1000 });
@@ -76,6 +88,146 @@ describe("createThrottledQueue", () => {
       expect(count).toBe(6);
       vi.advanceTimersByTime(1000);
       expect(count).toBe(9);
+    });
+  });
+
+  describe("concurrency", () => {
+    it("limits slow asynchronous callbacks to the configured number of slots", async () => {
+      const throttle = createThrottledQueue({
+        min_rpi: 5,
+        interval: 1000,
+        evenly_spaced: false,
+        concurrency: 2,
+      });
+      const work = Array.from({ length: 4 }, deferred);
+      let started = 0;
+      let active = 0;
+
+      for (const item of work) {
+        throttle(async () => {
+          started++;
+          active++;
+          return item.promise.then(() => { active--; return undefined; });
+        });
+      }
+
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(started).toBe(2);
+      expect(active).toBe(2);
+    });
+  });
+
+  describe("concurrency scheduling", () => {
+    it("does not consume a paced start while its only slot is full", async () => {
+      const throttle = createThrottledQueue({ min_rpi: 2, interval: 1000, concurrency: 1 });
+      const first = deferred();
+      let started = 0;
+
+      throttle(async () => { started++; return first.promise; });
+      throttle(() => { started++; });
+
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(started).toBe(1);
+
+      first.resolve();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(started).toBe(2);
+    });
+
+    it("releases a slot after a rejected callback", async () => {
+      const throttle = createThrottledQueue({ min_rpi: 2, interval: 1000, concurrency: 1 });
+      let rejectCallback!: (reason?: unknown) => void;
+      const first = new Promise<void>((_resolve, reject) => { rejectCallback = reject; });
+      let started = 0;
+
+      throttle(async () => { started++; return first; });
+      throttle(() => { started++; });
+
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(started).toBe(1);
+
+      rejectCallback(new Error("failed"));
+      await vi.advanceTimersByTimeAsync(0);
+      expect(started).toBe(2);
+    });
+  });
+
+  describe("concurrency compatibility", () => {
+    it("keeps the existing unlimited in-flight behavior when concurrency is omitted", async () => {
+      const throttle = createThrottledQueue({ min_rpi: 5, interval: 1000, evenly_spaced: false });
+      const work = Array.from({ length: 4 }, deferred);
+      let started = 0;
+
+      for (const item of work) {
+        throttle(async () => { started++; return item.promise; });
+      }
+
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(started).toBe(4);
+    });
+
+    it("makes a retry wait for a new paced start and a free slot", async () => {
+      const throttle = createThrottledQueue({
+        min_rpi: 5,
+        interval: 1000,
+        evenly_spaced: false,
+        concurrency: 1,
+        retry: 1,
+      });
+      let resolveFirst!: (value: boolean) => void;
+      const first = new Promise<boolean>(resolve => { resolveFirst = resolve; });
+      let attempts = 0;
+      let active = 0;
+      let maxActive = 0;
+
+      throttle(async () => {
+        attempts++;
+        active++;
+        maxActive = Math.max(maxActive, active);
+        if (attempts === 1) {
+          return first.then(value => { active--; return value; });
+        }
+        active--;
+        return undefined;
+      });
+
+      await vi.advanceTimersByTimeAsync(1000);
+      resolveFirst(false);
+      await first;
+      await Promise.resolve();
+      expect(attempts).toBe(1);
+
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(attempts).toBe(2);
+      expect(maxActive).toBe(1);
+    });
+  });
+
+  describe("concurrency and backoff", () => {
+    it("does not let slot release bypass an active backoff pause", async () => {
+      const throttle = createThrottledQueue({
+        min_rpi: 1,
+        max_rpi: 2,
+        interval: 1000,
+        evenly_spaced: false,
+        errors_per_interval: 1,
+        back_off: true,
+        concurrency: 1,
+      });
+      const second = deferred();
+      let started = 0;
+
+      throttle(() => { started++; return false; });
+      throttle(async () => { started++; return second.promise; });
+      throttle(() => { started++; });
+
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(started).toBe(2);
+
+      second.resolve();
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(started).toBe(2);
     });
   });
 

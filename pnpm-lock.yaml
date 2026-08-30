@@ -7,6 +7,10 @@ settings:
 importers:
 
   .:
+    dependencies:
+      '@varlock/bumpy':
+        specifier: ^1.18.1
+        version: 1.18.1
     devDependencies:
       '@commitlint/cli':
         specifier: 20.0.0
@@ -1219,6 +1223,10 @@ packages:
     resolution: {integrity: sha512-nAB74NfSNKknqQ1RrYj6uz8FcXEomu/MATJZxh/x+BArzN2U3JbOYC0APYzUIGhVY3m5hRxA8VPNdPBoG8txlA==}
     cpu: [x64]
     os: [win32]
+
+  '@varlock/bumpy@1.18.1':
+    resolution: {integrity: sha512-u6PHUr+laAgWWm/c3wdExHBCcvYkkTb+KsiRNR9GCFIbCDrCN9CyOZO/crtRZ5u4KWMKtUTeA7U/s+AA0k7Dcg==}
+    hasBin: true
 
   '@vitest/eslint-plugin@1.6.23':
     resolution: {integrity: sha512-CbrXxQpIUMbeyylGlxaxTgnWYM44et4Nx58swl7+vrTyC9Ttx+hQoy8BGCregbbZ08K5qFhRHeoad1VvERUbkg==}
@@ -5589,6 +5597,8 @@ snapshots:
 
   '@unrs/resolver-binding-win32-x64-msvc@1.12.2':
     optional: true
+
+  '@varlock/bumpy@1.18.1': {}
 
   '@vitest/eslint-plugin@1.6.23(@typescript-eslint/eslint-plugin@8.63.0(@typescript-eslint/parser@8.63.0(eslint@9.39.5(jiti@2.7.0))(typescript@6.0.3))(eslint@9.39.5(jiti@2.7.0))(typescript@6.0.3))(eslint@9.39.5(jiti@2.7.0))(typescript@6.0.3)(vitest@3.2.7(@types/node@24.13.3)(jiti@2.7.0)(yaml@2.9.0))':
     dependencies:

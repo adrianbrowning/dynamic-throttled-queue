@@ -25,7 +25,9 @@
     "lint:jscpd": "jscpd .",
     "lint": "pnpm lint:ts && pnpm lint:esl",
     "lint:e18e": "pnpm dlx @e18e/cli analyze",
-    "preinstall": "only-allow pnpm"
+    "preinstall": "only-allow pnpm",
+    "bump": "bumpy add",
+    "bump:status": "bumpy status"
   },
   "repository": {
     "type": "git",
@@ -70,5 +72,9 @@
       "types": "./dist/dynamic-throttled-queue.d.ts",
       "default": "./dist/dynamic-throttled-queue.js"
     }
-  }
+  },
+  "dependencies": {
+    "@varlock/bumpy": "^1.18.1"
+  },
+  "packageManager": "pnpm@10.34.5"
 }

@@ -17,6 +17,7 @@ jobs:
       mode: ${{ steps.plan.outputs.mode }}
       bumpy_version: ${{ steps.bumpy-version.outputs.version }}
     steps:
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-base
         with:
           checkout-fetch-depth: '0'
@@ -39,6 +40,7 @@ jobs:
       contents: write
       pull-requests: write
     steps:
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-base
         with:
           checkout-fetch-depth: '0'
@@ -55,7 +57,9 @@ jobs:
     environment: publish
     permissions:
       contents: read
+      id-token: write
     steps:
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-base
         with:
           registry-url: 'https://registry.npmjs.org'
@@ -72,9 +76,7 @@ jobs:
           writeFileSync('package.json', JSON.stringify(p, null, 2) + '\n');
           EOF
 
-      - run: pnpm publish --tag next --access public --no-git-checks
-        env:
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+      - run: pnpm publish --tag next --access public --no-git-checks --provenance
 
   publish:
     needs: plan
@@ -84,7 +86,9 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
+      id-token: write
     steps:
+      - uses: actions/checkout@v7
       - uses: ./.github/actions/setup-base
         with:
           checkout-fetch-depth: '0'
@@ -97,5 +101,3 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           BUMPY_GH_TOKEN: ${{ secrets.BUMPY_GH_TOKEN }}
-          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
-          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

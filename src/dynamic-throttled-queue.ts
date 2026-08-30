@@ -10,6 +10,8 @@ export type ThrottleOptions = {
   errors_per_interval?: number;
   back_off?: boolean;
   retry?: number;
+  /** Maximum number of callbacks awaiting asynchronous settlement. Omit for no limit. */
+  concurrency?: number;
   /** Minimum dead slots before queue compaction triggers. Default 512. */
   compact_threshold?: number;
   onRateChange?: (rate: number) => void;
@@ -32,6 +34,7 @@ export function createThrottledQueue(options: ThrottleOptions): ThrottleHandle {
     evenly_spaced = true,
     back_off = false,
     retry = 0,
+    concurrency,
     compact_threshold = 512,
     onRateChange,
   } = options;
@@ -48,6 +51,9 @@ export function createThrottledQueue(options: ThrottleOptions): ThrottleHandle {
     throw new Error("interval must be a positive number");
   }
 
+  if (concurrency !== undefined && (!Number.isInteger(concurrency) || concurrency < 1)) {
+    throw new Error("concurrency must be a positive integer");
+  }
   let current_rpi = Math.ceil((max_rpi + min_rpi) / 2);
   let dyn_interval = evenly_spaced ? interval / current_rpi : interval;
   let dyn_requests_per_interval = evenly_spaced ? 1 : current_rpi;
@@ -57,6 +63,8 @@ export function createThrottledQueue(options: ThrottleOptions): ThrottleHandle {
   let last_called = 0;
   let timeout: ReturnType<typeof setTimeout> | undefined;
   let dynTimeout: ReturnType<typeof setTimeout> | undefined;
+  let active_count = 0;
+  const max_concurrency = concurrency ?? Infinity;
 
   const queue: Array<QueueItem> = [];
   let head = 0;
@@ -87,6 +95,15 @@ export function createThrottledQueue(options: ThrottleOptions): ThrottleHandle {
     }
   }
 
+  function handleSettlement(item: QueueItem, result: boolean | void, resume = false) {
+    active_count--;
+    handleResult(item, result);
+
+    // A released slot can unblock pending work; dequeue still observes rate pacing.
+    if (resume && isRunning && !skippedLast && queue.length > head) {
+      dequeue();
+    }
+  }
   function dequeue() {
     const threshold = last_called + dyn_interval;
     const now = Date.now();
@@ -97,30 +114,34 @@ export function createThrottledQueue(options: ThrottleOptions): ThrottleHandle {
       return;
     }
 
+    // Retries appended by settlement are outside this batch and need another start opportunity.
     const end = Math.min(head + dyn_requests_per_interval, queue.length);
-    for (let i = head; i < end; i++) {
-      const item = queue[i]!;
+    let started = 0;
+    while (head < end && active_count < max_concurrency) {
+      const item = queue[head++]!;
+      active_count++;
+      if (started++ === 0) {
+        last_called = Date.now();
+      }
+
       let result: ReturnType<ThrottleCallback>;
       try {
         result = item.fn();
       }
       catch {
-        handleResult(item, false);
+        handleSettlement(item, false);
         continue;
       }
       if (result instanceof Promise) {
         void result.then(
-          v => handleResult(item, v),
-          () => handleResult(item, false)
+          value => handleSettlement(item, value, true),
+          () => handleSettlement(item, false, true)
         );
       }
       else {
-        handleResult(item, result);
+        handleSettlement(item, result);
       }
     }
-    head = end;
-
-    last_called = Date.now();
 
     // ponytail: splice is O(n), amortized by only firing when head > half array length
     if (head > compact_threshold && head > queue.length / 2) {
@@ -132,9 +153,11 @@ export function createThrottledQueue(options: ThrottleOptions): ThrottleHandle {
       stop();
       return;
     }
+    if (active_count >= max_concurrency) {
+      return;
+    }
     timeout = setTimeout(dequeue, dyn_interval);
   }
-
   function applyRate(newRpi: number) {
     if (newRpi === current_rpi) return;
     current_rpi = newRpi;

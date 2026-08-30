@@ -1,5 +1,5 @@
 {
   "$schema": "../node_modules/@varlock/bumpy/config-schema.json",
-  "baseBranch": "main",
+  "baseBranch": "master",
   "changelog": "default"
 }

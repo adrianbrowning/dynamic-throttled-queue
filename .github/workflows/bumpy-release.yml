@@ -101,3 +101,5 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           BUMPY_GH_TOKEN: ${{ secrets.BUMPY_GH_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

@@ -64,13 +64,14 @@ export function createThrottledQueue(options: ThrottleOptions): ThrottleHandle {
   let timeout: ReturnType<typeof setTimeout> | undefined;
   let dynTimeout: ReturnType<typeof setTimeout> | undefined;
   let active_count = 0;
+  let isStopped = false;
   const max_concurrency = concurrency ?? Infinity;
 
   const queue: Array<QueueItem> = [];
   let head = 0;
 
   /** Halts timers. Retains unprocessed queue items; next enqueue resumes from where it left off. */
-  function stop() {
+  function halt() {
     isRunning = false;
     skippedLast = false;
     clearTimeout(timeout);
@@ -83,12 +84,17 @@ export function createThrottledQueue(options: ThrottleOptions): ThrottleHandle {
     }
   }
 
+  function stop() {
+    isStopped = true;
+    halt();
+  }
+
   function handleResult(item: QueueItem, result: boolean | void) {
     if (result === false) {
       error_count++;
       if (item.retries > 0) {
         queue.push({ fn: item.fn, retries: item.retries - 1 });
-        if (!isRunning && queue.length > head) {
+        if (!isRunning && !isStopped && queue.length > head) {
           start();
         }
       }
@@ -150,7 +156,7 @@ export function createThrottledQueue(options: ThrottleOptions): ThrottleHandle {
     }
 
     if (head >= queue.length) {
-      stop();
+      halt();
       return;
     }
     if (active_count >= max_concurrency) {
@@ -209,6 +215,7 @@ export function createThrottledQueue(options: ThrottleOptions): ThrottleHandle {
 
   function enqueue(callback: ThrottleCallback) {
     queue.push({ fn: callback, retries: retry });
+    isStopped = false;
     if (!isRunning) {
       start();
     }

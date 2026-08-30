@@ -787,6 +787,38 @@ describe("createThrottledQueue", () => {
   });
 
   describe("handle API", () => {
+    it.each([ "success", "false", "rejection" ] as const)("does not resume scheduling when an active callback settles as $outcome after stop", async outcome => {
+      let settle!: (value: boolean | void) => void;
+      let fail!: (reason?: unknown) => void;
+      const inFlight = new Promise<boolean | void>((resolve, reject) => {
+        settle = resolve;
+        fail = reject;
+      });
+      const throttle = createThrottledQueue({
+        min_rpi: 1,
+        interval: 1000,
+        evenly_spaced: false,
+        retry: 1,
+      });
+      let started = 0;
+
+      throttle(async () => { started++; return inFlight; });
+      throttle(() => { started++; });
+
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(started).toBe(1);
+
+      throttle.stop();
+      if (outcome === "success") settle();
+      else if (outcome === "false") settle(false);
+      else fail(new Error("failed"));
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(started).toBe(1);
+      expect(throttle.pending).toBe(outcome === "success" ? 1 : 2);
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
     it("stop() halts processing mid-queue", () => {
       const throttle = createThrottledQueue({
         min_rpi: 2,

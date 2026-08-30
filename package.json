@@ -73,5 +73,6 @@
   },
   "dependencies": {
     "@varlock/bumpy": "^1.18.1"
-  }
+  },
+  "packageManager": "pnpm@10.34.5"
 }

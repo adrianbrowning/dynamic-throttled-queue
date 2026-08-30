@@ -80,7 +80,7 @@ jobs:
 
   publish:
     needs: plan
-    if: needs.plan.outputs.mode == 'publish'
+    if: needs.plan.outputs.mode == 'publish' && github.ref == 'refs/heads/master'
     runs-on: ubuntu-latest
     environment: publish
     permissions:

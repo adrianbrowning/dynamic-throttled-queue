@@ -101,3 +101,7 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
           BUMPY_GH_TOKEN: ${{ secrets.BUMPY_GH_TOKEN }}
+
+      - run: gh release upload "$(git describe --tags --abbrev=0)" dist/*
+        env:
+          GH_TOKEN: ${{ github.token }}

@@ -91,7 +91,80 @@ describe("createThrottledQueue", () => {
     });
   });
 
+  describe("FIFO and exactly-once delivery", () => {
+    it("drains callbacks in enqueue order exactly once", () => {
+      const throttle = createThrottledQueue({ min_rpi: 1, interval: 1000 });
+      const expectedIds = [ "first", "second", "third", "fourth" ];
+      const executedIds: Array<string> = [];
+
+      for (const id of expectedIds) {
+        throttle(() => { executedIds.push(id); });
+      }
+
+      vi.advanceTimersByTime(4000);
+
+      expect(executedIds).toEqual(expectedIds);
+      expect(executedIds).toHaveLength(expectedIds.length);
+      expect(new Set(executedIds)).toHaveLength(expectedIds.length);
+    });
+  });
+
+    it("preserves callback order across evenly spaced starts", () => {
+      const throttle = createThrottledQueue({ min_rpi: 2, interval: 1000 });
+      const expectedIds = [ "first", "second", "third", "fourth", "fifth" ];
+      const executedIds: Array<string> = [];
+
+      for (const id of expectedIds) {
+        throttle(() => { executedIds.push(id); });
+      }
+
+      vi.advanceTimersByTime(500);
+      expect(executedIds).toEqual([ "first" ]);
+      vi.advanceTimersByTime(2000);
+
+      expect(executedIds).toEqual(expectedIds);
+      expect(executedIds).toHaveLength(expectedIds.length);
+      expect(new Set(executedIds)).toHaveLength(expectedIds.length);
+    });
+
   describe("concurrency", () => {
+    it("preserves callback order across batch starts", () => {
+      const throttle = createThrottledQueue({ min_rpi: 3, interval: 1000, evenly_spaced: false });
+      const expectedIds = [ "first", "second", "third", "fourth", "fifth" ];
+      const executedIds: Array<string> = [];
+
+      for (const id of expectedIds) {
+        throttle(() => { executedIds.push(id); });
+      }
+
+      vi.advanceTimersByTime(1000);
+      expect(executedIds).toEqual([ "first", "second", "third" ]);
+      vi.advanceTimersByTime(1000);
+
+      expect(executedIds).toEqual(expectedIds);
+      expect(executedIds).toHaveLength(expectedIds.length);
+      expect(new Set(executedIds)).toHaveLength(expectedIds.length);
+    });
+
+    it("delivers retained callbacks before newly enqueued work after stop", () => {
+      const throttle = createThrottledQueue({ min_rpi: 5, interval: 1000, evenly_spaced: false });
+      const expectedIds = [ "first", "second", "third", "fourth" ];
+      const executedIds: Array<string> = [];
+
+      for (const id of expectedIds.slice(0, 3)) {
+        throttle(() => { executedIds.push(id); });
+      }
+
+      vi.advanceTimersByTime(500);
+      throttle.stop();
+      throttle(() => { executedIds.push(expectedIds[3]!); });
+      vi.advanceTimersByTime(1000);
+
+      expect(executedIds).toEqual(expectedIds);
+      expect(executedIds).toHaveLength(expectedIds.length);
+      expect(new Set(executedIds)).toHaveLength(expectedIds.length);
+    });
+
     it("limits slow asynchronous callbacks to the configured number of slots", async () => {
       const throttle = createThrottledQueue({
         min_rpi: 5,

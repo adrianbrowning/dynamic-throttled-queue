@@ -70,5 +70,8 @@
       "types": "./dist/dynamic-throttled-queue.d.ts",
       "default": "./dist/dynamic-throttled-queue.js"
     }
+  },
+  "dependencies": {
+    "@varlock/bumpy": "^1.18.1"
   }
 }

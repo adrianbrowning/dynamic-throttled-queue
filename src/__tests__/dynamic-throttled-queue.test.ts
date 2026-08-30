@@ -221,6 +221,109 @@ describe("createThrottledQueue", () => {
     });
   });
 
+  describe("async feedback timing across adjustment windows", () => {
+    function delayedResult(delay: number, result: boolean | void) {
+      return async () => new Promise<boolean | void>(resolve => {
+        setTimeout(() => resolve(result), delay);
+      });
+    }
+
+    function enqueueKeepAlive(throttle: ReturnType<typeof createThrottledQueue>) {
+      // Keep adjustment timers alive through the second 1000 ms window.
+      for (let i = 0; i < 40; i++) throttle(() => {});
+    }
+
+    it.each([
+      { result: undefined, expectedRate: 11, outcome: "success" },
+      { result: false, expectedRate: 9, outcome: "failure" },
+    ])("attributes a $outcome settling before the interval to the first window", async ({ result, expectedRate }) => {
+      const rates: Array<number> = [];
+      const throttle = createThrottledQueue({
+        min_rpi: 9,
+        max_rpi: 11,
+        interval: 1000,
+        errors_per_interval: 1,
+        onRateChange: rate => rates.push(rate),
+      });
+
+      // The callback starts at 100 ms and settles at 200 ms, well before adjustment.
+      throttle(delayedResult(100, result));
+      enqueueKeepAlive(throttle);
+
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(rates).toEqual([ expectedRate ]);
+    });
+
+    it("attributes a failure settling at the adjustment boundary to the later window", async () => {
+      const rates: Array<number> = [];
+      const throttle = createThrottledQueue({
+        min_rpi: 9,
+        max_rpi: 11,
+        interval: 1000,
+        errors_per_interval: 1,
+        onRateChange: rate => rates.push(rate),
+      });
+
+      // This starts at 100 ms. The 900 ms delay reaches 1000 ms, but the adjustment
+      // timer was registered first, so the first window increases before the failure.
+      throttle(delayedResult(900, false));
+      enqueueKeepAlive(throttle);
+
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(rates).toEqual([ 11 ]);
+
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(rates).toEqual([ 11, 10 ]);
+    });
+
+    it("increases at 1000 ms before attributing a 1500 ms task failure to the later window", async () => {
+      const rates: Array<number> = [];
+      const throttle = createThrottledQueue({
+        min_rpi: 9,
+        max_rpi: 11,
+        interval: 1000,
+        errors_per_interval: 1,
+        onRateChange: rate => rates.push(rate),
+      });
+
+      // At rate 10 this starts at 100 ms and settles at 1600 ms. Its failure is
+      // invisible at 1000 ms, then consumed by the adjustment at 2000 ms.
+      throttle(delayedResult(1500, false));
+      enqueueKeepAlive(throttle);
+
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(rates).toEqual([ 11 ]);
+
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(rates).toEqual([ 11, 10 ]);
+    });
+
+    it("groups variable async results by settlement window rather than invocation window", async () => {
+      const rates: Array<number> = [];
+      const throttle = createThrottledQueue({
+        min_rpi: 8,
+        max_rpi: 12,
+        interval: 1000,
+        errors_per_interval: 1,
+        onRateChange: rate => rates.push(rate),
+      });
+
+      // These start at 100, 200, 300, and 400 ms. The early failure lands in the
+      // first window; the boundary success and later failure do not affect it.
+      throttle(delayedResult(100, undefined));
+      throttle(delayedResult(100, false));
+      throttle(delayedResult(700, undefined));
+      throttle(delayedResult(1400, false));
+      enqueueKeepAlive(throttle);
+
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(rates).toEqual([ 9 ]);
+
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(rates).toEqual([ 9, 8 ]);
+    });
+  });
+
   describe("idle behavior", () => {
     it("stops timers when queue drains and restarts on new enqueue", () => {
       const throttle = createThrottledQueue({ min_rpi: 1, interval: 1000 });

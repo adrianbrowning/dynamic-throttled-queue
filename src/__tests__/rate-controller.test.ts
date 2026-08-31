@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
-import { createRateController } from "../rate-controller.ts";
 import { linear } from "../dynamic-throttled-queue.ts";
+import { createRateController } from "../rate-controller.ts";
 
 describe("rate controller", () => {
   it("exports the linear strategy with the compatibility decisions", () => {

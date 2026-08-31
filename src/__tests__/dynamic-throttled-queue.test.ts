@@ -341,7 +341,7 @@ describe("createThrottledQueue", () => {
       for (let i = 0; i < 10; i++) throttle(() => {});
       vi.advanceTimersByTime(1000);
 
-      expect(observations).toEqual([ {
+      expect(observations).toEqual([{
         currentRate: 2,
         minRate: 1,
         maxRate: 3,
@@ -349,7 +349,7 @@ describe("createThrottledQueue", () => {
         errorThreshold: 5,
         hasPendingWork: true,
         wasBackedOff: false,
-      } ]);
+      }]);
       expect(rates).toEqual([ 1 ]);
     });
 

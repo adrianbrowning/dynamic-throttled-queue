@@ -63,6 +63,8 @@ console.log(throttle.pending); // number of queued callbacks
 throttle.stop(); // halt processing
 ```
 
+`stop()` clears scheduler timers and retains callbacks that have not started. It cannot cancel an active asynchronous callback; if that callback later succeeds, returns `false`, or rejects, its settlement does not restart scheduling. A retry created by a failed active callback is retained with the pending work. Enqueueing another callback resumes the queue.
+
 ## Examples
 
 ### Basic

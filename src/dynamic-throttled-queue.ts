@@ -18,6 +18,13 @@ export type RateStrategyDecision = Readonly<{
 
 export type RateStrategy = (observation: RateStrategyObservation) => RateStrategyDecision;
 
+export type RateFailureOutcome =
+  | Readonly<{ kind: "returned-false"; }>
+  | Readonly<{ kind: "thrown"; error: unknown; }>
+  | Readonly<{ kind: "rejected"; error: unknown; }>;
+
+export type RateOutcomeClassifier = (outcome: RateFailureOutcome) => boolean;
+
 export const linear: RateStrategy = ({
   minRate,
   maxRate,
@@ -55,6 +62,8 @@ export type ThrottleOptions = {
   compact_threshold?: number;
   /** Policy used to request the next rate and any backoff after each observation window. */
   rateStrategy?: RateStrategy;
+  /** Decides whether a failed callback outcome contributes to adaptive-rate error counting. */
+  rateOutcomeClassifier?: RateOutcomeClassifier;
   onRateChange?: (rate: number) => void;
 };
 

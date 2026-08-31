@@ -322,6 +322,140 @@ describe("createThrottledQueue", () => {
   });
 
   describe("dynamic rate adjustment", () => {
+    it("lets a classifier exclude returned false from adaptive-rate accounting", () => {
+      const outcomes: Array<unknown> = [];
+      const rates: Array<number> = [];
+      const throttle = createThrottledQueue({
+        min_rpi: 1,
+        max_rpi: 5,
+        interval: 1000,
+        evenly_spaced: false,
+        errors_per_interval: 1,
+        rateOutcomeClassifier: outcome => {
+          outcomes.push(outcome);
+          return false;
+        },
+        onRateChange: rate => rates.push(rate),
+      });
+
+      for (let i = 0; i < 5; i++) throttle(() => false);
+      vi.advanceTimersByTime(1000);
+
+      expect(outcomes).toEqual([
+        { kind: "returned-false" },
+        { kind: "returned-false" },
+        { kind: "returned-false" },
+      ]);
+      expect(rates).toEqual([ 4 ]);
+    });
+
+    it("gives the classifier the original error from a thrown callback", () => {
+      const failure = new Error("thrown failure");
+      const outcomes: Array<unknown> = [];
+      const rates: Array<number> = [];
+      const throttle = createThrottledQueue({
+        min_rpi: 1,
+        max_rpi: 5,
+        interval: 1000,
+        evenly_spaced: false,
+        errors_per_interval: 1,
+        rateOutcomeClassifier: outcome => {
+          outcomes.push(outcome);
+          return true;
+        },
+        onRateChange: rate => rates.push(rate),
+      });
+
+      for (let i = 0; i < 5; i++) throttle(() => { throw failure; });
+      vi.advanceTimersByTime(1000);
+
+      expect(outcomes).toEqual([
+        { kind: "thrown", error: failure },
+        { kind: "thrown", error: failure },
+        { kind: "thrown", error: failure },
+      ]);
+      expect(rates).toEqual([ 2 ]);
+    });
+
+    it("gives the classifier the original error from a rejected callback", async () => {
+      const failure = new Error("rejected failure");
+      const outcomes: Array<unknown> = [];
+      const rates: Array<number> = [];
+      const throttle = createThrottledQueue({
+        min_rpi: 1,
+        max_rpi: 5,
+        interval: 1000,
+        evenly_spaced: false,
+        errors_per_interval: 1,
+        rateOutcomeClassifier: outcome => {
+          outcomes.push(outcome);
+          return true;
+        },
+        onRateChange: rate => rates.push(rate),
+      });
+
+      for (let i = 0; i < 5; i++) throttle(async () => { throw failure; });
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(outcomes).toEqual([
+        { kind: "rejected", error: failure },
+        { kind: "rejected", error: failure },
+        { kind: "rejected", error: failure },
+      ]);
+      expect(rates).toEqual([ 2 ]);
+    });
+
+    it("lets a classifier exclude every normalized failure kind", async () => {
+      const thrown = new Error("thrown failure");
+      const rejected = new Error("rejected failure");
+      const outcomes: Array<unknown> = [];
+      const rates: Array<number> = [];
+      const throttle = createThrottledQueue({
+        min_rpi: 1,
+        max_rpi: 5,
+        interval: 1000,
+        evenly_spaced: false,
+        errors_per_interval: 1,
+        rateOutcomeClassifier: outcome => {
+          outcomes.push(outcome);
+          return false;
+        },
+        onRateChange: rate => rates.push(rate),
+      });
+
+      throttle(() => false);
+      throttle(() => { throw thrown; });
+      throttle(async () => { throw rejected; });
+      throttle(() => {});
+      throttle(() => {});
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(outcomes).toEqual([
+        { kind: "returned-false" },
+        { kind: "thrown", error: thrown },
+        { kind: "rejected", error: rejected },
+      ]);
+      expect(rates).toEqual([ 4 ]);
+    });
+
+    it("fails safe when a classifier throws", () => {
+      const rates: Array<number> = [];
+      const throttle = createThrottledQueue({
+        min_rpi: 1,
+        max_rpi: 5,
+        interval: 1000,
+        evenly_spaced: false,
+        errors_per_interval: 1,
+        rateOutcomeClassifier: () => { throw new Error("classifier failed"); },
+        onRateChange: rate => rates.push(rate),
+      });
+
+      for (let i = 0; i < 5; i++) throttle(() => false);
+
+      expect(() => vi.advanceTimersByTime(1000)).not.toThrow();
+      expect(rates).toEqual([ 2 ]);
+    });
+
     it("uses a custom rate strategy through the queue configuration", () => {
       const observations: Array<Parameters<RateStrategy>[0]> = [];
       const rateStrategy: RateStrategy = observation => {
@@ -546,6 +680,22 @@ describe("createThrottledQueue", () => {
   });
 
   describe("retry", () => {
+    it("keeps retry eligibility independent from the rate outcome classifier", () => {
+      const throttle = createThrottledQueue({
+        min_rpi: 5,
+        interval: 1000,
+        evenly_spaced: false,
+        retry: 1,
+        rateOutcomeClassifier: () => false,
+      });
+      let callCount = 0;
+
+      throttle(() => { callCount++; return false; });
+      vi.advanceTimersByTime(3000);
+
+      expect(callCount).toBe(2);
+    });
+
     it("retries failed callbacks up to retry count", () => {
       const throttle = createThrottledQueue({
         min_rpi: 5,

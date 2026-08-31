@@ -18,7 +18,7 @@ export type RateDecision = {
 
 export type RateController = {
   readonly rate: number;
-  recordCompletion: (result: boolean | void) => void;
+  recordCompletion: (isRateReducing: boolean) => void;
   observe: (observation: Observation) => RateDecision;
 };
 
@@ -44,8 +44,8 @@ export function createRateController(options: RateControllerOptions, strategy: R
     get rate() {
       return rate;
     },
-    recordCompletion(result: boolean | void) {
-      if (result === false) errorCount++;
+    recordCompletion(isRateReducing: boolean) {
+      if (isRateReducing) errorCount++;
     },
     observe(observation: Observation) {
       const decision = validateDecision(strategy(Object.freeze({

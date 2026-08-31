@@ -305,7 +305,7 @@ describe("createThrottledQueue", () => {
   });
 
   describe("dynamic rate adjustment", () => {
-    it("decreases rate on errors", () => {
+    it("decreases to the minimum rate and stays there after consecutive failing windows", () => {
       const rates: Array<number> = [];
       const throttle = createThrottledQueue({
         min_rpi: 1,
@@ -315,18 +315,19 @@ describe("createThrottledQueue", () => {
         onRateChange: r => rates.push(r),
       });
 
-      // Starting rpi = ceil(5 - (5-1)/2) = 3, evenly_spaced so interval = 1000/3 ≈ 333ms
-      // Queue enough failing callbacks
-      for (let i = 0; i < 20; i++) {
+      // Starts at 3. Each error-filled observation window lowers the rate by one.
+      for (let i = 0; i < 40; i++) {
         throttle(() => false);
       }
 
-      // After 1 interval (1000ms), adjustRate fires and sees errors >= 2
-      vi.advanceTimersByTime(1000);
-      expect(rates).toContain(2); // decreased from 3
+      vi.advanceTimersByTime(4000);
+
+      // The final two windows exercise the lower clamp: no rate-change event is
+      // emitted once the rate is already at min_rpi.
+      expect(rates).toEqual([ 2, 1 ]);
     });
 
-    it("increases rate when no errors", () => {
+    it("increases to the maximum rate and stays there after consecutive successful windows", () => {
       const rates: Array<number> = [];
       const throttle = createThrottledQueue({
         min_rpi: 1,
@@ -335,14 +336,16 @@ describe("createThrottledQueue", () => {
         onRateChange: r => rates.push(r),
       });
 
-      // Queue succeeding callbacks
-      for (let i = 0; i < 20; i++) {
+      // Starts at 3. Each error-free observation window raises the rate by one.
+      for (let i = 0; i < 40; i++) {
         throttle(() => {});
       }
 
-      // After interval, adjustRate sees 0 errors + queue not empty → increase
-      vi.advanceTimersByTime(1000);
-      expect(rates).toContain(4); // increased from 3
+      vi.advanceTimersByTime(4000);
+
+      // The final two windows exercise the upper clamp: no rate-change event is
+      // emitted once the rate is already at max_rpi.
+      expect(rates).toEqual([ 4, 5 ]);
     });
   });
 
@@ -626,34 +629,32 @@ describe("createThrottledQueue", () => {
   });
 
   describe("regression: double adjustRate", () => {
-    it("async retry restart does not create duplicate rate adjustments", async () => {
-      expect.assertions(1);
+    it("async retry restart produces one rate change per subsequent adjustment window", async () => {
       const rates: Array<number> = [];
+      let resolveFirst!: (value: boolean) => void;
+      const firstResult = new Promise<boolean>(resolve => { resolveFirst = resolve; });
       const throttle = createThrottledQueue({
         min_rpi: 1,
         max_rpi: 5,
         interval: 1000,
-        errors_per_interval: 2,
+        errors_per_interval: 1,
         retry: 1,
         onRateChange: r => rates.push(r),
       });
 
-      // Single async failing callback — will trigger retry after resolution
-      throttle(async () => false);
-
-      // Advance to fire dequeue + let promise resolve
+      // Let the initial async callback drain the queue, then fail it. Its retry
+      // restarts the scheduler and opens a fresh adjustment window.
+      throttle(async () => firstResult);
       await vi.advanceTimersByTimeAsync(500);
+      resolveFirst(false);
+      await vi.advanceTimersByTimeAsync(0);
 
-      // adjustRate fires at 1000ms
-      await vi.advanceTimersByTimeAsync(500);
+      // The retry fails in the restarted window; the remaining callbacks keep
+      // it alive for the following successful window.
+      for (let i = 0; i < 40; i++) throttle(() => {});
+      await vi.advanceTimersByTimeAsync(2000);
 
-      // Retry enqueued + restart happens here. Second adjustRate window.
-      await vi.advanceTimersByTimeAsync(1000);
-
-      // If double adjustRate existed, we'd see more rate changes than expected.
-      // With rpi starting at 3, errors_per_interval=2: at most 1 decrease per interval
-      const decreases = rates.filter((r, i) => i > 0 && r < rates[i - 1]!);
-      expect(decreases.length).toBeLessThanOrEqual(1);
+      expect(rates).toEqual([ 2, 3 ]);
     });
   });
 
@@ -768,45 +769,6 @@ describe("createThrottledQueue", () => {
     });
   });
 
-  describe("rate clamping", () => {
-    it("rate never drops below min_rpi", () => {
-      const rates: Array<number> = [];
-      const throttle = createThrottledQueue({
-        min_rpi: 2,
-        max_rpi: 5,
-        interval: 1000,
-        errors_per_interval: 1,
-        evenly_spaced: false,
-        onRateChange: r => rates.push(r),
-      });
-
-      for (let i = 0; i < 50; i++) {
-        throttle(() => false);
-      }
-
-      vi.advanceTimersByTime(20_000);
-      expect(rates.every(r => r >= 2)).toBe(true);
-    });
-
-    it("rate never exceeds max_rpi", () => {
-      const rates: Array<number> = [];
-      const throttle = createThrottledQueue({
-        min_rpi: 1,
-        max_rpi: 4,
-        interval: 1000,
-        evenly_spaced: false,
-        onRateChange: r => rates.push(r),
-      });
-
-      for (let i = 0; i < 100; i++) {
-        throttle(() => {});
-      }
-
-      vi.advanceTimersByTime(30_000);
-      expect(rates.every(r => r <= 4)).toBe(true);
-    });
-  });
-
   describe("async retry restarts idle queue", () => {
     it("resumes processing when async failure enqueues retry after queue drained", async () => {
       expect.assertions(1);
@@ -830,7 +792,7 @@ describe("createThrottledQueue", () => {
   });
 
   describe("skippedLast blocks rate increase", () => {
-    it("does not increase rate on the interval immediately after backoff", () => {
+    it("skips the backoff adjustment window before increasing in the next eligible window", () => {
       const rates: Array<number> = [];
       const throttle = createThrottledQueue({
         min_rpi: 1,
@@ -849,13 +811,10 @@ describe("createThrottledQueue", () => {
         throttle(() => {});
       }
 
-      // First interval: error triggers decrease + backoff (skippedLast = true)
-      vi.advanceTimersByTime(1000);
-      const ratesAfterDecrease = rates.length;
-
-      // Next adjustRate fires 1000ms later with wasSkipped=true — should NOT increase
-      vi.advanceTimersByTime(1000);
-      expect(rates).toHaveLength(ratesAfterDecrease);
+      // At 1000ms, the first failure reduces 6 → 5 and starts backoff. The
+      // 2000ms window is skipped; the next error-free window raises 5 → 6.
+      vi.advanceTimersByTime(3000);
+      expect(rates).toEqual([ 5, 6 ]);
     });
   });
 

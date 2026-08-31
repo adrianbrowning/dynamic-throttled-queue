@@ -10,6 +10,7 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
     retry = 0,
     concurrency,
     compact_threshold = 512,
+    back_off = false,
     onRateChange,
   } = options;
   let current_rpi = rateController.rate;
@@ -22,6 +23,8 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
   let dynTimeout: ReturnType<typeof setTimeout> | undefined;
   let active_count = 0;
   let isStopped = false;
+  let hasStrategyFailure = false;
+  let strategyFailure: unknown;
   const max_concurrency = concurrency ?? Infinity;
   const queue: Array<QueueItem> = [];
   let head = 0;
@@ -113,9 +116,18 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
     dynTimeout = undefined;
     const wasSkipped = skippedLast;
     skippedLast = false;
-    const decision = rateController.observe({ hasPendingWork: queue.length > head, wasSkipped });
+    let decision: ReturnType<RateController["observe"]>;
+    try {
+      decision = rateController.observe({ hasPendingWork: queue.length > head, wasBackedOff: wasSkipped });
+    }
+    catch (error) {
+      hasStrategyFailure = true;
+      strategyFailure = error;
+      halt();
+      throw error;
+    }
     applyRate(decision.rate);
-    if (decision.shouldBackOff) {
+    if (decision.shouldBackOff && back_off) {
       clearTimeout(timeout);
       skippedLast = true;
       timeout = setTimeout(dequeue, dyn_interval + interval);
@@ -133,6 +145,7 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
   }
 
   function enqueue(callback: ThrottleCallback) {
+    if (hasStrategyFailure) throw strategyFailure;
     queue.push({ fn: callback, retries: retry });
     isStopped = false;
     if (!isRunning) start();

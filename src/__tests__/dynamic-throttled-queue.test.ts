@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createThrottledQueue } from "../dynamic-throttled-queue.ts";
+import type { RateStrategy } from "../dynamic-throttled-queue.ts";
 
 function deferred() {
   let settle!: () => void;
@@ -321,6 +322,154 @@ describe("createThrottledQueue", () => {
   });
 
   describe("dynamic rate adjustment", () => {
+    it("uses a custom rate strategy through the queue configuration", () => {
+      const observations: Array<Parameters<RateStrategy>[0]> = [];
+      const rateStrategy: RateStrategy = observation => {
+        observations.push(observation);
+        return { nextRate: 1, shouldBackOff: false };
+      };
+      const rates: Array<number> = [];
+      const throttle = createThrottledQueue({
+        min_rpi: 1,
+        max_rpi: 3,
+        interval: 1000,
+        evenly_spaced: false,
+        rateStrategy,
+        onRateChange: rate => rates.push(rate),
+      });
+
+      for (let i = 0; i < 10; i++) throttle(() => {});
+      vi.advanceTimersByTime(1000);
+
+      expect(observations).toEqual([ {
+        currentRate: 2,
+        minRate: 1,
+        maxRate: 3,
+        errorCount: 0,
+        errorThreshold: 5,
+        hasPendingWork: true,
+        wasBackedOff: false,
+      } ]);
+      expect(rates).toEqual([ 1 ]);
+    });
+
+    it("gives a custom strategy a frozen observation", () => {
+      let observationIsFrozen = false;
+      const throttle = createThrottledQueue({
+        min_rpi: 1,
+        max_rpi: 2,
+        interval: 1000,
+        evenly_spaced: false,
+        rateStrategy: observation => {
+          observationIsFrozen = Object.isFrozen(observation);
+          return { nextRate: observation.currentRate, shouldBackOff: false };
+        },
+      });
+
+      throttle(() => {});
+      throttle(() => {});
+      throttle(() => {});
+      vi.advanceTimersByTime(1000);
+
+      expect(observationIsFrozen).toBe(true);
+    });
+
+    it.each([
+      { decision: { nextRate: 1.5, shouldBackOff: false }, name: "a fractional rate" },
+      { decision: { nextRate: Infinity, shouldBackOff: false }, name: "a non-finite rate" },
+      { decision: { nextRate: 1, shouldBackOff: 1 }, name: "a non-boolean backoff recommendation" },
+    ])("surfaces $name from a custom strategy", ({ decision }) => {
+      const throttle = createThrottledQueue({
+        min_rpi: 1,
+        max_rpi: 2,
+        interval: 1000,
+        evenly_spaced: false,
+        rateStrategy: () => decision as unknown as ReturnType<RateStrategy>,
+      });
+
+      for (let i = 0; i < 3; i++) throttle(() => {});
+
+      expect(() => vi.advanceTimersByTime(1000)).toThrow(TypeError);
+    });
+
+    it("clamps a custom strategy's out-of-range integer rate before reporting it", () => {
+      const rates: Array<number> = [];
+      const throttle = createThrottledQueue({
+        min_rpi: 1,
+        max_rpi: 3,
+        interval: 1000,
+        evenly_spaced: false,
+        rateStrategy: () => ({ nextRate: 99, shouldBackOff: false }),
+        onRateChange: rate => rates.push(rate),
+      });
+
+      for (let i = 0; i < 3; i++) throttle(() => {});
+      vi.advanceTimersByTime(1000);
+
+      expect(rates).toEqual([ 3 ]);
+    });
+
+    it.each([
+      { back_off: false, expectedStartsAt2000: 4 },
+      { back_off: true, expectedStartsAt2000: 2 },
+    ])("applies a custom backoff recommendation only when back_off is $back_off", ({ back_off, expectedStartsAt2000 }) => {
+      const throttle = createThrottledQueue({
+        min_rpi: 1,
+        max_rpi: 2,
+        interval: 1000,
+        evenly_spaced: false,
+        back_off,
+        rateStrategy: observation => ({ nextRate: observation.currentRate, shouldBackOff: true }),
+      });
+      let started = 0;
+
+      for (let i = 0; i < 5; i++) throttle(() => { started++; });
+      vi.advanceTimersByTime(2000);
+
+      expect(started).toBe(expectedStartsAt2000);
+    });
+
+    it("reports an actual preceding pause as wasBackedOff", () => {
+      const wasBackedOff: Array<boolean> = [];
+      const throttle = createThrottledQueue({
+        min_rpi: 1,
+        max_rpi: 2,
+        interval: 1000,
+        evenly_spaced: false,
+        back_off: true,
+        rateStrategy: observation => {
+          wasBackedOff.push(observation.wasBackedOff);
+          return { nextRate: observation.currentRate, shouldBackOff: true };
+        },
+      });
+
+      for (let i = 0; i < 5; i++) throttle(() => {});
+      vi.advanceTimersByTime(2000);
+
+      expect(wasBackedOff).toEqual([ false, true ]);
+    });
+
+    it("permanently halts the queue when a custom strategy throws", () => {
+      const failure = new Error("strategy failed");
+      const throttle = createThrottledQueue({
+        min_rpi: 1,
+        max_rpi: 2,
+        interval: 1000,
+        evenly_spaced: false,
+        rateStrategy: () => { throw failure; },
+      });
+      let started = 0;
+
+      for (let i = 0; i < 3; i++) throttle(() => { started++; });
+
+      expect(() => vi.advanceTimersByTime(1000)).toThrow(failure);
+      expect(throttle.pending).toBe(1);
+      expect(vi.getTimerCount()).toBe(0);
+      expect(() => throttle(() => { started++; })).toThrow(failure);
+      vi.advanceTimersByTime(10_000);
+      expect(started).toBe(2);
+    });
+
     it("decreases to the minimum rate and stays there after consecutive failing windows", () => {
       const rates: Array<number> = [];
       const throttle = createThrottledQueue({

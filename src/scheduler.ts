@@ -1,4 +1,4 @@
-import type { ThrottleCallback, ThrottleHandle, ThrottleOptions } from "./dynamic-throttled-queue.ts";
+import type { RateFailureOutcome, ThrottleCallback, ThrottleHandle, ThrottleOptions } from "./dynamic-throttled-queue.ts";
 import type { RateController } from "./rate-controller.ts";
 
 type QueueItem = { fn: ThrottleCallback; retries: number; };
@@ -11,6 +11,7 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
     concurrency,
     compact_threshold = 512,
     back_off = false,
+    rateOutcomeClassifier,
     onRateChange,
   } = options;
   let current_rpi = rateController.rate;
@@ -47,17 +48,27 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
     halt();
   }
 
-  function handleResult(item: QueueItem, result: boolean | void) {
-    rateController.recordCompletion(result);
-    if (result === false && item.retries > 0) {
+  function isRateReducing(outcome: RateFailureOutcome | undefined) {
+    if (!outcome) return false;
+    try {
+      return rateOutcomeClassifier?.(outcome) ?? true;
+    }
+    catch {
+      return true;
+    }
+  }
+
+  function handleResult(item: QueueItem, outcome: RateFailureOutcome | undefined) {
+    rateController.recordCompletion(isRateReducing(outcome));
+    if (outcome && item.retries > 0) {
       queue.push({ fn: item.fn, retries: item.retries - 1 });
       if (!isRunning && !isStopped && queue.length > head) start();
     }
   }
 
-  function handleSettlement(item: QueueItem, result: boolean | void, resume = false) {
+  function handleSettlement(item: QueueItem, outcome: RateFailureOutcome | undefined, resume = false) {
     active_count--;
-    handleResult(item, result);
+    handleResult(item, outcome);
     if (resume && isRunning && !skippedLast && queue.length > head) dequeue();
   }
 
@@ -80,15 +91,18 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
       try {
         result = item.fn();
       }
-      catch {
-        handleSettlement(item, false);
+      catch (error) {
+        handleSettlement(item, { kind: "thrown", error });
         continue;
       }
       if (result instanceof Promise) {
-        void result.then(value => handleSettlement(item, value, true), () => handleSettlement(item, false, true));
+        void result.then(
+          value => handleSettlement(item, value === false ? { kind: "returned-false" } : undefined, true),
+          error => handleSettlement(item, { kind: "rejected", error }, true)
+        );
       }
       else {
-        handleSettlement(item, result);
+        handleSettlement(item, result === false ? { kind: "returned-false" } : undefined);
       }
     }
 

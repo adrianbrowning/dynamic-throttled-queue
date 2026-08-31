@@ -25,8 +25,8 @@ describe("rate controller", () => {
 
     expect(controller.rate).toBe(3);
 
-    controller.recordCompletion(false);
-    controller.recordCompletion(false);
+    controller.recordCompletion(true);
+    controller.recordCompletion(true);
 
     expect(controller.observe({ hasPendingWork: true, wasBackedOff: false })).toEqual({
       rate: 2,

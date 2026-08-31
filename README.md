@@ -26,7 +26,7 @@ throttle(() => {
 });
 ```
 
-Callbacks can return `false` to signal an error (used for dynamic rate adjustment and retry). Async callbacks (returning a Promise) are also supported — rejections and `false` resolutions count as errors.
+Callbacks can return `false` to signal a failure (used for dynamic rate adjustment and retry). Async callbacks (returning a Promise) are also supported — rejections and `false` resolutions count as failures. By default, every failure reduces the adaptive rate; use `rateOutcomeClassifier` when only selected failures should do so.
 
 Set `concurrency` to bound callbacks that are still awaiting asynchronous completion. This limit is independent of the request-start rate; omitting it preserves the existing unlimited in-flight behavior.
 
@@ -44,6 +44,7 @@ Set `concurrency` to bound callbacks that are still awaiting asynchronous comple
 | `concurrency` | `number` | — | Maximum callbacks awaiting asynchronous completion; omit for no limit |
 | `compact_threshold` | `number` | `512` | Non-negative integer minimum dead slots before internal queue compaction triggers; `0` compacts at the earliest eligible point |
 | `rateStrategy` | `RateStrategy` | `linear` | Pure policy that requests the next rate and an optional backoff after each observation window |
+| `rateOutcomeClassifier` | `RateOutcomeClassifier` | — | Decides whether a failed callback outcome contributes to adaptive-rate error counting |
 | `onRateChange` | `(rate: number) => void` | — | Called when the current rate changes |
 
 `retry`, `errors_per_interval`, and `compact_threshold` reject fractional and non-finite values. `errors_per_interval` must be at least `1`; `retry` and `compact_threshold` may be `0`.
@@ -117,6 +118,34 @@ for (let i = 0; i < 100; i++) {
   });
 }
 ```
+
+### Rate outcome classification
+
+`rateOutcomeClassifier` receives only failed callback outcomes and returns whether each one should reduce the adaptive rate. It does not change retry eligibility: `false`, thrown errors, and rejected promises still retry under the existing `retry` option.
+
+```ts
+import {
+  createThrottledQueue,
+  type RateFailureOutcome,
+} from "dynamic-throttled-queue";
+
+function affectsCapacity(outcome: RateFailureOutcome) {
+  if (outcome.kind === "returned-false") return false;
+
+  // Treat HTTP 429 and 5xx as capacity signals, while ignoring other failures.
+  const status = (outcome.error as { status?: number }).status;
+  return status === 429 || (status !== undefined && status >= 500 && status < 600);
+}
+
+const throttle = createThrottledQueue({
+  min_rpi: 1,
+  max_rpi: 10,
+  interval: 1000,
+  rateOutcomeClassifier: affectsCapacity,
+});
+```
+
+The normalized outcomes are `{ kind: "returned-false" }`, `{ kind: "thrown", error }`, and `{ kind: "rejected", error }`. Omitting the classifier preserves the default behavior: every failure reduces the adaptive rate. If the classifier throws, the original failure safely counts as rate-reducing and no separate classifier error is surfaced.
 
 ### Rate strategies
 

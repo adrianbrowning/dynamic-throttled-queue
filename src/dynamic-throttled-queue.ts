@@ -1,6 +1,41 @@
 import { createRateController } from "./rate-controller.ts";
 import { createScheduler } from "./scheduler.ts";
 
+export type RateStrategyObservation = Readonly<{
+  currentRate: number;
+  minRate: number;
+  maxRate: number;
+  errorCount: number;
+  errorThreshold: number;
+  hasPendingWork: boolean;
+  wasBackedOff: boolean;
+}>;
+
+export type RateStrategyDecision = Readonly<{
+  nextRate: number;
+  shouldBackOff: boolean;
+}>;
+
+export type RateStrategy = (observation: RateStrategyObservation) => RateStrategyDecision;
+
+export const linear: RateStrategy = ({
+  minRate,
+  maxRate,
+  currentRate,
+  errorCount,
+  errorThreshold,
+  hasPendingWork,
+  wasBackedOff,
+}) => {
+  if (errorCount >= errorThreshold) {
+    return { nextRate: Math.max(minRate, currentRate - 1), shouldBackOff: true };
+  }
+  if (!wasBackedOff && errorCount === 0 && hasPendingWork) {
+    return { nextRate: Math.min(maxRate, currentRate + 1), shouldBackOff: false };
+  }
+  return { nextRate: currentRate, shouldBackOff: false };
+};
+
 /** Return `false` to signal failure (increments error count, triggers retry if configured). */
 export type ThrottleCallback = () => boolean | void | Promise<boolean | void>;
 
@@ -18,6 +53,8 @@ export type ThrottleOptions = {
   concurrency?: number;
   /** Non-negative integer dead slots before queue compaction triggers. Default 512. */
   compact_threshold?: number;
+  /** Policy used to request the next rate and any backoff after each observation window. */
+  rateStrategy?: RateStrategy;
   onRateChange?: (rate: number) => void;
 };
 
@@ -59,6 +96,5 @@ export function createThrottledQueue(options: ThrottleOptions): ThrottleHandle {
     min_rpi,
     max_rpi,
     errors_per_interval,
-    back_off: options.back_off ?? false,
-  }));
+  }, options.rateStrategy ?? linear));
 }

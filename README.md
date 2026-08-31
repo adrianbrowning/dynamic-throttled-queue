@@ -43,6 +43,7 @@ Set `concurrency` to bound callbacks that are still awaiting asynchronous comple
 | `retry` | `number` | `0` | Non-negative integer number of times to retry failed callbacks |
 | `concurrency` | `number` | — | Maximum callbacks awaiting asynchronous completion; omit for no limit |
 | `compact_threshold` | `number` | `512` | Non-negative integer minimum dead slots before internal queue compaction triggers; `0` compacts at the earliest eligible point |
+| `rateStrategy` | `RateStrategy` | `linear` | Pure policy that requests the next rate and an optional backoff after each observation window |
 | `onRateChange` | `(rate: number) => void` | — | Called when the current rate changes |
 
 `retry`, `errors_per_interval`, and `compact_threshold` reject fractional and non-finite values. `errors_per_interval` must be at least `1`; `retry` and `compact_threshold` may be `0`.
@@ -116,6 +117,42 @@ for (let i = 0; i < 100; i++) {
   });
 }
 ```
+
+### Rate strategies
+
+The default `linear` strategy preserves the adaptive behavior above. You can import and pass it explicitly, or provide a custom pure strategy:
+
+```ts
+import {
+  createThrottledQueue,
+  linear,
+  type RateStrategy,
+} from "dynamic-throttled-queue";
+
+const conservative: RateStrategy = ({
+  currentRate,
+  minRate,
+  errorCount,
+  errorThreshold,
+}) => ({
+  nextRate: errorCount >= errorThreshold ? Math.max(minRate, currentRate - 1) : currentRate,
+  shouldBackOff: errorCount >= errorThreshold,
+});
+
+const throttle = createThrottledQueue({
+  min_rpi: 1,
+  max_rpi: 10,
+  interval: 1000,
+  rateStrategy: conservative,
+});
+
+// Equivalent to omitting rateStrategy:
+createThrottledQueue({ min_rpi: 1, max_rpi: 10, interval: 1000, rateStrategy: linear });
+```
+
+A `RateStrategy` receives a frozen observation with `currentRate`, `minRate`, `maxRate`, `errorCount`, `errorThreshold`, `hasPendingWork`, and `wasBackedOff`; it returns `{ nextRate, shouldBackOff }`. Every queue starts at the midpoint of its configured range. The queue clamps finite integer `nextRate` values to its bounds. `shouldBackOff` requests a pause, which the queue performs only when `back_off` is `true`.
+
+Strategies must return a finite integer `nextRate` and a boolean `shouldBackOff`. A malformed decision or a strategy exception permanently halts that queue, clears its timers, retains unstarted callbacks in `pending`, and surfaces the original error. Create a new queue instance to resume work.
 
 ### Backoff
 

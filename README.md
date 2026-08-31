@@ -149,7 +149,22 @@ The normalized outcomes are `{ kind: "returned-false" }`, `{ kind: "thrown", err
 
 ### Rate strategies
 
-The default `linear` strategy preserves the adaptive behavior above. You can import and pass it explicitly, or provide a custom pure strategy:
+The default `linear` strategy preserves the adaptive behavior above: it changes the rate by one request per interval. Use `aimd` when a capacity signal should reduce throughput more quickly while recovery remains gradual. AIMD increases by a fixed amount after a clean eligible observation window and reduces the rate by a multiplier when the error threshold is reached.
+
+```ts
+import { aimd, createThrottledQueue } from "dynamic-throttled-queue";
+
+const throttle = createThrottledQueue({
+  min_rpi: 1,
+  max_rpi: 100,
+  interval: 1000,
+  rateStrategy: aimd({ increaseBy: 2, decreaseFactor: 0.5 }),
+});
+```
+
+`aimd()` defaults to `{ increaseBy: 1, decreaseFactor: 0.5 }`. `increaseBy` must be a positive integer; `decreaseFactor` must be greater than `0` and less than `1`. AIMD uses `Math.floor(currentRate * decreaseFactor)` when reducing the rate, then the queue applies its configured `min_rpi` and `max_rpi` bounds. Like `linear`, it holds steady for partial-error, empty, and immediately-post-backoff observation windows.
+
+You can also import and pass `linear` explicitly, or provide a custom pure strategy:
 
 ```ts
 import {

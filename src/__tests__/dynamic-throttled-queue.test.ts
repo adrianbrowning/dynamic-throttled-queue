@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { createThrottledQueue } from "../dynamic-throttled-queue.ts";
+import { aimd, createThrottledQueue } from "../dynamic-throttled-queue.ts";
 import type { RateStrategy } from "../dynamic-throttled-queue.ts";
 
 function deferred() {
@@ -322,6 +322,59 @@ describe("createThrottledQueue", () => {
   });
 
   describe("dynamic rate adjustment", () => {
+    it("applies AIMD decisions through the queue and clamps them to configured bounds", () => {
+      const rates: Array<number> = [];
+      const throttle = createThrottledQueue({
+        min_rpi: 2,
+        max_rpi: 9,
+        interval: 1000,
+        evenly_spaced: false,
+        rateStrategy: aimd({ increaseBy: 4, decreaseFactor: 0.2 }),
+        onRateChange: rate => rates.push(rate),
+      });
+
+      for (let i = 0; i < 12; i++) throttle(() => {});
+      vi.advanceTimersByTime(1000);
+
+      expect(rates).toEqual([ 9 ]);
+    });
+
+    it("clamps AIMD's floored decrease to the queue minimum", () => {
+      const rates: Array<number> = [];
+      const throttle = createThrottledQueue({
+        min_rpi: 2,
+        max_rpi: 9,
+        interval: 1000,
+        evenly_spaced: false,
+        errors_per_interval: 1,
+        rateStrategy: aimd({ decreaseFactor: 0.2 }),
+        onRateChange: rate => rates.push(rate),
+      });
+
+      for (let i = 0; i < 12; i++) throttle(() => false);
+      vi.advanceTimersByTime(1000);
+
+      expect(rates).toEqual([ 2 ]);
+    });
+
+    it("uses AIMD's backoff request only when queue backoff is enabled", () => {
+      const throttle = createThrottledQueue({
+        min_rpi: 1,
+        max_rpi: 3,
+        interval: 1000,
+        evenly_spaced: false,
+        errors_per_interval: 1,
+        back_off: true,
+        rateStrategy: aimd(),
+      });
+      let started = 0;
+
+      for (let i = 0; i < 5; i++) throttle(() => { started++; return false; });
+      vi.advanceTimersByTime(2000);
+
+      expect(started).toBe(2);
+    });
+
     it("lets a classifier exclude returned false from adaptive-rate accounting", () => {
       const outcomes: Array<unknown> = [];
       const rates: Array<number> = [];

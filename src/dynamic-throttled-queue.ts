@@ -18,6 +18,11 @@ export type RateStrategyDecision = Readonly<{
 
 export type RateStrategy = (observation: RateStrategyObservation) => RateStrategyDecision;
 
+export type AimdOptions = {
+  increaseBy?: number;
+  decreaseFactor?: number;
+};
+
 export type RateFailureOutcome =
   | Readonly<{ kind: "returned-false"; }>
   | Readonly<{ kind: "thrown"; error: unknown; }>
@@ -42,6 +47,24 @@ export const linear: RateStrategy = ({
   }
   return { nextRate: currentRate, shouldBackOff: false };
 };
+
+export function aimd({ increaseBy = 1, decreaseFactor = 0.5 }: AimdOptions = {}): RateStrategy {
+  if (!Number.isInteger(increaseBy) || increaseBy < 1) {
+    throw new Error("increaseBy must be a positive integer");
+  }
+  if (!Number.isFinite(decreaseFactor) || decreaseFactor <= 0 || decreaseFactor >= 1) {
+    throw new Error("decreaseFactor must be a number greater than 0 and less than 1");
+  }
+  return ({ currentRate, errorCount, errorThreshold, hasPendingWork, wasBackedOff }) => {
+    if (errorCount >= errorThreshold) {
+      return { nextRate: Math.floor(currentRate * decreaseFactor), shouldBackOff: true };
+    }
+    if (!wasBackedOff && errorCount === 0 && hasPendingWork) {
+      return { nextRate: currentRate + increaseBy, shouldBackOff: false };
+    }
+    return { nextRate: currentRate, shouldBackOff: false };
+  };
+}
 
 /** Return `false` to signal failure (increments error count, triggers retry if configured). */
 export type ThrottleCallback = () => boolean | void | Promise<boolean | void>;

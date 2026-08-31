@@ -342,7 +342,7 @@ describe("createThrottledQueue", () => {
   });
 
   describe("backoff", () => {
-    it("backs off for one full interval on errors when back_off is true", () => {
+    it("runs work before a full pause, then resumes after it", () => {
       const throttle = createThrottledQueue({
         min_rpi: 1,
         max_rpi: 5,
@@ -352,16 +352,23 @@ describe("createThrottledQueue", () => {
         evenly_spaced: false,
       });
 
-      let count = 0;
-      for (let i = 0; i < 20; i++) {
-        throttle(() => { count++; return false; });
+      const startedAt = Date.now();
+      const starts: Array<number> = [];
+      for (let i = 0; i < 5; i++) {
+        throttle(() => {
+          starts.push(Date.now() - startedAt);
+          return i === 0 ? false : undefined;
+        });
       }
 
-      const countAt1s = (() => { vi.advanceTimersByTime(1000); return count; })();
-      const countAt2s = (() => { vi.advanceTimersByTime(1000); return count; })();
+      vi.advanceTimersByTime(1000);
+      expect(starts).toEqual([ 1000, 1000, 1000 ]);
 
-      // With backoff, no items should process during the pause interval
-      expect(countAt2s).toBe(countAt1s);
+      vi.advanceTimersByTime(1999);
+      expect(starts).toEqual([ 1000, 1000, 1000 ]);
+
+      vi.advanceTimersByTime(1);
+      expect(starts).toEqual([ 1000, 1000, 1000, 3000, 3000 ]);
     });
   });
 
@@ -420,25 +427,6 @@ describe("createThrottledQueue", () => {
       expect(rates[0]).toBeLessThan(3);
     });
 
-    it("treats promise resolving to false as error", async () => {
-      expect.assertions(1);
-      const throttle = createThrottledQueue({
-        min_rpi: 5,
-        interval: 1000,
-        evenly_spaced: false,
-        retry: 1,
-      });
-
-      let callCount = 0;
-      throttle(async () => { callCount++; return false; });
-
-      // First execution
-      await vi.advanceTimersByTimeAsync(1000);
-      // Retry gets queued asynchronously, needs another interval to fire
-      await vi.advanceTimersByTimeAsync(1000);
-
-      expect(callCount).toBe(2); // original + 1 retry
-    });
   });
 
   describe("async feedback timing across adjustment windows", () => {
@@ -559,38 +547,6 @@ describe("createThrottledQueue", () => {
       throttle(() => { count++; });
       vi.advanceTimersByTime(1000);
       expect(count).toBe(2);
-    });
-  });
-
-  describe("regression: skippedLast race", () => {
-    it("back_off pauses processing for a full extra interval", () => {
-      const throttle = createThrottledQueue({
-        min_rpi: 1,
-        max_rpi: 3,
-        interval: 1000,
-        errors_per_interval: 1,
-        back_off: true,
-      });
-
-      let count = 0;
-      for (let i = 0; i < 10; i++) {
-        throttle(() => { count++; return false; });
-      }
-
-      // Starting rpi=2, dyn_interval=500ms. First dequeue at 500ms.
-      vi.advanceTimersByTime(500);
-      expect(count).toBeGreaterThan(0);
-
-      // adjustRate fires at 1000ms, sees errors >= 1, triggers back_off
-      vi.advanceTimersByTime(500);
-      const countAtAdjust = count;
-
-      // back_off schedules dequeue at dyn_interval + interval from now
-      // During that pause, no new items should process
-      vi.advanceTimersByTime(500);
-      const countDuringPause = count;
-
-      expect(countDuringPause).toBe(countAtAdjust);
     });
   });
 
@@ -725,9 +681,8 @@ describe("createThrottledQueue", () => {
     });
   });
 
-  describe("async retry restarts idle queue", () => {
-    it("resumes processing when async failure enqueues retry after queue drained", async () => {
-      expect.assertions(1);
+  describe("async retry after idle drain", () => {
+    it("retries a false async result at the next paced start", async () => {
       const throttle = createThrottledQueue({
         min_rpi: 5,
         interval: 1000,
@@ -735,15 +690,26 @@ describe("createThrottledQueue", () => {
         retry: 1,
       });
 
-      let callCount = 0;
-      throttle(async () => { callCount++; return false; });
+      const firstResult = deferred();
+      const startedAt = Date.now();
+      const starts: Array<number> = [];
+      let attempts = 0;
+      throttle(async () => {
+        starts.push(Date.now() - startedAt);
+        attempts++;
+        return attempts === 1 ? firstResult.promise.then(() => false) : undefined;
+      });
 
-      // First execution drains queue, then promise resolves → retry enqueued → start()
       await vi.advanceTimersByTimeAsync(1000);
-      // Retry should now be queued and processing restarted
-      await vi.advanceTimersByTimeAsync(1000);
+      expect(starts).toEqual([ 1000 ]);
 
-      expect(callCount).toBe(2);
+      firstResult.resolve();
+      await vi.advanceTimersByTimeAsync(0);
+      await vi.advanceTimersByTimeAsync(999);
+      expect(starts).toEqual([ 1000 ]);
+
+      await vi.advanceTimersByTimeAsync(1);
+      expect(starts).toEqual([ 1000, 2000 ]);
     });
   });
 

@@ -1318,4 +1318,100 @@ describe("createThrottledQueue", () => {
       expect(rates[0]).toBe(2);
     });
   });
+
+  describe("abort", () => {
+    it("signals every active callback with the queue-owned signal", async () => {
+      const throttle = createThrottledQueue({
+        min_rpi: 2,
+        interval: 1000,
+        evenly_spaced: false,
+      });
+      const active = [ deferred(), deferred() ];
+      const signals: Array<AbortSignal> = [];
+
+      for (const item of active) {
+        throttle(async ({ signal }) => {
+          signals.push(signal);
+          return item.promise;
+        });
+      }
+
+      await vi.advanceTimersByTimeAsync(1000);
+      throttle.abort();
+
+      expect(signals).toHaveLength(2);
+      expect(signals[0]).toBe(signals[1]);
+      expect(signals[0]?.aborted).toBe(true);
+    });
+
+    it("is terminal, discards pending work, and prevents later starts", async () => {
+      const throttle = createThrottledQueue({
+        min_rpi: 1,
+        interval: 1000,
+        evenly_spaced: false,
+      });
+      const active = deferred();
+      let started = 0;
+
+      throttle(async () => { started++; return active.promise; });
+      throttle(() => { started++; });
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(started).toBe(1);
+
+      throttle.abort();
+      throttle.abort();
+
+      expect(throttle.pending).toBe(0);
+      expect(vi.getTimerCount()).toBe(0);
+      expect(() => throttle(() => { started++; })).toThrow("aborted");
+
+      active.resolve();
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(started).toBe(1);
+    });
+
+    it("ignores failed active work that settles after abortion", async () => {
+      const rates: Array<number> = [];
+      const throttle = createThrottledQueue({
+        min_rpi: 1,
+        max_rpi: 3,
+        interval: 1000,
+        evenly_spaced: false,
+        errors_per_interval: 1,
+        retry: 1,
+        onRateChange: rate => rates.push(rate),
+      });
+      let settle!: (value: boolean) => void;
+      const active = new Promise<boolean>(resolve => { settle = resolve; });
+
+      throttle(async () => active);
+      await vi.advanceTimersByTimeAsync(1000);
+      throttle.abort();
+      settle(false);
+      await vi.advanceTimersByTimeAsync(10_000);
+
+      expect(throttle.pending).toBe(0);
+      expect(vi.getTimerCount()).toBe(0);
+      expect(rates).toEqual([]);
+    });
+
+    it("leaves active callbacks unsignalled when stopped", async () => {
+      const throttle = createThrottledQueue({
+        min_rpi: 1,
+        interval: 1000,
+        evenly_spaced: false,
+      });
+      const active = deferred();
+      let signal!: AbortSignal;
+
+      throttle(async context => {
+        signal = context.signal;
+        return active.promise;
+      });
+      await vi.advanceTimersByTimeAsync(1000);
+      throttle.stop();
+
+      expect(signal.aborted).toBe(false);
+    });
+  });
 });

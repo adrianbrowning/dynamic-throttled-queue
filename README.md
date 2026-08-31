@@ -28,6 +28,15 @@ throttle(() => {
 
 Callbacks can return `false` to signal a failure (used for dynamic rate adjustment and retry). Async callbacks (returning a Promise) are also supported — rejections and `false` resolutions count as failures. By default, every failure reduces the adaptive rate; use `rateOutcomeClassifier` when only selected failures should do so.
 
+Each callback receives an execution context containing the queue-owned `AbortSignal`. Existing zero-argument callbacks remain supported. Use the signal to cooperatively cancel in-flight work:
+
+```ts
+throttle(async ({ signal }) => {
+  const response = await fetch("/api/data", { signal });
+  if (!response.ok) return false;
+});
+```
+
 Set `concurrency` to bound callbacks that are still awaiting asynchronous completion. This limit is independent of the request-start rate; omitting it preserves the existing unlimited in-flight behavior.
 
 ## Options
@@ -56,6 +65,7 @@ Set `concurrency` to bound callbacks that are still awaiting asynchronous comple
 | Property | Type | Description |
 | -------- | ---- | ----------- |
 | `stop()` | `() => void` | Stop processing the queue immediately |
+| `abort()` | `() => void` | Terminally discard queued work and signal active callbacks |
 | `pending` | `number` (readonly) | Number of callbacks still waiting in the queue |
 
 ```ts
@@ -68,6 +78,8 @@ throttle.stop(); // halt processing
 ```
 
 `stop()` clears scheduler timers and retains callbacks that have not started. It cannot cancel an active asynchronous callback; if that callback later succeeds, returns `false`, or rejects, its settlement does not restart scheduling. A retry created by a failed active callback is retained with the pending work. Enqueueing another callback resumes the queue.
+
+`abort()` is terminal and idempotent. It clears scheduler timers, discards pending callbacks, and aborts the one shared signal supplied to active callbacks. Future enqueue attempts throw. Cancellation is cooperative: callbacks that ignore the signal can continue running, but their later success or failure does not retry work or affect adaptive-rate accounting.
 
 ## Examples
 

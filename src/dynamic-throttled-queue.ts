@@ -66,8 +66,12 @@ export function aimd({ increaseBy = 1, decreaseFactor = 0.5 }: AimdOptions = {})
   };
 }
 
+export type ExecutionContext = Readonly<{
+  signal: AbortSignal;
+}>;
+
 /** Return `false` to signal failure (increments error count, triggers retry if configured). */
-export type ThrottleCallback = () => boolean | void | Promise<boolean | void>;
+export type ThrottleCallback = (context: ExecutionContext) => boolean | void | Promise<boolean | void>;
 
 export type ThrottleOptions = {
   min_rpi: number;
@@ -94,6 +98,7 @@ export type ThrottleFn = (callback: ThrottleCallback) => void;
 
 export type ThrottleHandle = ThrottleFn & {
   stop: () => void;
+  abort: () => void;
   readonly pending: number;
 };
 

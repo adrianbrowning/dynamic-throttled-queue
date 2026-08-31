@@ -24,8 +24,10 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
   let dynTimeout: ReturnType<typeof setTimeout> | undefined;
   let active_count = 0;
   let isStopped = false;
+  let isAborted = false;
   let hasStrategyFailure = false;
   let strategyFailure: unknown;
+  const abortController = new AbortController();
   const max_concurrency = concurrency ?? Infinity;
   const queue: Array<QueueItem> = [];
   let head = 0;
@@ -48,6 +50,15 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
     halt();
   }
 
+  function abort() {
+    if (isAborted) return;
+    isAborted = true;
+    halt();
+    queue.length = 0;
+    head = 0;
+    abortController.abort();
+  }
+
   function isRateReducing(outcome: RateFailureOutcome | undefined) {
     if (!outcome) return false;
     try {
@@ -59,6 +70,7 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
   }
 
   function handleResult(item: QueueItem, outcome: RateFailureOutcome | undefined) {
+    if (isAborted) return;
     rateController.recordCompletion(isRateReducing(outcome));
     if (outcome && item.retries > 0) {
       queue.push({ fn: item.fn, retries: item.retries - 1 });
@@ -76,7 +88,7 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
     active_count++;
     let result: ReturnType<ThrottleCallback>;
     try {
-      result = item.fn();
+      result = item.fn({ signal: abortController.signal });
     }
     catch (error) {
       handleSettlement(item, { kind: "thrown", error });
@@ -162,6 +174,7 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
   }
 
   function enqueue(callback: ThrottleCallback) {
+    if (isAborted) throw new Error("Cannot enqueue work after the queue has been aborted");
     if (hasStrategyFailure) throw strategyFailure;
     queue.push({ fn: callback, retries: retry });
     isStopped = false;
@@ -169,6 +182,7 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
   }
 
   enqueue.stop = stop;
+  enqueue.abort = abort;
   Object.defineProperty(enqueue, "pending", { get: () => queue.length - head });
   return enqueue as ThrottleHandle;
 }

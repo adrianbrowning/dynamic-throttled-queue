@@ -38,12 +38,14 @@ Set `concurrency` to bound callbacks that are still awaiting asynchronous comple
 | `max_rpi` | `number` | `min_rpi` | Maximum requests per interval |
 | `interval` | `number` | *required* | Milliseconds between each batch of requests |
 | `evenly_spaced` | `boolean` | `true` | Distribute requests evenly throughout the interval |
-| `errors_per_interval` | `number` | `5` | Error threshold per interval before adjusting rate |
+| `errors_per_interval` | `number` | `5` | Positive integer error threshold per interval before adjusting rate |
 | `back_off` | `boolean` | `false` | Back off for 1 full interval when error threshold is hit |
-| `retry` | `number` | `0` | Number of times to retry failed callbacks |
+| `retry` | `number` | `0` | Non-negative integer number of times to retry failed callbacks |
 | `concurrency` | `number` | — | Maximum callbacks awaiting asynchronous completion; omit for no limit |
-| `compact_threshold` | `number` | `512` | Minimum dead slots before internal queue compaction triggers |
+| `compact_threshold` | `number` | `512` | Non-negative integer minimum dead slots before internal queue compaction triggers; `0` compacts at the earliest eligible point |
 | `onRateChange` | `(rate: number) => void` | — | Called when the current rate changes |
+
+`retry`, `errors_per_interval`, and `compact_threshold` reject fractional and non-finite values. `errors_per_interval` must be at least `1`; `retry` and `compact_threshold` may be `0`.
 
 ## Handle API
 

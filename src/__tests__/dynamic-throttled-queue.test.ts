@@ -101,23 +101,23 @@ describe("createThrottledQueue", () => {
     });
   });
 
-    it("preserves callback order across evenly spaced starts", () => {
-      const throttle = createThrottledQueue({ min_rpi: 2, interval: 1000 });
-      const expectedIds = [ "first", "second", "third", "fourth", "fifth" ];
-      const executedIds: Array<string> = [];
+  it("preserves callback order across evenly spaced starts", () => {
+    const throttle = createThrottledQueue({ min_rpi: 2, interval: 1000 });
+    const expectedIds = [ "first", "second", "third", "fourth", "fifth" ];
+    const executedIds: Array<string> = [];
 
-      for (const id of expectedIds) {
-        throttle(() => { executedIds.push(id); });
-      }
+    for (const id of expectedIds) {
+      throttle(() => { executedIds.push(id); });
+    }
 
-      vi.advanceTimersByTime(500);
-      expect(executedIds).toEqual([ "first" ]);
-      vi.advanceTimersByTime(2000);
+    vi.advanceTimersByTime(500);
+    expect(executedIds).toEqual([ "first" ]);
+    vi.advanceTimersByTime(2000);
 
-      expect(executedIds).toEqual(expectedIds);
-      expect(executedIds).toHaveLength(expectedIds.length);
-      expect(new Set(executedIds)).toHaveLength(expectedIds.length);
-    });
+    expect(executedIds).toEqual(expectedIds);
+    expect(executedIds).toHaveLength(expectedIds.length);
+    expect(new Set(executedIds)).toHaveLength(expectedIds.length);
+  });
 
   describe("concurrency", () => {
     it("preserves callback order across batch starts", () => {

@@ -6,13 +6,14 @@ export type ThrottleOptions = {
   interval: number;
   max_rpi?: number;
   evenly_spaced?: boolean;
-  /** Max errors per interval before rate decrease. Default 5. */
+  /** Positive integer error threshold per interval before rate decrease. Default 5. */
   errors_per_interval?: number;
   back_off?: boolean;
+  /** Non-negative integer retries for each failed callback. Default 0. */
   retry?: number;
   /** Maximum number of callbacks awaiting asynchronous settlement. Omit for no limit. */
   concurrency?: number;
-  /** Minimum dead slots before queue compaction triggers. Default 512. */
+  /** Non-negative integer dead slots before queue compaction triggers. Default 512. */
   compact_threshold?: number;
   onRateChange?: (rate: number) => void;
 };
@@ -53,6 +54,15 @@ export function createThrottledQueue(options: ThrottleOptions): ThrottleHandle {
 
   if (concurrency !== undefined && (!Number.isInteger(concurrency) || concurrency < 1)) {
     throw new Error("concurrency must be a positive integer");
+  }
+  if (!Number.isInteger(errors_per_interval) || errors_per_interval < 1) {
+    throw new Error("errors_per_interval must be a positive integer");
+  }
+  if (!Number.isInteger(retry) || retry < 0) {
+    throw new Error("retry must be a non-negative integer");
+  }
+  if (!Number.isInteger(compact_threshold) || compact_threshold < 0) {
+    throw new Error("compact_threshold must be a non-negative integer");
   }
   let current_rpi = Math.ceil((max_rpi + min_rpi) / 2);
   let dyn_interval = evenly_spaced ? interval / current_rpi : interval;

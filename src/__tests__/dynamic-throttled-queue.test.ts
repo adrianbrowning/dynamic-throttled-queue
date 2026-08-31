@@ -38,6 +38,30 @@ describe("createThrottledQueue", () => {
       expect(() => createThrottledQueue({ min_rpi: 1, interval: 1000, concurrency: -1 })).toThrow("concurrency");
     });
 
+    it("accepts zero retries and rejects invalid retry counts", () => {
+      expect(() => createThrottledQueue({ min_rpi: 1, interval: 1000, retry: 0 })).not.toThrow();
+
+      for (const retry of [ -1, 1.5, NaN, Infinity, -Infinity ]) {
+        expect(() => createThrottledQueue({ min_rpi: 1, interval: 1000, retry })).toThrow("retry");
+      }
+    });
+
+    it("uses the default error threshold and rejects invalid thresholds", () => {
+      expect(() => createThrottledQueue({ min_rpi: 1, interval: 1000 })).not.toThrow();
+
+      for (const errors_per_interval of [ 0, -1, 1.5, NaN, Infinity, -Infinity ]) {
+        expect(() => createThrottledQueue({ min_rpi: 1, interval: 1000, errors_per_interval })).toThrow("errors_per_interval");
+      }
+    });
+
+    it("accepts zero compaction threshold and rejects invalid thresholds", () => {
+      expect(() => createThrottledQueue({ min_rpi: 1, interval: 1000, compact_threshold: 0 })).not.toThrow();
+
+      for (const compact_threshold of [ -1, 1.5, NaN, Infinity, -Infinity ]) {
+        expect(() => createThrottledQueue({ min_rpi: 1, interval: 1000, compact_threshold })).toThrow("compact_threshold");
+      }
+    });
+
   });
   describe("basic throttling", () => {
     it("executes all queued callbacks", () => {

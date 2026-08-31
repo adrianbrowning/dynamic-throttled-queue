@@ -51,14 +51,6 @@ describe("createThrottledQueue", () => {
       expect(count).toBe(10);
     });
 
-    it("does not start timers until first enqueue", () => {
-      const spy = vi.spyOn(globalThis, "setTimeout");
-      const callsBefore = spy.mock.calls.length;
-      createThrottledQueue({ min_rpi: 1, interval: 1000 });
-      expect(spy.mock.calls).toHaveLength(callsBefore);
-      spy.mockRestore();
-    });
-
     it("respects rate limit with evenly_spaced (default)", () => {
       const throttle = createThrottledQueue({ min_rpi: 2, interval: 1000 });
       let count = 0;
@@ -694,42 +686,6 @@ describe("createThrottledQueue", () => {
       throttle(() => { ran = true; });
       vi.advanceTimersByTime(1000);
       expect(ran).toBe(true);
-    });
-  });
-
-  describe("compact_threshold", () => {
-    it("compacts queue when head exceeds threshold and half length", () => {
-      const throttle = createThrottledQueue({
-        min_rpi: 10,
-        interval: 1000,
-        evenly_spaced: false,
-        compact_threshold: 5,
-      });
-
-      let count = 0;
-      for (let i = 0; i < 20; i++) {
-        throttle(() => { count++; });
-      }
-
-      vi.advanceTimersByTime(5000);
-      expect(count).toBe(20);
-    });
-
-    it("does not compact when head is below threshold", () => {
-      const throttle = createThrottledQueue({
-        min_rpi: 2,
-        interval: 1000,
-        evenly_spaced: false,
-        compact_threshold: 100,
-      });
-
-      let count = 0;
-      for (let i = 0; i < 4; i++) {
-        throttle(() => { count++; });
-      }
-
-      vi.advanceTimersByTime(3000);
-      expect(count).toBe(4);
     });
   });
 

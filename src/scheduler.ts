@@ -72,6 +72,26 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
     if (resume && isRunning && !skippedLast && queue.length > head) dequeue();
   }
 
+  function execute(item: QueueItem) {
+    active_count++;
+    let result: ReturnType<ThrottleCallback>;
+    try {
+      result = item.fn();
+    }
+    catch (error) {
+      handleSettlement(item, { kind: "thrown", error });
+      return;
+    }
+    if (result instanceof Promise) {
+      void result.then(
+        value => handleSettlement(item, value === false ? { kind: "returned-false" } : undefined, true),
+        (error: unknown) => handleSettlement(item, { kind: "rejected", error }, true)
+      );
+      return;
+    }
+    handleSettlement(item, result === false ? { kind: "returned-false" } : undefined);
+  }
+
   function dequeue() {
     const threshold = last_called + dyn_interval;
     const now = Date.now();
@@ -85,25 +105,8 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
     let started = 0;
     while (head < end && active_count < max_concurrency) {
       const item = queue[head++]!;
-      active_count++;
       if (started++ === 0) last_called = Date.now();
-      let result: ReturnType<ThrottleCallback>;
-      try {
-        result = item.fn();
-      }
-      catch (error) {
-        handleSettlement(item, { kind: "thrown", error });
-        continue;
-      }
-      if (result instanceof Promise) {
-        void result.then(
-          value => handleSettlement(item, value === false ? { kind: "returned-false" } : undefined, true),
-          error => handleSettlement(item, { kind: "rejected", error }, true)
-        );
-      }
-      else {
-        handleSettlement(item, result === false ? { kind: "returned-false" } : undefined);
-      }
+      execute(item);
     }
 
     if (head > compact_threshold && head > queue.length / 2) {

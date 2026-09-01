@@ -1,6 +1,14 @@
 import { createRateController } from "./rate-controller.ts";
 import { createScheduler } from "./scheduler.ts";
 
+export type RetryBackoff = {
+  strategy: "fixed" | "linear" | "exponential";
+  baseDelay: number;
+  maxDelay?: number;
+  jitter?: number;
+  random?: () => number;
+};
+
 export type RateStrategyObservation = Readonly<{
   currentRate: number;
   minRate: number;
@@ -87,6 +95,8 @@ export type ThrottleOptions = {
   back_off?: boolean;
   /** Non-negative integer retries for each failed callback. Default 0. */
   retry?: number;
+  /** Per-retry delay policy. Omit to preserve immediate retries. */
+  retryBackoff?: RetryBackoff;
   /** Maximum number of callbacks awaiting asynchronous settlement. Omit for no limit. */
   concurrency?: number;
   /** Non-negative integer dead slots before queue compaction triggers. Default 512. */
@@ -109,6 +119,19 @@ export type ThrottleHandle = ThrottleFn & {
   abort: () => void;
   readonly pending: number;
 };
+
+function validateRetryBackoff(retryBackoff: RetryBackoff | undefined) {
+  if (retryBackoff === undefined) return;
+  if (!Number.isFinite(retryBackoff.baseDelay) || retryBackoff.baseDelay < 0) {
+    throw new Error("retryBackoff.baseDelay must be a finite non-negative number");
+  }
+  if (retryBackoff.maxDelay !== undefined && (!Number.isFinite(retryBackoff.maxDelay) || retryBackoff.maxDelay < 0)) {
+    throw new Error("retryBackoff.maxDelay must be a finite non-negative number");
+  }
+  if (retryBackoff.jitter !== undefined && (!Number.isFinite(retryBackoff.jitter) || retryBackoff.jitter < 0 || retryBackoff.jitter > 1)) {
+    throw new Error("retryBackoff.jitter must be a finite number from 0 through 1");
+  }
+}
 
 export function createThrottledQueue(options: ThrottleOptions): ThrottleHandle {
   const { min_rpi, interval, max_rpi = min_rpi, concurrency, retry = 0, compact_threshold = 512 } = options;
@@ -140,6 +163,7 @@ export function createThrottledQueue(options: ThrottleOptions): ThrottleHandle {
   if (options.adjustmentTiming !== undefined && !adjustmentTimings.has(options.adjustmentTiming)) {
     throw new Error("adjustmentTiming must be either interval or settled");
   }
+  validateRetryBackoff(options.retryBackoff);
   return createScheduler(options, createRateController({
     min_rpi,
     max_rpi,

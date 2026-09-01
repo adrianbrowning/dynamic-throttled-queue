@@ -101,6 +101,8 @@ export type ThrottleOptions = {
   retryBackoff?: RetryBackoff;
   /** Maximum number of callbacks awaiting asynchronous settlement. Omit for no limit. */
   concurrency?: number;
+  /** Maximum accepted callbacks that have not reached a terminal outcome. Omit for no limit. */
+  maxQueueSize?: number;
   /** Non-negative integer dead slots before queue compaction triggers. Default 512. */
   compact_threshold?: number;
   /** Policy used to request the next rate and any backoff after each observation window. */
@@ -138,7 +140,7 @@ function validateRetryBackoff(retryBackoff: RetryBackoff | undefined) {
 }
 
 export function createThrottledQueue(options: ThrottleOptions): ThrottleHandle {
-  const { min_rpi, interval, max_rpi = min_rpi, concurrency, retry = 0, compact_threshold = 512 } = options;
+  const { min_rpi, interval, max_rpi = min_rpi, concurrency, maxQueueSize, retry = 0, compact_threshold = 512 } = options;
 
   const errors_per_interval = options.errors_per_interval ?? 5;
 
@@ -154,6 +156,9 @@ export function createThrottledQueue(options: ThrottleOptions): ThrottleHandle {
 
   if (concurrency !== undefined && (!Number.isInteger(concurrency) || concurrency < 1)) {
     throw new Error("concurrency must be a positive integer");
+  }
+  if (maxQueueSize !== undefined && (!Number.isSafeInteger(maxQueueSize) || maxQueueSize < 0)) {
+    throw new Error("maxQueueSize must be a non-negative safe integer");
   }
   if (!Number.isInteger(errors_per_interval) || errors_per_interval < 1) {
     throw new Error("errors_per_interval must be a positive integer");

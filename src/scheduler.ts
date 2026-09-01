@@ -17,6 +17,7 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
     retry = 0,
     retryBackoff,
     concurrency,
+    maxQueueSize,
     compact_threshold = 512,
     back_off = false,
     rateOutcomeClassifier,
@@ -41,9 +42,11 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
   let strategyFailure: unknown;
   const abortController = new AbortController();
   const max_concurrency = concurrency ?? Infinity;
+  const max_queue_size = maxQueueSize ?? Infinity;
   const queue: Array<QueueItem> = [];
   const delayedRetries: Array<DelayedRetry> = [];
   let head = 0;
+  let reserved_count = 0;
   let observationWindow: number | undefined;
   let nextObservationWindow = 0;
   let collectingSettledWindow = false;
@@ -138,6 +141,7 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
     delayedRetries.length = 0;
     queue.length = 0;
     head = 0;
+    reserved_count = 0;
     abortController.abort();
   }
 
@@ -177,6 +181,7 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
         scheduleDelayedRetry(retryItem, calculateRetryDelay(retryBackoff, retryIndex));
       }
     }
+    else reserved_count--;
   }
 
   function handleSettlement(item: QueueItem, outcome: RateFailureOutcome | undefined, resume = false) {
@@ -341,6 +346,8 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
   function enqueue(callback: ThrottleCallback) {
     if (isAborted) throw new Error("Cannot enqueue work after the queue has been aborted");
     if (hasStrategyFailure) throw strategyFailure;
+    if (reserved_count >= max_queue_size) throw new Error("Cannot enqueue work: maxQueueSize has been reached");
+    reserved_count++;
     queue.push({ fn: callback, retries: retry });
     const wasStopped = isStopped;
     isStopped = false;

@@ -81,6 +81,14 @@ describe("createThrottledQueue", () => {
       }
     });
 
+    it("accepts zero capacity and rejects invalid capacity limits", () => {
+      expect(() => createThrottledQueue({ min_rpi: 1, interval: 1000, maxQueueSize: 0 })).not.toThrow();
+
+      for (const maxQueueSize of [ -1, 1.5, NaN, Infinity, -Infinity, Number.MAX_SAFE_INTEGER + 1 ]) {
+        expect(() => createThrottledQueue({ min_rpi: 1, interval: 1000, maxQueueSize })).toThrow("maxQueueSize");
+      }
+    });
+
   });
   describe("basic throttling", () => {
     it("executes all queued callbacks", () => {
@@ -123,6 +131,87 @@ describe("createThrottledQueue", () => {
       expect(count).toBe(6);
       vi.advanceTimersByTime(1000);
       expect(count).toBe(9);
+    });
+  });
+
+  describe("queue capacity", () => {
+    it("rejects enqueue synchronously when all capacity reservations are occupied", () => {
+      const throttle = createThrottledQueue({ min_rpi: 1, interval: 1000, maxQueueSize: 1 });
+
+      throttle(() => {});
+
+      expect(() => throttle(() => {})).toThrow("maxQueueSize");
+    });
+
+    it("rejects every enqueue when capacity is zero", () => {
+      const throttle = createThrottledQueue({ min_rpi: 1, interval: 1000, maxQueueSize: 0 });
+
+      expect(() => throttle(() => {})).toThrow("maxQueueSize");
+    });
+
+    it("releases capacity after an active callback settles", async () => {
+      const throttle = createThrottledQueue({
+        min_rpi: 1,
+        interval: 1000,
+        maxQueueSize: 1,
+      });
+      const first = deferred();
+
+      throttle(async () => first.promise);
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(() => throttle(() => {})).toThrow("maxQueueSize");
+
+      first.resolve();
+      await vi.advanceTimersByTimeAsync(0);
+
+      expect(() => throttle(() => {})).not.toThrow();
+    });
+
+    it("releases capacity after a final failed callback", () => {
+      const throttle = createThrottledQueue({ min_rpi: 1, interval: 1000, maxQueueSize: 1 });
+
+      throttle(() => false);
+      vi.advanceTimersByTime(1000);
+
+      expect(() => throttle(() => {})).not.toThrow();
+    });
+
+    it("retains the original reservation until a retried callback succeeds", () => {
+      const throttle = createThrottledQueue({
+        min_rpi: 1,
+        interval: 1000,
+        maxQueueSize: 1,
+        retry: 1,
+      });
+      let attempts = 0;
+
+      throttle(() => {
+        attempts++;
+        return attempts === 1 ? false : undefined;
+      });
+      vi.advanceTimersByTime(1000);
+      expect(() => throttle(() => {})).toThrow("maxQueueSize");
+
+      vi.advanceTimersByTime(1000);
+
+      expect(() => throttle(() => {})).not.toThrow();
+    });
+
+    it.each([ "pause", "stop" ] as const)("retains reservations while the queue is $state", state => {
+      const throttle = createThrottledQueue({ min_rpi: 1, interval: 1000, maxQueueSize: 1 });
+
+      throttle(() => {});
+      throttle[state]();
+
+      expect(() => throttle(() => {})).toThrow("maxQueueSize");
+    });
+
+    it("keeps the unlimited admission behavior when capacity is omitted", () => {
+      const throttle = createThrottledQueue({ min_rpi: 1, interval: 1000 });
+
+      for (let i = 0; i < 100; i++) throttle(() => {});
+
+      expect(throttle.pending).toBe(100);
     });
   });
 

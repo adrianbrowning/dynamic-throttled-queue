@@ -63,6 +63,24 @@ describe("createThrottledQueue", () => {
       }
     });
 
+    it("accepts fractional retry delays and rejects invalid retry-backoff policies", () => {
+      const options = { min_rpi: 1, interval: 1000, retryBackoff: { strategy: "fixed" as const, baseDelay: 0.5 } };
+      expect(() => createThrottledQueue(options)).not.toThrow();
+
+      for (const retryBackoff of [
+        { strategy: "fixed" as const, baseDelay: -1 },
+        { strategy: "fixed" as const, baseDelay: Number.NaN },
+        { strategy: "fixed" as const, baseDelay: Infinity },
+        { strategy: "fixed" as const, baseDelay: 1, maxDelay: -1 },
+        { strategy: "fixed" as const, baseDelay: 1, maxDelay: Number.NaN },
+        { strategy: "fixed" as const, baseDelay: 1, jitter: -0.1 },
+        { strategy: "fixed" as const, baseDelay: 1, jitter: 1.1 },
+        { strategy: "fixed" as const, baseDelay: 1, jitter: Infinity },
+      ]) {
+        expect(() => createThrottledQueue({ min_rpi: 1, interval: 1000, retryBackoff })).toThrow("retryBackoff");
+      }
+    });
+
   });
   describe("basic throttling", () => {
     it("executes all queued callbacks", () => {
@@ -789,6 +807,106 @@ describe("createThrottledQueue", () => {
   });
 
   describe("retry", () => {
+    it("waits for retry backoff before re-entering normal scheduler pacing", () => {
+      const throttle = createThrottledQueue({
+        min_rpi: 5,
+        interval: 1000,
+        evenly_spaced: false,
+        retry: 1,
+        retryBackoff: { strategy: "fixed", baseDelay: 500 },
+      });
+      const starts: Array<number> = [];
+      const startedAt = Date.now();
+
+      throttle(() => {
+        starts.push(Date.now() - startedAt);
+        return starts.length === 1 ? false : undefined;
+      });
+
+      vi.advanceTimersByTime(2499);
+      expect(starts).toEqual([ 1000 ]);
+
+      vi.advanceTimersByTime(1);
+      expect(starts).toEqual([ 1000, 2500 ]);
+    });
+
+    it("counts a delayed retry as pending work", () => {
+      const throttle = createThrottledQueue({
+        min_rpi: 1,
+        interval: 1000,
+        evenly_spaced: false,
+        retry: 1,
+        retryBackoff: { strategy: "fixed", baseDelay: 500 },
+      });
+
+      throttle(() => false);
+      vi.advanceTimersByTime(1000);
+
+      expect(throttle.pending).toBe(1);
+    });
+
+    it("freezes a delayed retry's remaining delay while paused", () => {
+      const throttle = createThrottledQueue({
+        min_rpi: 1,
+        interval: 1000,
+        evenly_spaced: false,
+        retry: 1,
+        retryBackoff: { strategy: "fixed", baseDelay: 1000 },
+      });
+      let attempts = 0;
+
+      throttle(() => { attempts++; return attempts === 1 ? false : undefined; });
+      vi.advanceTimersByTime(1400);
+      throttle.pause();
+      vi.advanceTimersByTime(1000);
+      throttle.resume();
+
+      vi.advanceTimersByTime(1599);
+      expect(attempts).toBe(1);
+
+      vi.advanceTimersByTime(1);
+      expect(attempts).toBe(2);
+    });
+
+    it("appends equal-due retries after already pending work in scheduling order", () => {
+      const throttle = createThrottledQueue({
+        min_rpi: 3,
+        interval: 1000,
+        evenly_spaced: false,
+        retry: 1,
+        retryBackoff: { strategy: "fixed", baseDelay: 500 },
+      });
+      const started: Array<string> = [];
+
+      throttle(() => { started.push("first"); return false; });
+      throttle(() => { started.push("second"); return false; });
+      vi.advanceTimersByTime(1000);
+      throttle(() => { started.push("new"); });
+      vi.advanceTimersByTime(1000);
+
+      expect(started).toEqual([ "first", "second", "new", "first", "second" ]);
+    });
+
+    it("discards delayed retries when aborted", () => {
+      const throttle = createThrottledQueue({
+        min_rpi: 1,
+        interval: 1000,
+        evenly_spaced: false,
+        retry: 1,
+        retryBackoff: { strategy: "fixed", baseDelay: 500 },
+      });
+      let attempts = 0;
+
+      throttle(() => { attempts++; return false; });
+      vi.advanceTimersByTime(1000);
+      throttle.abort();
+      vi.advanceTimersByTime(10_000);
+
+      expect(throttle.pending).toBe(0);
+      expect(attempts).toBe(1);
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
     it("keeps retry eligibility independent from the rate outcome classifier", () => {
       const throttle = createThrottledQueue({
         min_rpi: 5,

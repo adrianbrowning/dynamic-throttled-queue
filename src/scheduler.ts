@@ -1,13 +1,21 @@
 import type { RateFailureOutcome, ThrottleCallback, ThrottleHandle, ThrottleOptions } from "./dynamic-throttled-queue.ts";
 import type { RateController } from "./rate-controller.ts";
+import { calculateRetryDelay } from "./retry-backoff.ts";
 
 type QueueItem = { fn: ThrottleCallback; retries: number; observationWindow?: number; };
+type DelayedRetry = {
+  item: QueueItem;
+  remaining: number;
+  due?: number;
+  timeout?: ReturnType<typeof setTimeout>;
+};
 
 export function createScheduler(options: ThrottleOptions, rateController: RateController): ThrottleHandle {
   const {
     interval,
     evenly_spaced = true,
     retry = 0,
+    retryBackoff,
     concurrency,
     compact_threshold = 512,
     back_off = false,
@@ -33,11 +41,49 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
   const abortController = new AbortController();
   const max_concurrency = concurrency ?? Infinity;
   const queue: Array<QueueItem> = [];
+  const delayedRetries: Array<DelayedRetry> = [];
   let head = 0;
   let observationWindow: number | undefined;
   let nextObservationWindow = 0;
   let collectingSettledWindow = false;
   let settledOutstanding = 0;
+
+  function releaseDelayedRetry(delayedRetry: DelayedRetry) {
+    const index = delayedRetries.indexOf(delayedRetry);
+    if (index < 0) return;
+    delayedRetries.splice(index, 1);
+    queue.push(delayedRetry.item);
+    if (!isRunning && !isPaused && !isStopped && queue.length > head) start();
+  }
+
+  function startDelayedRetry(delayedRetry: DelayedRetry) {
+    delayedRetry.due = Date.now() + delayedRetry.remaining;
+    delayedRetry.timeout = setTimeout(() => {
+      releaseDelayedRetry(delayedRetry);
+    }, delayedRetry.remaining);
+  }
+
+  function freezeDelayedRetries() {
+    for (const delayedRetry of delayedRetries) {
+      if (delayedRetry.timeout === undefined) continue;
+      if (delayedRetry.due === undefined) continue;
+      clearTimeout(delayedRetry.timeout);
+      delayedRetry.timeout = undefined;
+      delayedRetry.remaining = Math.max(0, delayedRetry.due - Date.now());
+    }
+  }
+
+  function resumeDelayedRetries() {
+    for (const delayedRetry of delayedRetries) {
+      if (delayedRetry.timeout === undefined) startDelayedRetry(delayedRetry);
+    }
+  }
+
+  function scheduleDelayedRetry(item: QueueItem, delay: number) {
+    const delayedRetry: DelayedRetry = { item, remaining: delay };
+    delayedRetries.push(delayedRetry);
+    if (!isPaused && !isStopped) startDelayedRetry(delayedRetry);
+  }
 
   function halt() {
     isRunning = false;
@@ -61,6 +107,7 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
   function stop() {
     isStopped = true;
     isPaused = false;
+    freezeDelayedRetries();
     halt();
     discardSettledWindow();
   }
@@ -69,6 +116,7 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
     if (isAborted || isStopped || isPaused) return;
     isPaused = true;
     rateController.clearObservation();
+    freezeDelayedRetries();
     halt();
     discardSettledWindow();
   }
@@ -76,6 +124,7 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
   function resume() {
     if (!isPaused) return;
     isPaused = false;
+    resumeDelayedRetries();
     if (queue.length > head) start();
   }
 
@@ -84,6 +133,8 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
     isAborted = true;
     halt();
     discardSettledWindow();
+    freezeDelayedRetries();
+    delayedRetries.length = 0;
     queue.length = 0;
     head = 0;
     abortController.abort();
@@ -105,8 +156,15 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
       rateController.recordCompletion(isRateReducing(outcome));
     }
     if (outcome && item.retries > 0) {
-      queue.push({ fn: item.fn, retries: item.retries - 1 });
-      if (!isRunning && !isPaused && !isStopped && queue.length > head) start();
+      const retryItem = { fn: item.fn, retries: item.retries - 1 };
+      if (retryBackoff === undefined) {
+        queue.push(retryItem);
+        if (!isRunning && !isPaused && !isStopped && queue.length > head) start();
+      }
+      else {
+        const retryIndex = retry - item.retries + 1;
+        scheduleDelayedRetry(retryItem, calculateRetryDelay(retryBackoff, retryIndex));
+      }
     }
   }
 
@@ -273,7 +331,9 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
     if (isAborted) throw new Error("Cannot enqueue work after the queue has been aborted");
     if (hasStrategyFailure) throw strategyFailure;
     queue.push({ fn: callback, retries: retry });
+    const wasStopped = isStopped;
     isStopped = false;
+    if (wasStopped) resumeDelayedRetries();
     if (!isRunning && !isPaused) start();
   }
 
@@ -281,6 +341,6 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
   enqueue.resume = resume;
   enqueue.stop = stop;
   enqueue.abort = abort;
-  Object.defineProperty(enqueue, "pending", { get: () => queue.length - head });
+  Object.defineProperty(enqueue, "pending", { get: () => queue.length - head + delayedRetries.length });
   return enqueue as ThrottleHandle;
 }

@@ -50,6 +50,7 @@ Set `concurrency` to bound callbacks that are still awaiting asynchronous comple
 | `errors_per_interval` | `number` | `5` | Positive integer error threshold per interval before adjusting rate |
 | `back_off` | `boolean` | `false` | Back off for 1 full interval when error threshold is hit |
 | `retry` | `number` | `0` | Non-negative integer number of times to retry failed callbacks |
+| `retryBackoff` | `RetryBackoff` | — | Per-retry fixed, linear, or exponential delay policy; omit for immediate retries |
 | `concurrency` | `number` | — | Maximum callbacks awaiting asynchronous completion; omit for no limit |
 | `compact_threshold` | `number` | `512` | Non-negative integer minimum dead slots before internal queue compaction triggers; `0` compacts at the earliest eligible point |
 | `rateStrategy` | `RateStrategy` | `linear` | Pure policy that requests the next rate and an optional backoff after each observation window |
@@ -57,7 +58,9 @@ Set `concurrency` to bound callbacks that are still awaiting asynchronous comple
 | `adjustmentTiming` | `"interval" \| "settled"` | `"interval"` | Defines whether rate decisions use outcomes settled each interval or complete started-attempt sets |
 | `onRateChange` | `(rate: number) => void` | — | Called when the current rate changes |
 
-`retry`, `errors_per_interval`, and `compact_threshold` reject fractional and non-finite values. `errors_per_interval` must be at least `1`; `retry` and `compact_threshold` may be `0`.
+`retry`, `errors_per_interval`, and `compact_threshold` reject fractional and non-finite values. `errors_per_interval` must be at least `1`; `retry` and `compact_threshold` may be `0`. `retryBackoff.baseDelay` and optional `maxDelay` are finite non-negative millisecond values (fractional values are accepted); optional `jitter` is finite from `0` through `1`.
+
+`retryBackoff` is `{ strategy: "fixed" | "linear" | "exponential"; baseDelay: number; maxDelay?: number; jitter?: number; random?: () => number }`. The first retry has index `1`: fixed uses `baseDelay`, linear uses `baseDelay × retryIndex`, and exponential uses `baseDelay × 2^(retryIndex - 1)`. The calculated delay is capped at `maxDelay`, when supplied, then optional symmetric percentage jitter is applied and capped again. `random` makes jitter deterministic for tests; a thrown, non-finite, or out-of-range result safely falls back to no jitter. Retry backoff begins when the failed attempt settles and is independent of adaptive-rate `back_off`.
 
 ### Adaptive-rate timing
 
@@ -75,7 +78,7 @@ With `adjustmentTiming: "settled"`, an observation window contains every callbac
 | `resume()` | `() => void` | Resume a paused queue with a fresh pacing and observation window |
 | `stop()` | `() => void` | Stop processing the queue immediately |
 | `abort()` | `() => void` | Terminally discard queued work and signal active callbacks |
-| `pending` | `number` (readonly) | Number of callbacks still waiting in the queue |
+| `pending` | `number` (readonly) | Number of callbacks waiting in the queue, including delayed retries |
 
 ```ts
 const throttle = createThrottledQueue({ min_rpi: 5, interval: 1000 });
@@ -91,15 +94,15 @@ throttle.stop(); // halt processing
 | State | Pending work and enqueue | Active work | Scheduling and lifecycle operations |
 | ----- | ------------------------ | ----------- | ----------------------------------- |
 | Running | Pending work can start; new callbacks are accepted. | Continues normally. | `pause()` retains work and stops new starts. `stop()` retains work and clears timers. `abort()` is terminal. |
-| Paused | Pending work, newly enqueued callbacks, and retries are retained but do not start. | Continues and settles normally. | `resume()` restarts pacing at the current rate and begins a fresh adaptive-rate observation window. `pause()` is idempotent. `stop()` clears the paused state. |
-| Stopped | Pending work is retained. A later enqueue restarts scheduling. | Continues and settles normally. | `pause()` and `resume()` are no-ops. `stop()` is idempotent. |
+| Paused | Pending work, newly enqueued callbacks, and retries are retained but do not start. | Continues and settles normally. | `resume()` restarts pacing at the current rate and begins a fresh adaptive-rate observation window. Delayed retries freeze their remaining delay and continue only after resume. `pause()` is idempotent. `stop()` clears the paused state. |
+| Stopped | Pending work is retained. A later enqueue restarts scheduling. | Continues and settles normally. | Delayed retries freeze their remaining delay; the later enqueue resumes them. `pause()` and `resume()` are no-ops. `stop()` is idempotent. |
 | Aborted | Pending work is discarded and future enqueues throw. | Receives the shared abort signal and may finish cooperatively. | `pause()`, `resume()`, `stop()`, and `abort()` do not restart scheduling; `abort()` is idempotent. |
 
 While paused, callback outcomes do not contribute to adaptive-rate adjustment. A failed active callback may still create a configured retry, but that retry remains pending until `resume()`.
 
 In settled timing, `pause()` discards the in-progress observation window rather than making a partial or late rate decision. `stop()` retains its non-restarting behavior, and `abort()` remains terminal: neither produces post-stop or post-abort settled-window accounting.
 
-`stop()` clears scheduler timers and retains callbacks that have not started. It cannot cancel an active asynchronous callback; if that callback later succeeds, returns `false`, or rejects, its settlement does not restart scheduling. A retry created by a failed active callback is retained with the pending work. Enqueueing another callback resumes the queue.
+`stop()` clears scheduler timers and retains callbacks that have not started. It cannot cancel an active asynchronous callback; if that callback later succeeds, returns `false`, or rejects, its settlement does not restart scheduling. A retry created by a failed active callback is retained with the pending work. Enqueueing another callback resumes the queue and any frozen delayed retries.
 
 `abort()` is terminal and idempotent. It clears scheduler timers, discards pending callbacks, and aborts the one shared signal supplied to active callbacks. Future enqueue attempts throw. Cancellation is cooperative: callbacks that ignore the signal can continue running, but their later success or failure does not retry work or affect adaptive-rate accounting.
 
@@ -257,6 +260,24 @@ throttle(async () => {
   if (!res.ok) return false; // will be retried
 });
 ```
+
+### Retry backoff
+
+```ts
+const throttle = createThrottledQueue({
+  min_rpi: 5,
+  interval: 1000,
+  retry: 3,
+  retryBackoff: {
+    strategy: "exponential",
+    baseDelay: 250,
+    maxDelay: 10_000,
+    jitter: 0.2,
+  },
+});
+```
+
+Delayed retries remain pending, return to the normal queue tail when due, and then obey normal scheduler pacing. Equal due times preserve the order their retry delays were scheduled. `abort()` discards delayed retries along with other pending work.
 
 ## Migration from v1
 

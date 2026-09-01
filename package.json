@@ -1,6 +1,6 @@
 {
   "name": "dynamic-throttled-queue",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "type": "module",
   "description": "Dynamically throttles arbitrary code to execute between a minimum and maximum number of times per interval. Best for making throttled API requests.",
   "files": [

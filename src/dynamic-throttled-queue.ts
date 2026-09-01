@@ -38,6 +38,8 @@ export type RateFailureOutcome =
 
 export type RateOutcomeClassifier = (outcome: RateFailureOutcome) => boolean;
 
+export type RetryClassifier = (outcome: RateFailureOutcome, attempt: number) => boolean;
+
 export type AdjustmentTiming = "interval" | "settled";
 
 const adjustmentTimings = new Set<string>([ "interval", "settled" ]);
@@ -105,6 +107,8 @@ export type ThrottleOptions = {
   rateStrategy?: RateStrategy;
   /** Decides whether a failed callback outcome contributes to adaptive-rate error counting. */
   rateOutcomeClassifier?: RateOutcomeClassifier;
+  /** Decides whether a failed callback outcome is eligible for another attempt. */
+  retryClassifier?: RetryClassifier;
   /** When adaptive-rate observations are adjusted. Defaults to interval compatibility behavior. */
   adjustmentTiming?: AdjustmentTiming;
   onRateChange?: (rate: number) => void;

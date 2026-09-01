@@ -20,6 +20,7 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
     compact_threshold = 512,
     back_off = false,
     rateOutcomeClassifier,
+    retryClassifier,
     onRateChange,
     adjustmentTiming = "interval",
   } = options;
@@ -150,12 +151,22 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
     }
   }
 
+  function isRetryable(item: QueueItem, outcome: RateFailureOutcome | undefined) {
+    if (!outcome || item.retries === 0) return false;
+    try {
+      return retryClassifier ? retryClassifier(outcome, retry - item.retries + 1) === true : true;
+    }
+    catch {
+      return true;
+    }
+  }
+
   function handleResult(item: QueueItem, outcome: RateFailureOutcome | undefined) {
     if (isAborted) return;
     if (!isPaused && (!usesSettledTiming || item.observationWindow === observationWindow)) {
       rateController.recordCompletion(isRateReducing(outcome));
     }
-    if (outcome && item.retries > 0) {
+    if (isRetryable(item, outcome)) {
       const retryItem = { fn: item.fn, retries: item.retries - 1 };
       if (retryBackoff === undefined) {
         queue.push(retryItem);

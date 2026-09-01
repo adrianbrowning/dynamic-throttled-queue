@@ -371,7 +371,7 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
   enqueue.resume = resume;
   enqueue.stop = stop;
   enqueue.abort = abort;
-  enqueue.waitForIdle = () => isIdle() ? Promise.resolve() : new Promise<void>(resolve => { idleWaiters.push(resolve); });
+  enqueue.waitForIdle = async () => isIdle() ? Promise.resolve() : new Promise<void>(resolve => { idleWaiters.push(resolve); });
   Object.defineProperty(enqueue, "pending", { get: () => queue.length - head + delayedRetries.length });
   return enqueue as ThrottleHandle;
 }

@@ -1915,6 +1915,177 @@ describe("createThrottledQueue", () => {
     });
   });
 
+  describe("getState()", () => {
+    it("returns a frozen snapshot", () => {
+      const q = createThrottledQueue({ min_rpi: 1, interval: 1000 });
+      const s = q.getState();
+      expect(Object.isFrozen(s)).toBe(true);
+    });
+
+    it("initial snapshot has rate, pending:0, active:0, state:running", () => {
+      const q = createThrottledQueue({ min_rpi: 2, max_rpi: 4, interval: 1000 });
+      const s = q.getState();
+      expect(s.pending).toBe(0);
+      expect(s.active).toBe(0);
+      expect(s.state).toBe("running");
+      expect(typeof s.rate).toBe("number");
+    });
+
+    it("each call returns a fresh snapshot", () => {
+      const q = createThrottledQueue({ min_rpi: 1, interval: 1000 });
+      const s1 = q.getState();
+      const s2 = q.getState();
+      expect(s1).not.toBe(s2);
+    });
+
+    it("reflects pending count after enqueue", () => {
+      const q = createThrottledQueue({ min_rpi: 1, interval: 1000 });
+      q(() => {});
+      q(() => {});
+      expect(q.getState().pending).toBe(2);
+    });
+
+    it("reflects active count during async execution", async () => {
+      const q = createThrottledQueue({ min_rpi: 2, interval: 1000, evenly_spaced: false });
+      const d1 = deferred();
+      const d2 = deferred();
+      q(() => d1.promise);
+      q(() => d2.promise);
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(q.getState().active).toBe(2);
+      d1.resolve();
+      d2.resolve();
+      await vi.advanceTimersByTimeAsync(0);
+    });
+
+    it("state is paused while paused", () => {
+      const q = createThrottledQueue({ min_rpi: 1, interval: 1000 });
+      q.pause();
+      expect(q.getState().state).toBe("paused");
+    });
+
+    it("state is stopped while stopped", () => {
+      const q = createThrottledQueue({ min_rpi: 1, interval: 1000 });
+      q.stop();
+      expect(q.getState().state).toBe("stopped");
+    });
+
+    it("state is aborted after abort", () => {
+      const q = createThrottledQueue({ min_rpi: 1, interval: 1000 });
+      q.abort();
+      expect(q.getState().state).toBe("aborted");
+    });
+
+    it("state is running after stop then enqueue restarts", () => {
+      const q = createThrottledQueue({ min_rpi: 1, interval: 1000 });
+      q.stop();
+      q(() => {});
+      expect(q.getState().state).toBe("running");
+    });
+
+    it("state is running after resume", () => {
+      const q = createThrottledQueue({ min_rpi: 1, interval: 1000 });
+      q(() => {});
+      q.pause();
+      q.resume();
+      expect(q.getState().state).toBe("running");
+    });
+
+    it("started increments for each callback attempt including retries", () => {
+      const q = createThrottledQueue({ min_rpi: 5, interval: 1000, evenly_spaced: false, retry: 1 });
+      q(() => false);
+      vi.advanceTimersByTime(3000);
+      expect(q.getState().started).toBe(2);
+    });
+
+    it("succeeded increments for successful callbacks", () => {
+      const q = createThrottledQueue({ min_rpi: 2, interval: 1000, evenly_spaced: false });
+      q(() => {});
+      q(() => {});
+      vi.advanceTimersByTime(1000);
+      expect(q.getState().succeeded).toBe(2);
+    });
+
+    it("failed increments for returned-false, thrown, and rejected", async () => {
+      const q = createThrottledQueue({ min_rpi: 3, interval: 1000, evenly_spaced: false });
+      q(() => false);
+      q(() => { throw new Error("boom"); });
+      q(async () => { throw new Error("async"); });
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(q.getState().failed).toBe(3);
+    });
+
+    it("failed increments per attempt even when retry later succeeds", () => {
+      let attempt = 0;
+      const q = createThrottledQueue({ min_rpi: 5, interval: 1000, evenly_spaced: false, retry: 1 });
+      q(() => { attempt++; return attempt === 1 ? false : undefined; });
+      vi.advanceTimersByTime(3000);
+      expect(q.getState().failed).toBe(1);
+      expect(q.getState().succeeded).toBe(1);
+    });
+
+    it("retried increments only when another attempt is actually scheduled", () => {
+      const q = createThrottledQueue({ min_rpi: 5, interval: 1000, evenly_spaced: false, retry: 2 });
+      let attempt = 0;
+      q(() => { attempt++; return attempt <= 2 ? false : undefined; });
+      vi.advanceTimersByTime(5000);
+      expect(q.getState().retried).toBe(2);
+    });
+
+    it("retried does not increment when retry is exhausted", () => {
+      const q = createThrottledQueue({ min_rpi: 5, interval: 1000, evenly_spaced: false, retry: 1 });
+      q(() => false); // fails both attempts, no more retries scheduled
+      vi.advanceTimersByTime(3000);
+      expect(q.getState().retried).toBe(1); // only 1 retry was scheduled
+    });
+
+    it("rateIncreases and rateDecreases match onRateChange notifications", () => {
+      const rates: number[] = [];
+      const q = createThrottledQueue({
+        min_rpi: 1, max_rpi: 5, interval: 1000, evenly_spaced: false,
+        errors_per_interval: 2, onRateChange: r => rates.push(r),
+      });
+      for (let i = 0; i < 20; i++) q(() => {});
+      vi.advanceTimersByTime(1000);
+      const s1 = q.getState();
+      expect(s1.rateIncreases + s1.rateDecreases).toBe(rates.length);
+    });
+
+    it("rate direction counters are monotonic — no-op rate change does not increment", () => {
+      const q = createThrottledQueue({ min_rpi: 1, max_rpi: 1, interval: 1000 });
+      q(() => {});
+      vi.advanceTimersByTime(3000);
+      const s = q.getState();
+      expect(s.rateIncreases).toBe(0);
+      expect(s.rateDecreases).toBe(0);
+    });
+
+    it("counters do not change for settlements after abort", async () => {
+      const q = createThrottledQueue({ min_rpi: 1, interval: 1000 });
+      const d = deferred();
+      q(() => d.promise);
+      await vi.advanceTimersByTimeAsync(1000);
+      const before = q.getState();
+      q.abort();
+      d.resolve();
+      await vi.advanceTimersByTimeAsync(0);
+      const after = q.getState();
+      expect(after.started).toBe(before.started);
+      expect(after.succeeded).toBe(before.succeeded);
+      expect(after.failed).toBe(before.failed);
+    });
+
+    it("pending includes delayed retries", () => {
+      const q = createThrottledQueue({
+        min_rpi: 1, interval: 1000, evenly_spaced: false,
+        retry: 1, retryBackoff: { strategy: "fixed", baseDelay: 500 },
+      });
+      q(() => false);
+      vi.advanceTimersByTime(1000);
+      expect(q.getState().pending).toBe(1);
+    });
+  });
+
   describe("waitForIdle()", () => {
     it("resolves immediately when already idle", async () => {
       const q = createThrottledQueue({ min_rpi: 1, interval: 1000 });

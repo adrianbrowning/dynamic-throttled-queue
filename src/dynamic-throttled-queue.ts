@@ -118,12 +118,28 @@ export type ThrottleOptions = {
 
 export type ThrottleFn = (callback: ThrottleCallback) => void;
 
+export type QueueLifecycleState = "running" | "paused" | "stopped" | "aborted";
+
+export type QueueState = Readonly<{
+  rate: number;
+  pending: number;
+  active: number;
+  state: QueueLifecycleState;
+  started: number;
+  succeeded: number;
+  failed: number;
+  retried: number;
+  rateIncreases: number;
+  rateDecreases: number;
+}>;
+
 export type ThrottleHandle = ThrottleFn & {
   pause: () => void;
   resume: () => void;
   stop: () => void;
   abort: () => void;
   waitForIdle: () => Promise<void>;
+  getState: () => QueueState;
   readonly pending: number;
 };
 

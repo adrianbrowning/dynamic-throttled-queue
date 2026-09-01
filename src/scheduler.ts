@@ -1,4 +1,4 @@
-import type { RateFailureOutcome, ThrottleCallback, ThrottleHandle, ThrottleOptions } from "./dynamic-throttled-queue.ts";
+import type { QueueState, RateFailureOutcome, ThrottleCallback, ThrottleHandle, ThrottleOptions } from "./dynamic-throttled-queue.ts";
 import type { RateController } from "./rate-controller.ts";
 import { calculateRetryDelay } from "./retry-backoff.ts";
 
@@ -39,6 +39,12 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
   let isStopped = false;
   let isAborted = false;
   let hasStrategyFailure = false;
+  let cnt_started = 0;
+  let cnt_succeeded = 0;
+  let cnt_failed = 0;
+  let cnt_retried = 0;
+  let cnt_rateIncreases = 0;
+  let cnt_rateDecreases = 0;
   let strategyFailure: unknown;
   const abortController = new AbortController();
   const max_concurrency = concurrency ?? Infinity;
@@ -178,10 +184,13 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
 
   function handleResult(item: QueueItem, outcome: RateFailureOutcome | undefined) {
     if (isAborted) return;
+    if (outcome) cnt_failed++;
+    else cnt_succeeded++;
     if (!isPaused && (!usesSettledTiming || item.observationWindow === observationWindow)) {
       rateController.recordCompletion(isRateReducing(outcome));
     }
     if (isRetryable(item, outcome)) {
+      cnt_retried++;
       const retryItem = { fn: item.fn, retries: item.retries - 1 };
       if (retryBackoff === undefined) {
         queue.push(retryItem);
@@ -211,6 +220,7 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
       item.observationWindow = observationWindow;
       settledOutstanding++;
     }
+    cnt_started++;
     active_count++;
     let result: ReturnType<ThrottleCallback>;
     try {
@@ -261,6 +271,8 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
 
   function applyRate(newRpi: number) {
     if (newRpi === current_rpi) return;
+    if (newRpi > current_rpi) cnt_rateIncreases++;
+    else cnt_rateDecreases++;
     current_rpi = newRpi;
     onRateChange?.(current_rpi);
     if (evenly_spaced) dyn_interval = interval / current_rpi;
@@ -367,11 +379,30 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
     if (!isRunning && !isPaused) start();
   }
 
+  function getLifecycleState() {
+    if (isAborted) return "aborted" as const;
+    if (isStopped) return "stopped" as const;
+    if (isPaused) return "paused" as const;
+    return "running" as const;
+  }
+
   enqueue.pause = pause;
   enqueue.resume = resume;
   enqueue.stop = stop;
   enqueue.abort = abort;
   enqueue.waitForIdle = async () => isIdle() ? Promise.resolve() : new Promise<void>(resolve => { idleWaiters.push(resolve); });
+  enqueue.getState = (): QueueState => Object.freeze({
+    rate: current_rpi,
+    pending: queue.length - head + delayedRetries.length,
+    active: active_count,
+    state: getLifecycleState(),
+    started: cnt_started,
+    succeeded: cnt_succeeded,
+    failed: cnt_failed,
+    retried: cnt_retried,
+    rateIncreases: cnt_rateIncreases,
+    rateDecreases: cnt_rateDecreases,
+  });
   Object.defineProperty(enqueue, "pending", { get: () => queue.length - head + delayedRetries.length });
   return enqueue as ThrottleHandle;
 }

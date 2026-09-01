@@ -51,6 +51,17 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
   let nextObservationWindow = 0;
   let collectingSettledWindow = false;
   let settledOutstanding = 0;
+  const idleWaiters: Array<() => void> = [];
+
+  function isIdle() {
+    return active_count === 0 && queue.length <= head && delayedRetries.length === 0;
+  }
+
+  function notifyIdle() {
+    if (!isIdle()) return;
+    const waiters = idleWaiters.splice(0);
+    for (const resolve of waiters) resolve();
+  }
 
   function releaseDelayedRetry(delayedRetry: DelayedRetry) {
     const index = delayedRetries.indexOf(delayedRetry);
@@ -192,6 +203,7 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
       if (!collectingSettledWindow && settledOutstanding === 0) finishSettledWindow();
     }
     if (resume && isRunning && !skippedLast && queue.length > head && (!usesSettledTiming || collectingSettledWindow)) dequeue();
+    notifyIdle();
   }
 
   function execute(item: QueueItem) {
@@ -359,6 +371,7 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
   enqueue.resume = resume;
   enqueue.stop = stop;
   enqueue.abort = abort;
+  enqueue.waitForIdle = async () => isIdle() ? Promise.resolve() : new Promise<void>(resolve => { idleWaiters.push(resolve); });
   Object.defineProperty(enqueue, "pending", { get: () => queue.length - head + delayedRetries.length });
   return enqueue as ThrottleHandle;
 }

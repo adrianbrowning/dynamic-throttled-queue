@@ -1949,8 +1949,8 @@ describe("createThrottledQueue", () => {
       const q = createThrottledQueue({ min_rpi: 2, interval: 1000, evenly_spaced: false });
       const d1 = deferred();
       const d2 = deferred();
-      q(() => d1.promise);
-      q(() => d2.promise);
+      q(async () => d1.promise);
+      q(async () => d2.promise);
       await vi.advanceTimersByTimeAsync(1000);
       expect(q.getState().active).toBe(2);
       d1.resolve();
@@ -2040,10 +2040,14 @@ describe("createThrottledQueue", () => {
     });
 
     it("rateIncreases and rateDecreases match onRateChange notifications", () => {
-      const rates: number[] = [];
+      const rates: Array<number> = [];
       const q = createThrottledQueue({
-        min_rpi: 1, max_rpi: 5, interval: 1000, evenly_spaced: false,
-        errors_per_interval: 2, onRateChange: r => rates.push(r),
+        min_rpi: 1,
+        max_rpi: 5,
+        interval: 1000,
+        evenly_spaced: false,
+        errors_per_interval: 2,
+        onRateChange: r => rates.push(r),
       });
       for (let i = 0; i < 20; i++) q(() => {});
       vi.advanceTimersByTime(1000);
@@ -2063,7 +2067,7 @@ describe("createThrottledQueue", () => {
     it("counters do not change for settlements after abort", async () => {
       const q = createThrottledQueue({ min_rpi: 1, interval: 1000 });
       const d = deferred();
-      q(() => d.promise);
+      q(async () => d.promise);
       await vi.advanceTimersByTimeAsync(1000);
       const before = q.getState();
       q.abort();
@@ -2077,8 +2081,11 @@ describe("createThrottledQueue", () => {
 
     it("pending includes delayed retries", () => {
       const q = createThrottledQueue({
-        min_rpi: 1, interval: 1000, evenly_spaced: false,
-        retry: 1, retryBackoff: { strategy: "fixed", baseDelay: 500 },
+        min_rpi: 1,
+        interval: 1000,
+        evenly_spaced: false,
+        retry: 1,
+        retryBackoff: { strategy: "fixed", baseDelay: 500 },
       });
       q(() => false);
       vi.advanceTimersByTime(1000);

@@ -30,6 +30,10 @@ export type RateFailureOutcome =
 
 export type RateOutcomeClassifier = (outcome: RateFailureOutcome) => boolean;
 
+export type AdjustmentTiming = "interval" | "settled";
+
+const adjustmentTimings = new Set<string>([ "interval", "settled" ]);
+
 export const linear: RateStrategy = ({
   minRate,
   maxRate,
@@ -91,6 +95,8 @@ export type ThrottleOptions = {
   rateStrategy?: RateStrategy;
   /** Decides whether a failed callback outcome contributes to adaptive-rate error counting. */
   rateOutcomeClassifier?: RateOutcomeClassifier;
+  /** When adaptive-rate observations are adjusted. Defaults to interval compatibility behavior. */
+  adjustmentTiming?: AdjustmentTiming;
   onRateChange?: (rate: number) => void;
 };
 
@@ -130,6 +136,9 @@ export function createThrottledQueue(options: ThrottleOptions): ThrottleHandle {
   }
   if (!Number.isInteger(compact_threshold) || compact_threshold < 0) {
     throw new Error("compact_threshold must be a non-negative integer");
+  }
+  if (options.adjustmentTiming !== undefined && !adjustmentTimings.has(options.adjustmentTiming)) {
+    throw new Error("adjustmentTiming must be either interval or settled");
   }
   return createScheduler(options, createRateController({
     min_rpi,

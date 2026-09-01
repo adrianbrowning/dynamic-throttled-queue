@@ -1414,4 +1414,123 @@ describe("createThrottledQueue", () => {
       expect(signal.aborted).toBe(false);
     });
   });
+
+  describe("pause and resume", () => {
+    it("retains pending and newly accepted callbacks without starting them until resumed", () => {
+      const throttle = createThrottledQueue({ min_rpi: 1, interval: 1000, evenly_spaced: false });
+      const started: Array<string> = [];
+
+      throttle(() => { started.push("first"); });
+      throttle(() => { started.push("second"); });
+      throttle.pause();
+      throttle(() => { started.push("third"); });
+
+      vi.advanceTimersByTime(10_000);
+
+      expect(started).toEqual([]);
+      expect(throttle.pending).toBe(3);
+
+      throttle.resume();
+      vi.advanceTimersByTime(1000);
+
+      expect(started).toEqual([ "first" ]);
+      expect(throttle.pending).toBe(2);
+    });
+
+    it("is idempotent when pause and resume are repeated", () => {
+      const throttle = createThrottledQueue({ min_rpi: 1, interval: 1000, evenly_spaced: false });
+      let started = 0;
+
+      throttle(() => { started++; });
+      throttle.pause();
+      throttle.pause();
+      throttle.resume();
+      throttle.resume();
+      vi.advanceTimersByTime(1000);
+
+      expect(started).toBe(1);
+    });
+
+    it("retains a retry from active work while paused until resumed", async () => {
+      const throttle = createThrottledQueue({
+        min_rpi: 1,
+        interval: 1000,
+        evenly_spaced: false,
+        retry: 1,
+      });
+      let settle!: (value: boolean) => void;
+      const active = new Promise<boolean>(resolve => { settle = resolve; });
+      let attempts = 0;
+
+      throttle(async () => { attempts++; return active; });
+      await vi.advanceTimersByTimeAsync(1000);
+      expect(attempts).toBe(1);
+
+      throttle.pause();
+      settle(false);
+      await vi.advanceTimersByTimeAsync(10_000);
+
+      expect(attempts).toBe(1);
+      expect(throttle.pending).toBe(1);
+
+      throttle.resume();
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(attempts).toBe(2);
+    });
+
+    it("discards outcomes that settle while paused before beginning a fresh observation window", async () => {
+      const observationErrors: Array<number> = [];
+      const throttle = createThrottledQueue({
+        min_rpi: 1,
+        max_rpi: 3,
+        interval: 1000,
+        evenly_spaced: false,
+        concurrency: 1,
+        errors_per_interval: 1,
+        rateStrategy: observation => {
+          observationErrors.push(observation.errorCount);
+          return { nextRate: observation.currentRate, shouldBackOff: false };
+        },
+      });
+      let settle!: (value: boolean) => void;
+      const active = new Promise<boolean>(resolve => { settle = resolve; });
+
+      throttle(async () => active);
+      throttle(() => {});
+      await vi.advanceTimersByTimeAsync(1000);
+
+      throttle.pause();
+      settle(false);
+      await vi.advanceTimersByTimeAsync(0);
+      throttle.resume();
+      await vi.advanceTimersByTimeAsync(1000);
+
+      expect(observationErrors).toEqual([ 0 ]);
+    });
+
+    it("makes stop take precedence over pause and leaves pause and resume inert after stop or abort", () => {
+      const throttle = createThrottledQueue({ min_rpi: 1, interval: 1000, evenly_spaced: false });
+      const started: Array<string> = [];
+
+      throttle(() => { started.push("retained"); });
+      throttle.pause();
+      throttle.stop();
+      throttle.resume();
+      throttle.pause();
+      vi.advanceTimersByTime(10_000);
+
+      expect(started).toEqual([]);
+      expect(throttle.pending).toBe(1);
+
+      throttle(() => { started.push("new"); });
+      vi.advanceTimersByTime(2000);
+      expect(started).toEqual([ "retained", "new" ]);
+
+      throttle.abort();
+      throttle.pause();
+      throttle.resume();
+      expect(vi.getTimerCount()).toBe(0);
+    });
+  });
 });

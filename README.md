@@ -64,6 +64,8 @@ Set `concurrency` to bound callbacks that are still awaiting asynchronous comple
 
 | Property | Type | Description |
 | -------- | ---- | ----------- |
+| `pause()` | `() => void` | Temporarily prevent new callback starts while retaining accepted work |
+| `resume()` | `() => void` | Resume a paused queue with a fresh pacing and observation window |
 | `stop()` | `() => void` | Stop processing the queue immediately |
 | `abort()` | `() => void` | Terminally discard queued work and signal active callbacks |
 | `pending` | `number` (readonly) | Number of callbacks still waiting in the queue |
@@ -76,6 +78,17 @@ console.log(throttle.pending); // number of queued callbacks
 
 throttle.stop(); // halt processing
 ```
+
+## Lifecycle
+
+| State | Pending work and enqueue | Active work | Scheduling and lifecycle operations |
+| ----- | ------------------------ | ----------- | ----------------------------------- |
+| Running | Pending work can start; new callbacks are accepted. | Continues normally. | `pause()` retains work and stops new starts. `stop()` retains work and clears timers. `abort()` is terminal. |
+| Paused | Pending work, newly enqueued callbacks, and retries are retained but do not start. | Continues and settles normally. | `resume()` restarts pacing at the current rate and begins a fresh adaptive-rate observation window. `pause()` is idempotent. `stop()` clears the paused state. |
+| Stopped | Pending work is retained. A later enqueue restarts scheduling. | Continues and settles normally. | `pause()` and `resume()` are no-ops. `stop()` is idempotent. |
+| Aborted | Pending work is discarded and future enqueues throw. | Receives the shared abort signal and may finish cooperatively. | `pause()`, `resume()`, `stop()`, and `abort()` do not restart scheduling; `abort()` is idempotent. |
+
+While paused, callback outcomes do not contribute to adaptive-rate adjustment. A failed active callback may still create a configured retry, but that retry remains pending until `resume()`.
 
 `stop()` clears scheduler timers and retains callbacks that have not started. It cannot cancel an active asynchronous callback; if that callback later succeeds, returns `false`, or rejects, its settlement does not restart scheduling. A retry created by a failed active callback is retained with the pending work. Enqueueing another callback resumes the queue.
 

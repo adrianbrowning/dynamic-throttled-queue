@@ -807,6 +807,124 @@ describe("createThrottledQueue", () => {
   });
 
   describe("retry", () => {
+    it("uses retryClassifier to retry returned false with a one-based attempt number", () => {
+      const classifications: Array<unknown> = [];
+      const throttle = createThrottledQueue({
+        min_rpi: 5,
+        interval: 1000,
+        evenly_spaced: false,
+        retry: 1,
+        retryClassifier: (outcome, attempt) => {
+          classifications.push({ outcome, attempt });
+          return true;
+        },
+      });
+      let callCount = 0;
+
+      throttle(() => { callCount++; return false; });
+      vi.advanceTimersByTime(3000);
+
+      expect(classifications).toEqual([
+        { outcome: { kind: "returned-false" }, attempt: 1 },
+      ]);
+      expect(callCount).toBe(2);
+    });
+
+    it.each([
+      {
+        name: "returned false",
+        callback: (onStart: () => void) => () => { onStart(); return false; },
+        outcome: { kind: "returned-false" },
+      },
+      {
+        name: "a thrown error",
+        callback: (onStart: () => void) => () => {
+          onStart();
+          throw new Error("thrown failure");
+        },
+        outcome: { kind: "thrown", error: expect.any(Error) },
+      },
+      {
+        name: "a rejected promise",
+        callback: (onStart: () => void) => async () => {
+          onStart();
+          throw new Error("rejected failure");
+        },
+        outcome: { kind: "rejected", error: expect.any(Error) },
+      },
+    ])("does not retry $name when retryClassifier returns a non-true value", async ({ callback, outcome }) => {
+      const classifications: Array<unknown> = [];
+      const throttle = createThrottledQueue({
+        min_rpi: 5,
+        interval: 1000,
+        evenly_spaced: false,
+        retry: 1,
+        retryClassifier: classified => {
+          classifications.push(classified);
+          return 1 as unknown as boolean;
+        },
+      });
+      let callCount = 0;
+
+      throttle(callback(() => { callCount++; }));
+      await vi.advanceTimersByTimeAsync(3000);
+
+      expect(callCount).toBe(1);
+      expect(classifications).toEqual([ outcome ]);
+    });
+
+    it.each([
+      { retryable: false, rateReducing: false, expectedAttempts: 1, expectedErrors: 0 },
+      { retryable: false, rateReducing: true, expectedAttempts: 1, expectedErrors: 1 },
+      { retryable: true, rateReducing: false, expectedAttempts: 2, expectedErrors: 0 },
+      { retryable: true, rateReducing: true, expectedAttempts: 2, expectedErrors: 1 },
+    ])("keeps retry eligibility $retryable and rate reduction $rateReducing independent", ({
+      retryable,
+      rateReducing,
+      expectedAttempts,
+      expectedErrors,
+    }) => {
+      const errorCounts: Array<number> = [];
+      const throttle = createThrottledQueue({
+        min_rpi: 1,
+        max_rpi: 3,
+        interval: 1000,
+        evenly_spaced: false,
+        retry: 1,
+        retryClassifier: () => retryable,
+        rateOutcomeClassifier: () => rateReducing,
+        rateStrategy: observation => {
+          errorCounts.push(observation.errorCount);
+          return { nextRate: observation.currentRate, shouldBackOff: false };
+        },
+      });
+      let attempts = 0;
+
+      throttle(() => { attempts++; return false; });
+      throttle(() => {});
+      throttle(() => {});
+      vi.advanceTimersByTime(2000);
+
+      expect(attempts).toBe(expectedAttempts);
+      expect(errorCounts).toEqual([ expectedErrors ]);
+    });
+
+    it("falls back to retrying when retryClassifier throws", () => {
+      const throttle = createThrottledQueue({
+        min_rpi: 5,
+        interval: 1000,
+        evenly_spaced: false,
+        retry: 1,
+        retryClassifier: () => { throw new Error("classifier failed"); },
+      });
+      let attempts = 0;
+
+      throttle(() => { attempts++; return false; });
+
+      expect(() => vi.advanceTimersByTime(3000)).not.toThrow();
+      expect(attempts).toBe(2);
+    });
+
     it("waits for retry backoff before re-entering normal scheduler pacing", () => {
       const throttle = createThrottledQueue({
         min_rpi: 5,

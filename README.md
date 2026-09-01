@@ -26,7 +26,7 @@ throttle(() => {
 });
 ```
 
-Callbacks can return `false` to signal a failure (used for dynamic rate adjustment and retry). Async callbacks (returning a Promise) are also supported — rejections and `false` resolutions count as failures. By default, every failure reduces the adaptive rate; use `rateOutcomeClassifier` when only selected failures should do so.
+Callbacks can return `false` to signal a failure (used for dynamic rate adjustment and retry). Async callbacks (returning a Promise) are also supported — rejections and `false` resolutions count as failures. By default, every failure reduces the adaptive rate; use `rateOutcomeClassifier` when only selected failures should do so. Use `retryClassifier` to separately decide whether a failure is eligible for retry.
 
 Each callback receives an execution context containing the queue-owned `AbortSignal`. Existing zero-argument callbacks remain supported. Use the signal to cooperatively cancel in-flight work:
 
@@ -56,6 +56,7 @@ Set `concurrency` to bound callbacks that are still awaiting asynchronous comple
 | `rateStrategy` | `RateStrategy` | `linear` | Pure policy that requests the next rate and an optional backoff after each observation window |
 | `rateOutcomeClassifier` | `RateOutcomeClassifier` | — | Decides whether a failed callback outcome contributes to adaptive-rate error counting |
 | `adjustmentTiming` | `"interval" \| "settled"` | `"interval"` | Defines whether rate decisions use outcomes settled each interval or complete started-attempt sets |
+| `retryClassifier` | `RetryClassifier` | — | Decides whether a failed callback outcome is eligible for another attempt |
 | `onRateChange` | `(rate: number) => void` | — | Called when the current rate changes |
 
 `retry`, `errors_per_interval`, and `compact_threshold` reject fractional and non-finite values. `errors_per_interval` must be at least `1`; `retry` and `compact_threshold` may be `0`. `retryBackoff.baseDelay` and optional `maxDelay` are finite non-negative millisecond values (fractional values are accepted); optional `jitter` is finite from `0` through `1`.
@@ -183,6 +184,23 @@ const throttle = createThrottledQueue({
 ```
 
 The normalized outcomes are `{ kind: "returned-false" }`, `{ kind: "thrown", error }`, and `{ kind: "rejected", error }`. Omitting the classifier preserves the default behavior: every failure reduces the adaptive rate. If the classifier throws, the original failure safely counts as rate-reducing and no separate classifier error is surfaced.
+
+### Retry classification
+
+`retryClassifier` receives the same normalized failure outcome and a one-based attempt number, including the initial callback start. It must return literal `true` for the failure to be retried; any other value makes it permanent. The configured `retry` value remains the hard cap on additional attempts, so the classifier is not called after that budget is exhausted. If it throws, the queue preserves legacy behavior and retries subject to the remaining budget.
+
+Retry eligibility is independent from adaptive-rate accounting. A failure can be retryable, rate-reducing, both, or neither:
+
+```ts
+const throttle = createThrottledQueue({
+  min_rpi: 1,
+  interval: 1000,
+  retry: 2,
+  retryClassifier: (outcome, attempt) =>
+    outcome.kind === "rejected" && attempt < 3,
+  rateOutcomeClassifier: outcome => outcome.kind === "rejected",
+});
+```
 
 ### Rate strategies
 

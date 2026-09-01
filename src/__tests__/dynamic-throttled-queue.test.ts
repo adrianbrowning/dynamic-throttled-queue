@@ -322,6 +322,62 @@ describe("createThrottledQueue", () => {
   });
 
   describe("dynamic rate adjustment", () => {
+    describe("adjustment timing", () => {
+      it("waits for a settled window's slow failure before adjusting the rate", async () => {
+        const rates: Array<number> = [];
+        const started: Array<string> = [];
+        const throttle = createThrottledQueue({
+          min_rpi: 1,
+          max_rpi: 3,
+          interval: 1000,
+          evenly_spaced: false,
+          errors_per_interval: 1,
+          adjustmentTiming: "settled",
+          rateStrategy: observation => ({
+            nextRate: observation.errorCount > 0 ? observation.currentRate - 1 : observation.currentRate,
+            shouldBackOff: false,
+          }),
+          onRateChange: rate => rates.push(rate),
+        });
+
+        throttle(async () => new Promise<boolean>(resolve => {
+          started.push("slow");
+          setTimeout(() => resolve(false), 500);
+        }));
+        throttle(() => { started.push("fast"); });
+        throttle(() => { started.push("next-window"); });
+
+        await vi.advanceTimersByTimeAsync(1000);
+        expect(rates).toEqual([]);
+        expect(started).toEqual([ "slow", "fast" ]);
+
+        await vi.advanceTimersByTimeAsync(500);
+        expect(rates).toEqual([ 1 ]);
+        expect(started).toEqual([ "slow", "fast" ]);
+      });
+
+      it("begins the next settled window after an adaptive-rate backoff ends", async () => {
+        const throttle = createThrottledQueue({
+          min_rpi: 1,
+          max_rpi: 3,
+          interval: 1000,
+          evenly_spaced: false,
+          errors_per_interval: 1,
+          back_off: true,
+          adjustmentTiming: "settled",
+        });
+        let started = 0;
+
+        for (let i = 0; i < 4; i++) throttle(() => { started++; return false; });
+
+        await vi.advanceTimersByTimeAsync(1000);
+        expect(started).toBe(2);
+
+        await vi.advanceTimersByTimeAsync(2000);
+        expect(started).toBe(3);
+      });
+    });
+
     it("applies AIMD decisions through the queue and clamps them to configured bounds", () => {
       const rates: Array<number> = [];
       const throttle = createThrottledQueue({

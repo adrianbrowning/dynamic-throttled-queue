@@ -54,9 +54,16 @@ Set `concurrency` to bound callbacks that are still awaiting asynchronous comple
 | `compact_threshold` | `number` | `512` | Non-negative integer minimum dead slots before internal queue compaction triggers; `0` compacts at the earliest eligible point |
 | `rateStrategy` | `RateStrategy` | `linear` | Pure policy that requests the next rate and an optional backoff after each observation window |
 | `rateOutcomeClassifier` | `RateOutcomeClassifier` | — | Decides whether a failed callback outcome contributes to adaptive-rate error counting |
+| `adjustmentTiming` | `"interval" \| "settled"` | `"interval"` | Defines whether rate decisions use outcomes settled each interval or complete started-attempt sets |
 | `onRateChange` | `(rate: number) => void` | — | Called when the current rate changes |
 
 `retry`, `errors_per_interval`, and `compact_threshold` reject fractional and non-finite values. `errors_per_interval` must be at least `1`; `retry` and `compact_threshold` may be `0`.
+
+### Adaptive-rate timing
+
+`adjustmentTiming: "interval"` is the compatibility default: each configured interval observes the callback outcomes that have settled so far. A slow callback can therefore settle after its start interval and affect a later rate decision.
+
+With `adjustmentTiming: "settled"`, an observation window contains every callback attempt that starts during one full configured interval. When collection closes, no further callbacks start until every attempt in that window settles; the queue then makes exactly one rate decision from the complete window. The next collection interval begins immediately after that decision, unless adaptive-rate `back_off` delays scheduling. Empty settled intervals do not produce a decision. A never-settling callback blocks further settled windows until it settles, or until terminal `abort()`.
 
 ## Handle API
 
@@ -89,6 +96,8 @@ throttle.stop(); // halt processing
 | Aborted | Pending work is discarded and future enqueues throw. | Receives the shared abort signal and may finish cooperatively. | `pause()`, `resume()`, `stop()`, and `abort()` do not restart scheduling; `abort()` is idempotent. |
 
 While paused, callback outcomes do not contribute to adaptive-rate adjustment. A failed active callback may still create a configured retry, but that retry remains pending until `resume()`.
+
+In settled timing, `pause()` discards the in-progress observation window rather than making a partial or late rate decision. `stop()` retains its non-restarting behavior, and `abort()` remains terminal: neither produces post-stop or post-abort settled-window accounting.
 
 `stop()` clears scheduler timers and retains callbacks that have not started. It cannot cancel an active asynchronous callback; if that callback later succeeds, returns `false`, or rejects, its settlement does not restart scheduling. A retry created by a failed active callback is retained with the pending work. Enqueueing another callback resumes the queue.
 

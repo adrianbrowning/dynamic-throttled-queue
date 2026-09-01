@@ -1,7 +1,7 @@
 import type { RateFailureOutcome, ThrottleCallback, ThrottleHandle, ThrottleOptions } from "./dynamic-throttled-queue.ts";
 import type { RateController } from "./rate-controller.ts";
 
-type QueueItem = { fn: ThrottleCallback; retries: number; };
+type QueueItem = { fn: ThrottleCallback; retries: number; observationWindow?: number; };
 
 export function createScheduler(options: ThrottleOptions, rateController: RateController): ThrottleHandle {
   const {
@@ -13,7 +13,9 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
     back_off = false,
     rateOutcomeClassifier,
     onRateChange,
+    adjustmentTiming = "interval",
   } = options;
+  const usesSettledTiming = adjustmentTiming === "settled";
   let current_rpi = rateController.rate;
   let dyn_interval = evenly_spaced ? interval / current_rpi : interval;
   let dyn_requests_per_interval = evenly_spaced ? 1 : current_rpi;
@@ -32,6 +34,10 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
   const max_concurrency = concurrency ?? Infinity;
   const queue: Array<QueueItem> = [];
   let head = 0;
+  let observationWindow: number | undefined;
+  let nextObservationWindow = 0;
+  let collectingSettledWindow = false;
+  let settledOutstanding = 0;
 
   function halt() {
     isRunning = false;
@@ -46,10 +52,17 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
     }
   }
 
+  function discardSettledWindow() {
+    observationWindow = undefined;
+    collectingSettledWindow = false;
+    settledOutstanding = 0;
+  }
+
   function stop() {
     isStopped = true;
     isPaused = false;
     halt();
+    discardSettledWindow();
   }
 
   function pause() {
@@ -57,6 +70,7 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
     isPaused = true;
     rateController.clearObservation();
     halt();
+    discardSettledWindow();
   }
 
   function resume() {
@@ -69,6 +83,7 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
     if (isAborted) return;
     isAborted = true;
     halt();
+    discardSettledWindow();
     queue.length = 0;
     head = 0;
     abortController.abort();
@@ -86,7 +101,9 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
 
   function handleResult(item: QueueItem, outcome: RateFailureOutcome | undefined) {
     if (isAborted) return;
-    if (!isPaused) rateController.recordCompletion(isRateReducing(outcome));
+    if (!isPaused && (!usesSettledTiming || item.observationWindow === observationWindow)) {
+      rateController.recordCompletion(isRateReducing(outcome));
+    }
     if (outcome && item.retries > 0) {
       queue.push({ fn: item.fn, retries: item.retries - 1 });
       if (!isRunning && !isPaused && !isStopped && queue.length > head) start();
@@ -96,10 +113,18 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
   function handleSettlement(item: QueueItem, outcome: RateFailureOutcome | undefined, resume = false) {
     active_count--;
     handleResult(item, outcome);
-    if (resume && isRunning && !skippedLast && queue.length > head) dequeue();
+    if (item.observationWindow === observationWindow) {
+      settledOutstanding--;
+      if (!collectingSettledWindow && settledOutstanding === 0) finishSettledWindow();
+    }
+    if (resume && isRunning && !skippedLast && queue.length > head && (!usesSettledTiming || collectingSettledWindow)) dequeue();
   }
 
   function execute(item: QueueItem) {
+    if (usesSettledTiming && collectingSettledWindow) {
+      item.observationWindow = observationWindow;
+      settledOutstanding++;
+    }
     active_count++;
     let result: ReturnType<ThrottleCallback>;
     try {
@@ -140,7 +165,7 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
       queue.splice(0, head);
       head = 0;
     }
-    if (head >= queue.length) {
+    if (head >= queue.length && !usesSettledTiming) {
       halt();
       return;
     }
@@ -179,9 +204,64 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
     if (isRunning) dynTimeout = setTimeout(adjustRate, interval);
   }
 
+  function finishSettledWindow() {
+    if (observationWindow === undefined || isPaused || isStopped || isAborted) return;
+    const wasSkipped = skippedLast;
+    skippedLast = false;
+    let decision: ReturnType<RateController["observe"]>;
+    try {
+      decision = rateController.observe({ hasPendingWork: queue.length > head, wasBackedOff: wasSkipped });
+    }
+    catch (error) {
+      hasStrategyFailure = true;
+      strategyFailure = error;
+      halt();
+      discardSettledWindow();
+      throw error;
+    }
+    observationWindow = undefined;
+    applyRate(decision.rate);
+    if (decision.shouldBackOff && back_off) {
+      skippedLast = true;
+      timeout = setTimeout(resumeSettledScheduling, interval);
+      return;
+    }
+    if (queue.length > head) beginSettledWindow();
+    else halt();
+  }
+
+  function closeSettledWindow() {
+    dynTimeout = undefined;
+    collectingSettledWindow = false;
+    clearTimeout(timeout);
+    timeout = undefined;
+    if (settledOutstanding === 0) finishSettledWindow();
+  }
+
+  function resumeSettledScheduling() {
+    skippedLast = false;
+    beginSettledWindow();
+  }
+
+  function beginSettledWindow() {
+    if (isAborted || isPaused || isStopped || skippedLast || queue.length <= head) return;
+    isRunning = true;
+    collectingSettledWindow = true;
+    observationWindow = nextObservationWindow++;
+    last_called = Date.now();
+    clearTimeout(timeout);
+    timeout = setTimeout(dequeue, dyn_interval);
+    clearTimeout(dynTimeout);
+    dynTimeout = setTimeout(closeSettledWindow, interval);
+  }
+
   function start() {
     if (isAborted || isPaused || isStopped) return;
     if (skippedLast) return;
+    if (usesSettledTiming) {
+      beginSettledWindow();
+      return;
+    }
     isRunning = true;
     last_called = Date.now();
     clearTimeout(timeout);

@@ -14,6 +14,7 @@ describe("scheduler", () => {
     const recordCompletion = vi.fn();
     const scheduler = createScheduler({ min_rpi: 1, interval: 1000 }, {
       rate: 2,
+      clearObservation: vi.fn(),
       recordCompletion,
       observe: () => ({ rate: 2, shouldBackOff: false }),
     });

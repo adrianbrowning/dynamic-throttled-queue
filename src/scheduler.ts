@@ -23,6 +23,7 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
   let timeout: ReturnType<typeof setTimeout> | undefined;
   let dynTimeout: ReturnType<typeof setTimeout> | undefined;
   let active_count = 0;
+  let isPaused = false;
   let isStopped = false;
   let isAborted = false;
   let hasStrategyFailure = false;
@@ -47,7 +48,21 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
 
   function stop() {
     isStopped = true;
+    isPaused = false;
     halt();
+  }
+
+  function pause() {
+    if (isAborted || isStopped || isPaused) return;
+    isPaused = true;
+    rateController.clearObservation();
+    halt();
+  }
+
+  function resume() {
+    if (!isPaused) return;
+    isPaused = false;
+    if (queue.length > head) start();
   }
 
   function abort() {
@@ -71,10 +86,10 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
 
   function handleResult(item: QueueItem, outcome: RateFailureOutcome | undefined) {
     if (isAborted) return;
-    rateController.recordCompletion(isRateReducing(outcome));
+    if (!isPaused) rateController.recordCompletion(isRateReducing(outcome));
     if (outcome && item.retries > 0) {
       queue.push({ fn: item.fn, retries: item.retries - 1 });
-      if (!isRunning && !isStopped && queue.length > head) start();
+      if (!isRunning && !isPaused && !isStopped && queue.length > head) start();
     }
   }
 
@@ -165,6 +180,7 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
   }
 
   function start() {
+    if (isAborted || isPaused || isStopped) return;
     if (skippedLast) return;
     isRunning = true;
     last_called = Date.now();
@@ -178,9 +194,11 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
     if (hasStrategyFailure) throw strategyFailure;
     queue.push({ fn: callback, retries: retry });
     isStopped = false;
-    if (!isRunning) start();
+    if (!isRunning && !isPaused) start();
   }
 
+  enqueue.pause = pause;
+  enqueue.resume = resume;
   enqueue.stop = stop;
   enqueue.abort = abort;
   Object.defineProperty(enqueue, "pending", { get: () => queue.length - head });

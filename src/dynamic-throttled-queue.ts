@@ -97,6 +97,8 @@ export type ThrottleOptions = {
 export type ThrottleFn = (callback: ThrottleCallback) => void;
 
 export type ThrottleHandle = ThrottleFn & {
+  pause: () => void;
+  resume: () => void;
   stop: () => void;
   abort: () => void;
   readonly pending: number;

@@ -123,6 +123,7 @@ export type ThrottleHandle = ThrottleFn & {
   resume: () => void;
   stop: () => void;
   abort: () => void;
+  waitForIdle: () => Promise<void>;
   readonly pending: number;
 };
 

@@ -1914,4 +1914,143 @@ describe("createThrottledQueue", () => {
       expect(vi.getTimerCount()).toBe(0);
     });
   });
+
+  describe("waitForIdle()", () => {
+    it("resolves immediately when already idle", async () => {
+      const q = createThrottledQueue({ min_rpi: 1, interval: 1000 });
+      await expect(q.waitForIdle()).resolves.toBeUndefined();
+    });
+
+    it("resolves after synchronous work completes", async () => {
+      const q = createThrottledQueue({ min_rpi: 1, interval: 1000 });
+      let done = false;
+      q(() => {});
+      const idle = q.waitForIdle().then(() => { done = true; });
+      expect(done).toBe(false);
+      await vi.runAllTimersAsync();
+      await idle;
+      expect(done).toBe(true);
+    });
+
+    it("resolves after async work settles", async () => {
+      const q = createThrottledQueue({ min_rpi: 1, interval: 1000 });
+      const d = deferred();
+      let done = false;
+      q(() => d.promise);
+      const idle = q.waitForIdle().then(() => { done = true; });
+      await vi.runAllTimersAsync();
+      expect(done).toBe(false);
+      d.resolve();
+      await vi.runAllTimersAsync();
+      await idle;
+      expect(done).toBe(true);
+    });
+
+    it("does not expose transient idle between failure and retry", async () => {
+      const q = createThrottledQueue({ min_rpi: 1, interval: 1000, retry: 1 });
+      let idleCount = 0;
+      let attempt = 0;
+      q(() => {
+        attempt++;
+        return attempt === 1 ? false : undefined; // first fails, retry succeeds
+      });
+      const idle = q.waitForIdle().then(() => { idleCount++; });
+      await vi.runAllTimersAsync();
+      await idle;
+      expect(idleCount).toBe(1);
+      expect(attempt).toBe(2);
+    });
+
+    it("does not expose transient idle between async failure and delayed retry", async () => {
+      const q = createThrottledQueue({
+        min_rpi: 1, interval: 1000, retry: 1,
+        retryBackoff: { strategy: "fixed", baseDelay: 500 },
+      });
+      let idleCount = 0;
+      let attempt = 0;
+      q(async () => {
+        attempt++;
+        return attempt === 1 ? false : undefined;
+      });
+      const idle = q.waitForIdle().then(() => { idleCount++; });
+      await vi.runAllTimersAsync();
+      await idle;
+      expect(idleCount).toBe(1);
+      expect(attempt).toBe(2);
+    });
+
+    it("concurrent callers all resolve at the same idle transition without leaking", async () => {
+      const q = createThrottledQueue({ min_rpi: 1, interval: 1000 });
+      q(() => {});
+      const results: number[] = [];
+      const p1 = q.waitForIdle().then(() => { results.push(1); });
+      const p2 = q.waitForIdle().then(() => { results.push(2); });
+      const p3 = q.waitForIdle().then(() => { results.push(3); });
+      await vi.runAllTimersAsync();
+      await Promise.all([p1, p2, p3]);
+      expect(results).toHaveLength(3);
+      // Second wave: no leftover waiters from first idle
+      q(() => {});
+      const p4 = q.waitForIdle();
+      await vi.runAllTimersAsync();
+      await p4;
+    });
+
+    it("leaves waiters pending when stop() retains pending work", async () => {
+      const q = createThrottledQueue({ min_rpi: 1, interval: 1000 });
+      q(() => {});
+      q(() => {});
+      let done = false;
+      const idle = q.waitForIdle().then(() => { done = true; });
+      // stop before any work runs — timers not advanced
+      q.stop();
+      await vi.runAllTimersAsync();
+      expect(done).toBe(false);
+      idle.catch(() => {}); // suppress unhandled
+    });
+
+    it("waiters remain pending during abort until active async callbacks settle", async () => {
+      const q = createThrottledQueue({ min_rpi: 1, interval: 1000 });
+      const d = deferred();
+      let done = false;
+      q(() => d.promise);
+      const idle = q.waitForIdle().then(() => { done = true; });
+      await vi.runAllTimersAsync(); // callback starts
+      q.abort();
+      await vi.runAllTimersAsync();
+      expect(done).toBe(false); // active callback not settled
+      d.resolve();
+      await vi.runAllTimersAsync();
+      await idle;
+      expect(done).toBe(true);
+    });
+
+    it("resolves when paused queue drains after resume", async () => {
+      const q = createThrottledQueue({ min_rpi: 1, interval: 1000 });
+      let done = false;
+      q(() => {});
+      const idle = q.waitForIdle().then(() => { done = true; });
+      q.pause();
+      await vi.runAllTimersAsync();
+      expect(done).toBe(false); // paused with pending work
+      q.resume();
+      await vi.runAllTimersAsync();
+      await idle;
+      expect(done).toBe(true);
+    });
+
+    it("already-resolved waiter is unaffected by later enqueues", async () => {
+      const q = createThrottledQueue({ min_rpi: 1, interval: 1000 });
+      q(() => {});
+      const first = q.waitForIdle();
+      await vi.runAllTimersAsync();
+      await first; // first waiter resolved
+      let secondCount = 0;
+      const second = q.waitForIdle().then(() => { secondCount++; });
+      q(() => {}); // new work
+      await vi.runAllTimersAsync();
+      await second;
+      expect(secondCount).toBe(1); // second waiter resolved exactly once for the new work
+    });
+  });
 });

@@ -82,6 +82,7 @@ With `adjustmentTiming: "settled"`, an observation window contains every callbac
 | `resume()` | `() => void` | Resume a paused queue with a fresh pacing and observation window |
 | `stop()` | `() => void` | Stop processing the queue immediately |
 | `abort()` | `() => void` | Terminally discard queued work and signal active callbacks |
+| `waitForIdle()` | `() => Promise<void>` | Resolves when all pending, active, and delayed-retry work has completed |
 | `pending` | `number` (readonly) | Number of callbacks waiting in the queue, including delayed retries |
 
 ```ts
@@ -109,6 +110,8 @@ In settled timing, `pause()` discards the in-progress observation window rather 
 `stop()` clears scheduler timers and retains callbacks that have not started. It cannot cancel an active asynchronous callback; if that callback later succeeds, returns `false`, or rejects, its settlement does not restart scheduling. A retry created by a failed active callback is retained with the pending work. Enqueueing another callback resumes the queue and any frozen delayed retries.
 
 `abort()` is terminal and idempotent. It clears scheduler timers, discards pending callbacks, and aborts the one shared signal supplied to active callbacks. Future enqueue attempts throw. Cancellation is cooperative: callbacks that ignore the signal can continue running, but their later success or failure does not retry work or affect adaptive-rate accounting.
+
+`waitForIdle()` returns a `Promise<void>` that resolves once all pending callbacks, active executions, and delayed retries have reached a terminal outcome. If the queue is already idle the promise resolves immediately. Each call is one-shot: a later enqueue does not affect a promise that has already resolved. Multiple simultaneous callers all resolve at the same idle transition without retaining waiter state. A callback failure that triggers a retry never exposes a transient idle transition between the failed attempt and the retry. `stop()` retains pending work, so existing waiters remain pending until that work completes after a later enqueue resumes the queue. `abort()` discards pending work but waiters remain pending until every active callback settles; post-abort settlements do not create new retry work. A paused queue resolves waiters only when both pending and active work are zero.
 
 ## Examples
 

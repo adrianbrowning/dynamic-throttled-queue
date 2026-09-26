@@ -527,6 +527,34 @@ describe("createThrottledQueue", () => {
       vi.advanceTimersByTime(10_000);
       expect(started).toBe(2);
     });
+
+    it("rejects idle waiters on strategy failure without waiting for active callbacks, then ignores their settlement", async () => {
+      const failure = new Error("strategy failed");
+      const throttle = createThrottledQueue({
+        min_rpi: 1,
+        max_rpi: 2,
+        interval: 1000,
+        evenly_spaced: false,
+        concurrency: 1,
+        retry: 1,
+        rateStrategy: () => { throw failure; },
+      });
+      const active = deferred();
+      let started = 0;
+
+      throttle(async () => { started++; await active.promise; return false; });
+      throttle(() => { started++; });
+      const idle = throttle.waitForIdle();
+
+      expect(() => vi.advanceTimersByTime(1000)).toThrow(failure);
+      expect(throttle.getState()).toMatchObject({ state: "failed", active: 1 });
+      await expect(idle).rejects.toBe(failure);
+
+      active.resolve();
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(throttle.getState()).toMatchObject({ state: "failed", active: 0, pending: 0, failed: 0, retried: 0 });
+      expect(started).toBe(1);
+    });
   });
 
   describe("backoff", () => {

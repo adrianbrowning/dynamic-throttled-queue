@@ -1,4 +1,3 @@
-import { createRateController } from "./rate-controller.ts";
 import { createScheduler } from "./scheduler.ts";
 
 export type RetryBackoff = {
@@ -190,9 +189,15 @@ export function createThrottledQueue(options: ThrottleOptions): ThrottleHandle {
     throw new Error("adjustmentTiming must be either interval or settled");
   }
   validateRetryBackoff(options.retryBackoff);
-  return createScheduler(options, createRateController({
+  return createScheduler(options, {
     min_rpi,
     max_rpi,
+    interval,
     errors_per_interval,
-  }, options.rateStrategy ?? linear));
+    back_off: options.back_off ?? false,
+    adjustmentTiming: options.adjustmentTiming ?? "interval",
+    rateStrategy: options.rateStrategy ?? linear,
+    rateOutcomeClassifier: options.rateOutcomeClassifier,
+    onRateChange: options.onRateChange,
+  });
 }

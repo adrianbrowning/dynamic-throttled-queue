@@ -1,8 +1,7 @@
 import { describe, expect, it } from "vitest";
 import { aimd, linear } from "../dynamic-throttled-queue.ts";
-import { createRateController } from "../rate-controller.ts";
 
-describe("rate controller", () => {
+describe("rate strategies", () => {
   it("exports AIMD with a one-step increase and half-rate decrease by default", () => {
     const strategy = aimd();
     const common = {
@@ -67,23 +66,5 @@ describe("rate controller", () => {
 
     expect(linear({ ...common, currentRate: 3, errorCount: 2 })).toEqual({ nextRate: 2, shouldBackOff: true });
     expect(linear({ ...common, currentRate: 3, errorCount: 0 })).toEqual({ nextRate: 4, shouldBackOff: false });
-  });
-
-  it("starts at the midpoint and lowers the rate with a backoff request when its failure threshold is reached", () => {
-    const controller = createRateController({
-      min_rpi: 1,
-      max_rpi: 5,
-      errors_per_interval: 2,
-    }, linear);
-
-    expect(controller.rate).toBe(3);
-
-    controller.recordCompletion(true);
-    controller.recordCompletion(true);
-
-    expect(controller.observe({ hasPendingWork: true, wasBackedOff: false })).toEqual({
-      rate: 2,
-      shouldBackOff: true,
-    });
   });
 });

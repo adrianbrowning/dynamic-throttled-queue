@@ -1,8 +1,9 @@
+import { createAdaptiveRate } from "./adaptive-rate.ts";
+import type { AdaptiveRateOptions, Pacing, SettlementReporter } from "./adaptive-rate.ts";
 import type { QueueState, RateFailureOutcome, ThrottleCallback, ThrottleHandle, ThrottleOptions } from "./dynamic-throttled-queue.ts";
-import type { RateController } from "./rate-controller.ts";
 import { calculateRetryDelay } from "./retry-backoff.ts";
 
-type QueueItem = { fn: ThrottleCallback; retries: number; observationWindow?: number; };
+type QueueItem = { fn: ThrottleCallback; retries: number; };
 type DelayedRetry = {
   item: QueueItem;
   remaining: number;
@@ -10,7 +11,7 @@ type DelayedRetry = {
   timeout?: ReturnType<typeof setTimeout>;
 };
 
-export function createScheduler(options: ThrottleOptions, rateController: RateController): ThrottleHandle {
+export function createScheduler(options: ThrottleOptions, adaptiveRateOptions: AdaptiveRateOptions): ThrottleHandle {
   const {
     interval,
     evenly_spaced = true,
@@ -19,33 +20,18 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
     concurrency,
     maxQueueSize,
     compact_threshold = 512,
-    back_off = false,
-    rateOutcomeClassifier,
     retryClassifier,
-    onRateChange,
-    adjustmentTiming = "interval",
   } = options;
-  const usesSettledTiming = adjustmentTiming === "settled";
-  let current_rpi = rateController.rate;
-  let dyn_interval = evenly_spaced ? interval / current_rpi : interval;
-  let dyn_requests_per_interval = evenly_spaced ? 1 : current_rpi;
-  let skippedLast = false;
-  let isRunning = false;
   let last_called = 0;
   let timeout: ReturnType<typeof setTimeout> | undefined;
-  let dynTimeout: ReturnType<typeof setTimeout> | undefined;
   let active_count = 0;
   let isPaused = false;
   let isStopped = false;
   let isAborted = false;
-  let hasStrategyFailure = false;
   let cnt_started = 0;
   let cnt_succeeded = 0;
   let cnt_failed = 0;
   let cnt_retried = 0;
-  let cnt_rateIncreases = 0;
-  let cnt_rateDecreases = 0;
-  let strategyFailure: unknown;
   const abortController = new AbortController();
   const max_concurrency = concurrency ?? Infinity;
   const max_queue_size = maxQueueSize ?? Infinity;
@@ -53,11 +39,28 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
   const delayedRetries: Array<DelayedRetry> = [];
   let head = 0;
   let reserved_count = 0;
-  let observationWindow: number | undefined;
-  let nextObservationWindow = 0;
-  let collectingSettledWindow = false;
-  let settledOutstanding = 0;
   const idleWaiters: Array<() => void> = [];
+  const adaptiveRate = createAdaptiveRate(adaptiveRateOptions, {
+    hasPendingWork: () => queue.length > head,
+    onPacingChange,
+  });
+
+  function spacing() {
+    return evenly_spaced ? interval / adaptiveRate.rate : interval;
+  }
+
+  function onPacingChange(pacing: Pacing) {
+    clearTimeout(timeout);
+    timeout = undefined;
+    if (pacing === "open") {
+      last_called = Date.now();
+      timeout = setTimeout(dequeue, spacing());
+    }
+    else if (pacing === "idle" && head >= queue.length) {
+      queue.length = 0;
+      head = 0;
+    }
+  }
 
   function isIdle() {
     return active_count === 0 && queue.length <= head && delayedRetries.length === 0;
@@ -74,7 +77,7 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
     if (index < 0) return;
     delayedRetries.splice(index, 1);
     queue.push(delayedRetry.item);
-    if (!isRunning && !isPaused && !isStopped && queue.length > head) start();
+    start();
   }
 
   function startDelayedRetry(delayedRetry: DelayedRetry) {
@@ -106,70 +109,37 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
     if (!isPaused && !isStopped) startDelayedRetry(delayedRetry);
   }
 
-  function halt() {
-    isRunning = false;
-    skippedLast = false;
-    clearTimeout(timeout);
-    timeout = undefined;
-    clearTimeout(dynTimeout);
-    dynTimeout = undefined;
-    if (head >= queue.length) {
-      queue.length = 0;
-      head = 0;
-    }
-  }
-
-  function discardSettledWindow() {
-    observationWindow = undefined;
-    collectingSettledWindow = false;
-    settledOutstanding = 0;
-  }
-
   function stop() {
     isStopped = true;
     isPaused = false;
     freezeDelayedRetries();
-    halt();
-    discardSettledWindow();
+    adaptiveRate.stop();
   }
 
   function pause() {
     if (isAborted || isStopped || isPaused) return;
     isPaused = true;
-    rateController.clearObservation();
     freezeDelayedRetries();
-    halt();
-    discardSettledWindow();
+    adaptiveRate.pause();
   }
 
   function resume() {
     if (!isPaused) return;
     isPaused = false;
     resumeDelayedRetries();
-    if (queue.length > head) start();
+    start();
   }
 
   function abort() {
     if (isAborted) return;
     isAborted = true;
-    halt();
-    discardSettledWindow();
+    adaptiveRate.stop();
     freezeDelayedRetries();
     delayedRetries.length = 0;
     queue.length = 0;
     head = 0;
     reserved_count = 0;
     abortController.abort();
-  }
-
-  function isRateReducing(outcome: RateFailureOutcome | undefined) {
-    if (!outcome) return false;
-    try {
-      return rateOutcomeClassifier?.(outcome) ?? true;
-    }
-    catch {
-      return true;
-    }
   }
 
   function isRetryable(item: QueueItem, outcome: RateFailureOutcome | undefined) {
@@ -182,19 +152,16 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
     }
   }
 
-  function handleResult(item: QueueItem, outcome: RateFailureOutcome | undefined) {
+  function handleResult(item: QueueItem, outcome: RateFailureOutcome | undefined, reportSettlement: SettlementReporter) {
     if (isAborted) return;
     if (outcome) cnt_failed++;
     else cnt_succeeded++;
-    if (!isPaused && (!usesSettledTiming || item.observationWindow === observationWindow)) {
-      rateController.recordCompletion(isRateReducing(outcome));
-    }
     if (isRetryable(item, outcome)) {
       cnt_retried++;
       const retryItem = { fn: item.fn, retries: item.retries - 1 };
       if (retryBackoff === undefined) {
         queue.push(retryItem);
-        if (!isRunning && !isPaused && !isStopped && queue.length > head) start();
+        start();
       }
       else {
         const retryIndex = retry - item.retries + 1;
@@ -202,24 +169,18 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
       }
     }
     else reserved_count--;
+    reportSettlement(outcome);
   }
 
-  function handleSettlement(item: QueueItem, outcome: RateFailureOutcome | undefined, resume = false) {
+  function handleSettlement(item: QueueItem, outcome: RateFailureOutcome | undefined, reportSettlement: SettlementReporter, resume = false) {
     active_count--;
-    handleResult(item, outcome);
-    if (item.observationWindow === observationWindow) {
-      settledOutstanding--;
-      if (!collectingSettledWindow && settledOutstanding === 0) finishSettledWindow();
-    }
-    if (resume && isRunning && !skippedLast && queue.length > head && (!usesSettledTiming || collectingSettledWindow)) dequeue();
+    handleResult(item, outcome, reportSettlement);
+    if (resume && adaptiveRate.pacing === "open" && queue.length > head) dequeue();
     notifyIdle();
   }
 
   function execute(item: QueueItem) {
-    if (usesSettledTiming && collectingSettledWindow) {
-      item.observationWindow = observationWindow;
-      settledOutstanding++;
-    }
+    const reportSettlement = adaptiveRate.started();
     cnt_started++;
     active_count++;
     let result: ReturnType<ThrottleCallback>;
@@ -227,21 +188,21 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
       result = item.fn({ signal: abortController.signal });
     }
     catch (error) {
-      handleSettlement(item, { kind: "thrown", error });
+      handleSettlement(item, { kind: "thrown", error }, reportSettlement);
       return;
     }
     if (result instanceof Promise) {
       void result.then(
-        value => handleSettlement(item, value === false ? { kind: "returned-false" } : undefined, true),
-        (error: unknown) => handleSettlement(item, { kind: "rejected", error }, true)
+        value => handleSettlement(item, value === false ? { kind: "returned-false" } : undefined, reportSettlement, true),
+        (error: unknown) => handleSettlement(item, { kind: "rejected", error }, reportSettlement, true)
       );
       return;
     }
-    handleSettlement(item, result === false ? { kind: "returned-false" } : undefined);
+    handleSettlement(item, result === false ? { kind: "returned-false" } : undefined, reportSettlement);
   }
 
   function dequeue() {
-    const threshold = last_called + dyn_interval;
+    const threshold = last_called + spacing();
     const now = Date.now();
     if (now < threshold) {
       clearTimeout(timeout);
@@ -249,7 +210,7 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
       return;
     }
 
-    const end = Math.min(head + dyn_requests_per_interval, queue.length);
+    const end = Math.min(head + (evenly_spaced ? 1 : adaptiveRate.rate), queue.length);
     let started = 0;
     while (head < end && active_count < max_concurrency) {
       const item = queue[head++]!;
@@ -261,122 +222,26 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
       queue.splice(0, head);
       head = 0;
     }
-    if (head >= queue.length && !usesSettledTiming) {
-      halt();
-      return;
-    }
-    if (active_count >= max_concurrency) return;
-    timeout = setTimeout(dequeue, dyn_interval);
-  }
-
-  function applyRate(newRpi: number) {
-    if (newRpi === current_rpi) return;
-    if (newRpi > current_rpi) cnt_rateIncreases++;
-    else cnt_rateDecreases++;
-    current_rpi = newRpi;
-    onRateChange?.(current_rpi);
-    if (evenly_spaced) dyn_interval = interval / current_rpi;
-    else dyn_requests_per_interval = current_rpi;
-  }
-
-  function adjustRate() {
-    dynTimeout = undefined;
-    const wasSkipped = skippedLast;
-    skippedLast = false;
-    let decision: ReturnType<RateController["observe"]>;
-    try {
-      decision = rateController.observe({ hasPendingWork: queue.length > head, wasBackedOff: wasSkipped });
-    }
-    catch (error) {
-      hasStrategyFailure = true;
-      strategyFailure = error;
-      halt();
-      throw error;
-    }
-    applyRate(decision.rate);
-    if (decision.shouldBackOff && back_off) {
-      clearTimeout(timeout);
-      skippedLast = true;
-      timeout = setTimeout(dequeue, dyn_interval + interval);
-    }
-    if (isRunning) dynTimeout = setTimeout(adjustRate, interval);
-  }
-
-  function finishSettledWindow() {
-    if (observationWindow === undefined || isPaused || isStopped || isAborted) return;
-    const wasSkipped = skippedLast;
-    skippedLast = false;
-    let decision: ReturnType<RateController["observe"]>;
-    try {
-      decision = rateController.observe({ hasPendingWork: queue.length > head, wasBackedOff: wasSkipped });
-    }
-    catch (error) {
-      hasStrategyFailure = true;
-      strategyFailure = error;
-      halt();
-      discardSettledWindow();
-      throw error;
-    }
-    observationWindow = undefined;
-    applyRate(decision.rate);
-    if (decision.shouldBackOff && back_off) {
-      skippedLast = true;
-      timeout = setTimeout(resumeSettledScheduling, interval);
-      return;
-    }
-    if (queue.length > head) beginSettledWindow();
-    else halt();
-  }
-
-  function closeSettledWindow() {
-    dynTimeout = undefined;
-    collectingSettledWindow = false;
-    clearTimeout(timeout);
-    timeout = undefined;
-    if (settledOutstanding === 0) finishSettledWindow();
-  }
-
-  function resumeSettledScheduling() {
-    skippedLast = false;
-    beginSettledWindow();
-  }
-
-  function beginSettledWindow() {
-    if (isAborted || isPaused || isStopped || skippedLast || queue.length <= head) return;
-    isRunning = true;
-    collectingSettledWindow = true;
-    observationWindow = nextObservationWindow++;
-    last_called = Date.now();
-    clearTimeout(timeout);
-    timeout = setTimeout(dequeue, dyn_interval);
-    clearTimeout(dynTimeout);
-    dynTimeout = setTimeout(closeSettledWindow, interval);
+    if (head >= queue.length) adaptiveRate.drained();
+    if (adaptiveRate.pacing !== "open" || active_count >= max_concurrency) return;
+    timeout = setTimeout(dequeue, spacing());
   }
 
   function start() {
     if (isAborted || isPaused || isStopped) return;
-    if (skippedLast) return;
-    if (usesSettledTiming) {
-      beginSettledWindow();
-      return;
-    }
-    isRunning = true;
-    last_called = Date.now();
-    clearTimeout(timeout);
-    timeout = setTimeout(dequeue, dyn_interval);
-    if (!dynTimeout) dynTimeout = setTimeout(adjustRate, interval);
+    adaptiveRate.start();
   }
 
   function enqueue(callback: ThrottleCallback) {
     if (isAborted) throw new Error("Cannot enqueue work after the queue has been aborted");
-    if (hasStrategyFailure) throw strategyFailure;
+    adaptiveRate.throwIfFailed();
     if (reserved_count >= max_queue_size) throw new Error("Cannot enqueue work: maxQueueSize has been reached");
     reserved_count++;
     queue.push({ fn: callback, retries: retry });
     const wasStopped = isStopped;
     isStopped = false;
     if (wasStopped) resumeDelayedRetries();
-    if (!isRunning && !isPaused) start();
+    start();
   }
 
   function getLifecycleState() {
@@ -392,7 +257,7 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
   enqueue.abort = abort;
   enqueue.waitForIdle = async () => isIdle() ? Promise.resolve() : new Promise<void>(resolve => { idleWaiters.push(resolve); });
   enqueue.getState = (): QueueState => Object.freeze({
-    rate: current_rpi,
+    rate: adaptiveRate.rate,
     pending: queue.length - head + delayedRetries.length,
     active: active_count,
     state: getLifecycleState(),
@@ -400,8 +265,8 @@ export function createScheduler(options: ThrottleOptions, rateController: RateCo
     succeeded: cnt_succeeded,
     failed: cnt_failed,
     retried: cnt_retried,
-    rateIncreases: cnt_rateIncreases,
-    rateDecreases: cnt_rateDecreases,
+    rateIncreases: adaptiveRate.rateIncreases,
+    rateDecreases: adaptiveRate.rateDecreases,
   });
   Object.defineProperty(enqueue, "pending", { get: () => queue.length - head + delayedRetries.length });
   return enqueue as ThrottleHandle;

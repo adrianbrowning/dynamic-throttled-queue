@@ -30,11 +30,12 @@ export type PendingWork<T> = {
   /** Makes the oldest queued item active and returns it, or `undefined` when nothing is queued. */
   take: () => T | undefined;
   /**
-   * Ends one active item. With `retry`, the retry keeps the item's reservation; without it, the
-   * reservation is released. `observe` runs after the retry is placed and before idle is checked:
-   * work it accepts keeps idle waiters pending, and `fail` called from inside it rejects them.
+   * Ends one active item. `decide` runs once the item no longer counts as active but still holds its
+   * reservation; returning a retry keeps that reservation, returning nothing releases it. `observe`
+   * runs after the retry is placed and before idle is checked: work it accepts keeps idle waiters
+   * pending, and `fail` called from inside it rejects them.
    */
-  settle: (retry?: Retry<T>, observe?: () => void) => void;
+  settle: (decide?: () => Retry<T> | undefined, observe?: () => void) => void;
   /** Stops held-retry delays from elapsing, keeping each one's remaining time. */
   freeze: () => void;
   /** Resumes held-retry delays from their remaining time. Retries held while frozen wait for this. */
@@ -61,6 +62,8 @@ export function createPendingWork<T>(options: PendingWorkOptions, host: PendingW
   const held: Array<HeldRetry<T>> = [];
   let frozen = false;
   let active = 0;
+  /** Items between leaving `active` and having their retry placed; they keep their reservation. */
+  let deciding = 0;
   const idleWaiters: Array<PromiseWithResolvers<void>> = [];
 
   function queued() {
@@ -115,7 +118,7 @@ export function createPendingWork<T>(options: PendingWorkOptions, host: PendingW
       return active;
     },
     accept(item) {
-      if (pending() + active >= capacity) throw new Error("Cannot enqueue work: maxQueueSize has been reached");
+      if (pending() + active + deciding >= capacity) throw new Error("Cannot enqueue work: maxQueueSize has been reached");
       queue.push(item);
     },
     take() {
@@ -132,8 +135,16 @@ export function createPendingWork<T>(options: PendingWorkOptions, host: PendingW
       }
       return item;
     },
-    settle(retry, observe) {
+    settle(decide, observe) {
       active--;
+      deciding++;
+      let retry: Retry<T> | undefined;
+      try {
+        retry = decide?.();
+      }
+      finally {
+        deciding--;
+      }
       if (retry?.delay !== undefined) hold(retry.item, retry.delay);
       else if (retry) {
         queue.push(retry.item);

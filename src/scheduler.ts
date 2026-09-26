@@ -123,7 +123,7 @@ export function createScheduler(options: ThrottleOptions, adaptiveRateOptions: A
     }
     if (outcome) cnt_failed++;
     else cnt_succeeded++;
-    work.settle(nextAttempt(item, outcome), () => {
+    work.settle(() => nextAttempt(item, outcome), () => {
       reportSettlement(outcome);
       if (resume && adaptiveRate.pacing === "open" && work.queued > 0) dequeue();
     });

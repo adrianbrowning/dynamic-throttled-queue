@@ -75,7 +75,7 @@ describe("pending work", () => {
       work.accept("b");
       work.take();
 
-      work.settle({ item: "a again" });
+      work.settle(() => ({ item: "a again" }));
 
       expect(retriesQueued()).toBe(1);
       expect(takeAll(work)).toEqual([ "b", "a again" ]);
@@ -89,7 +89,7 @@ describe("pending work", () => {
       work.take();
       work.accept("held");
       work.take();
-      work.settle({ item: "held", delay: 1000 });
+      work.settle(() => ({ item: "held", delay: 1000 }));
       work.accept("queued");
 
       expect(() => work.accept("over")).toThrow("maxQueueSize");
@@ -100,11 +100,33 @@ describe("pending work", () => {
       work.accept("a");
 
       work.take();
-      work.settle({ item: "a" });
+      work.settle(() => ({ item: "a" }));
       expect(() => work.accept("b")).toThrow("maxQueueSize");
 
       work.take();
       work.settle();
+      expect(() => work.accept("b")).not.toThrow();
+    });
+
+    it("stops counting an item as active but keeps its reservation while its retry is decided", () => {
+      const { work } = track({ capacity: 1 });
+      work.accept("a");
+      work.take();
+      let seen: { active: number; admitted: boolean; } | undefined;
+
+      work.settle(() => {
+        let admitted = true;
+        try {
+          work.accept("b");
+        }
+        catch {
+          admitted = false;
+        }
+        seen = { active: work.active, admitted };
+        return undefined;
+      });
+
+      expect(seen).toEqual({ active: 0, admitted: false });
       expect(() => work.accept("b")).not.toThrow();
     });
 
@@ -121,7 +143,7 @@ describe("pending work", () => {
       work.accept("a");
       work.take();
 
-      work.settle({ item: "a again", delay: 500 });
+      work.settle(() => ({ item: "a again", delay: 500 }));
       expect(work).toMatchObject({ queued: 0, pending: 1, active: 0 });
 
       vi.advanceTimersByTime(499);
@@ -137,7 +159,7 @@ describe("pending work", () => {
       const { work } = track();
       work.accept("a");
       work.take();
-      work.settle({ item: "a again", delay: 1000 });
+      work.settle(() => ({ item: "a again", delay: 1000 }));
 
       vi.advanceTimersByTime(400);
       work.freeze();
@@ -157,7 +179,7 @@ describe("pending work", () => {
       work.take();
       work.freeze();
 
-      work.settle({ item: "a again", delay: 500 });
+      work.settle(() => ({ item: "a again", delay: 500 }));
       vi.advanceTimersByTime(5000);
       expect(work.queued).toBe(0);
 
@@ -170,7 +192,7 @@ describe("pending work", () => {
       const { work, retriesQueued } = track();
       work.accept("a");
       work.take();
-      work.settle({ item: "a again", delay: 500 });
+      work.settle(() => ({ item: "a again", delay: 500 }));
 
       work.discard();
       vi.advanceTimersByTime(5000);
@@ -211,7 +233,7 @@ describe("pending work", () => {
       work.take();
       const idle = watchIdle(work);
 
-      work.settle(retry);
+      work.settle(() => retry);
       vi.advanceTimersByTime(500);
       await vi.advanceTimersByTimeAsync(0);
       expect(idle.status).toBe("pending");

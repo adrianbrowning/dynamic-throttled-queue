@@ -196,21 +196,22 @@ describe("createThrottledQueue", () => {
       expect(() => throttle(() => {})).not.toThrow();
     });
 
-    it("holds the settling callback's reservation while its retry is being decided", () => {
-      const admissions: Array<string> = [];
+    it("no longer counts a settling callback as active, but holds its reservation, while its retry is decided", () => {
+      const seen: Array<{ active: number; admitted: boolean; }> = [];
       const throttle = createThrottledQueue({
         min_rpi: 1,
         interval: 1000,
         maxQueueSize: 1,
         retry: 1,
         retryClassifier: () => {
+          let admitted = true;
           try {
             throttle(() => {});
-            admissions.push("accepted");
           }
           catch {
-            admissions.push("rejected");
+            admitted = false;
           }
+          seen.push({ active: throttle.getState().active, admitted });
           return true;
         },
       });
@@ -218,7 +219,7 @@ describe("createThrottledQueue", () => {
       throttle(() => false);
       vi.advanceTimersByTime(1000);
 
-      expect(admissions).toEqual([ "rejected" ]);
+      expect(seen).toEqual([{ active: 0, admitted: false }]);
       expect(throttle.pending).toBe(1);
     });
 
@@ -580,6 +581,23 @@ describe("createThrottledQueue", () => {
       await vi.advanceTimersByTimeAsync(10_000);
       expect(throttle.getState()).toMatchObject({ state: "failed", active: 0, pending: 0, failed: 0, retried: 0 });
       expect(started).toBe(1);
+    });
+
+    it("resolves idle waiters when the queue drains before a settled window's strategy fails", async () => {
+      const failure = new Error("strategy failed");
+      const throttle = createThrottledQueue({
+        min_rpi: 1,
+        interval: 1000,
+        adjustmentTiming: "settled",
+        rateStrategy: () => { throw failure; },
+      });
+
+      throttle(() => {});
+      const idle = throttle.waitForIdle();
+
+      expect(() => vi.advanceTimersByTime(1000)).toThrow(failure);
+      await expect(idle).resolves.toBeUndefined();
+      expect(throttle.getState()).toMatchObject({ state: "failed", active: 0, pending: 0 });
     });
   });
 
@@ -1282,6 +1300,19 @@ describe("createThrottledQueue", () => {
       expect(signals).toHaveLength(2);
       expect(signals[0]).toBe(signals[1]);
       expect(signals[0]?.aborted).toBe(true);
+    });
+
+    it("stops starting the rest of a batch when a callback aborts the queue", () => {
+      const throttle = createThrottledQueue({ min_rpi: 3, interval: 1000, evenly_spaced: false });
+      const started: Array<string> = [];
+
+      throttle(() => { started.push("first"); throttle.abort(); });
+      throttle(() => { started.push("second"); });
+      throttle(() => { started.push("third"); });
+      vi.advanceTimersByTime(1000);
+
+      expect(started).toEqual([ "first" ]);
+      expect(throttle.getState()).toMatchObject({ state: "aborted", started: 1, active: 0, pending: 0 });
     });
 
     it("is terminal, discards pending work, and prevents later starts", async () => {

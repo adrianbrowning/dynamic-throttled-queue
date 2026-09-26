@@ -196,6 +196,32 @@ describe("createThrottledQueue", () => {
       expect(() => throttle(() => {})).not.toThrow();
     });
 
+    it("holds the settling callback's reservation while its retry is being decided", () => {
+      const admissions: Array<string> = [];
+      const throttle = createThrottledQueue({
+        min_rpi: 1,
+        interval: 1000,
+        maxQueueSize: 1,
+        retry: 1,
+        retryClassifier: () => {
+          try {
+            throttle(() => {});
+            admissions.push("accepted");
+          }
+          catch {
+            admissions.push("rejected");
+          }
+          return true;
+        },
+      });
+
+      throttle(() => false);
+      vi.advanceTimersByTime(1000);
+
+      expect(admissions).toEqual([ "rejected" ]);
+      expect(throttle.pending).toBe(1);
+    });
+
     it.each([ "pause", "stop" ] as const)("retains reservations while the queue is $state", state => {
       const throttle = createThrottledQueue({ min_rpi: 1, interval: 1000, maxQueueSize: 1 });
 

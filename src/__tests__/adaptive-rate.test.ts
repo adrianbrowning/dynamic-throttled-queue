@@ -17,6 +17,7 @@ afterEach(() => {
 /** Starts observing over a 1..5 range (midpoint 3) with a one-failure threshold and a 1000 ms interval. */
 function observe(options: Partial<AdaptiveRateOptions> = {}, { pending = true } = {}) {
   const work = { pending };
+  const failures: Array<unknown> = [];
   const adaptive = createAdaptiveRate({
     min_rpi: 1,
     max_rpi: 5,
@@ -31,9 +32,10 @@ function observe(options: Partial<AdaptiveRateOptions> = {}, { pending = true } 
     resumeStarts: () => {},
     holdStarts: () => {},
     idle: () => {},
+    failed: error => failures.push(error),
   });
   adaptive.start();
-  return { adaptive, work };
+  return { adaptive, work, failures };
 }
 
 function settleStarts(adaptive: AdaptiveRate, count: number, outcome?: RateFailureOutcome) {
@@ -231,13 +233,13 @@ describe("adaptive rate", () => {
         strategy: (() => ({ nextRate: 1, shouldBackOff: 1 })) as unknown as RateStrategy,
         error: TypeError,
       },
-    ])("halts and records the failure on $name", ({ strategy, error }) => {
-      const { adaptive } = observe({ rateStrategy: strategy });
+    ])("reports the failure on $name without applying a decision or scheduling another", ({ strategy, error }) => {
+      const { adaptive, failures } = observe({ rateStrategy: strategy });
 
       expect(() => vi.advanceTimersByTime(1000)).toThrow(error);
-      expect(adaptive.pacing).toBe("idle");
       expect(vi.getTimerCount()).toBe(0);
-      expect(() => adaptive.throwIfFailed()).toThrow(error);
+      expect(failures).toHaveLength(1);
+      expect(() => { throw failures[0]; }).toThrow(error);
       expect(adaptive.rate).toBe(3);
     });
   });

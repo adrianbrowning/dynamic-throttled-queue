@@ -36,6 +36,8 @@ export type AdaptiveRateHost = {
   holdStarts: (deferBy?: number) => void;
   /** Observation ended: cancel the next paced start. */
   idle: () => void;
+  /** The rate strategy failed; the host must call `stop()`. The error is rethrown after this returns. */
+  failed: (error: unknown) => void;
 };
 
 export type AdaptiveRate = {
@@ -53,8 +55,6 @@ export type AdaptiveRate = {
   pause: () => void;
   /** Reports a callback start. Call the returned reporter once when that callback settles. */
   started: () => SettlementReporter;
-  /** Throws the strategy failure that permanently halted adaptive rate, if one occurred. */
-  throwIfFailed: () => void;
 };
 
 type Timing = {
@@ -204,7 +204,6 @@ export function createAdaptiveRate(options: AdaptiveRateOptions, host: AdaptiveR
   let wasBackedOff = false;
   let ignoringSettlements = false;
   let pacing: Pacing = "idle";
-  let failure: { error: unknown; } | undefined;
 
   function isRateReducing(outcome: RateFailureOutcome) {
     try {
@@ -238,8 +237,7 @@ export function createAdaptiveRate(options: AdaptiveRateOptions, host: AdaptiveR
       decision = validateDecision(rateStrategy(observation));
     }
     catch (error) {
-      failure = { error };
-      timing.stop();
+      host.failed(error);
       throw error;
     }
     const hold = back_off && decision.shouldBackOff;
@@ -312,8 +310,5 @@ export function createAdaptiveRate(options: AdaptiveRateOptions, host: AdaptiveR
       ignoringSettlements = true;
     },
     started: () => timing.started(),
-    throwIfFailed() {
-      if (failure) throw failure.error;
-    },
   };
 }

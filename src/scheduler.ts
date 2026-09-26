@@ -1,6 +1,6 @@
 import { createAdaptiveRate } from "./adaptive-rate.ts";
 import type { AdaptiveRateOptions, SettlementReporter } from "./adaptive-rate.ts";
-import type { QueueState, RateFailureOutcome, ThrottleCallback, ThrottleHandle, ThrottleOptions } from "./dynamic-throttled-queue.ts";
+import type { QueueLifecycleState, QueueState, RateFailureOutcome, ThrottleCallback, ThrottleHandle, ThrottleOptions } from "./dynamic-throttled-queue.ts";
 import { calculateRetryDelay } from "./retry-backoff.ts";
 
 type QueueItem = { fn: ThrottleCallback; retries: number; };
@@ -9,6 +9,20 @@ type DelayedRetry = {
   remaining: number;
   due?: number;
   timeout?: ReturnType<typeof setTimeout>;
+};
+
+type Lifecycle =
+  | Readonly<{ state: Exclude<QueueLifecycleState, "failed">; }>
+  | Readonly<{ state: "failed"; error: unknown; }>;
+type LifecycleEvent = "pause" | "resume" | "stop" | "restart" | "abort" | "fail";
+
+/** The state each event leads to. An event missing from the current state's row is a no-op. */
+const lifecycleTransitions: Readonly<Record<QueueLifecycleState, Partial<Readonly<Record<LifecycleEvent, QueueLifecycleState>>>>> = {
+  running: { pause: "paused", stop: "stopped", abort: "aborted", fail: "failed" },
+  paused: { resume: "running", stop: "stopped", abort: "aborted" },
+  stopped: { restart: "running", abort: "aborted" },
+  aborted: {},
+  failed: {},
 };
 
 export function createScheduler(options: ThrottleOptions, adaptiveRateOptions: AdaptiveRateOptions): ThrottleHandle {
@@ -25,9 +39,7 @@ export function createScheduler(options: ThrottleOptions, adaptiveRateOptions: A
   let last_called = 0;
   let timeout: ReturnType<typeof setTimeout> | undefined;
   let active_count = 0;
-  let isPaused = false;
-  let isStopped = false;
-  let isAborted = false;
+  let lifecycle: Lifecycle = { state: "running" };
   let cnt_started = 0;
   let cnt_succeeded = 0;
   let cnt_failed = 0;
@@ -39,7 +51,7 @@ export function createScheduler(options: ThrottleOptions, adaptiveRateOptions: A
   const delayedRetries: Array<DelayedRetry> = [];
   let head = 0;
   let reserved_count = 0;
-  const idleWaiters: Array<() => void> = [];
+  const idleWaiters: Array<PromiseWithResolvers<void>> = [];
   const adaptiveRate = createAdaptiveRate(adaptiveRateOptions, {
     hasPendingWork: () => queue.length > head,
     resumeStarts() {
@@ -59,6 +71,9 @@ export function createScheduler(options: ThrottleOptions, adaptiveRateOptions: A
         head = 0;
       }
     },
+    failed(error) {
+      transition("fail", error);
+    },
   });
 
   function spacing() {
@@ -71,8 +86,7 @@ export function createScheduler(options: ThrottleOptions, adaptiveRateOptions: A
 
   function notifyIdle() {
     if (!isIdle()) return;
-    const waiters = idleWaiters.splice(0);
-    for (const resolve of waiters) resolve();
+    for (const waiter of idleWaiters.splice(0)) waiter.resolve();
   }
 
   function releaseDelayedRetry(delayedRetry: DelayedRetry) {
@@ -109,40 +123,46 @@ export function createScheduler(options: ThrottleOptions, adaptiveRateOptions: A
   function scheduleDelayedRetry(item: QueueItem, delay: number) {
     const delayedRetry: DelayedRetry = { item, remaining: delay };
     delayedRetries.push(delayedRetry);
-    if (!isPaused && !isStopped) startDelayedRetry(delayedRetry);
+    if (lifecycle.state === "running") startDelayedRetry(delayedRetry);
   }
 
-  function stop() {
-    isStopped = true;
-    isPaused = false;
-    freezeDelayedRetries();
-    adaptiveRate.stop();
-  }
-
-  function pause() {
-    if (isAborted || isStopped || isPaused) return;
-    isPaused = true;
-    freezeDelayedRetries();
-    adaptiveRate.pause();
-  }
-
-  function resume() {
-    if (!isPaused) return;
-    isPaused = false;
-    resumeDelayedRetries();
-    start();
-  }
-
-  function abort() {
-    if (isAborted) return;
-    isAborted = true;
-    adaptiveRate.stop();
-    freezeDelayedRetries();
+  function discardPendingWork() {
+    for (const delayedRetry of delayedRetries) clearTimeout(delayedRetry.timeout);
     delayedRetries.length = 0;
     queue.length = 0;
     head = 0;
     reserved_count = 0;
-    abortController.abort();
+  }
+
+  /** Moves the lifecycle for `event` and runs the cleanup that entering the new state requires. */
+  function transition(event: LifecycleEvent, error?: unknown) {
+    const next = lifecycleTransitions[lifecycle.state][event];
+    if (next === undefined) return;
+    lifecycle = next === "failed" ? { state: next, error } : { state: next };
+    switch (next) {
+      case "running":
+        resumeDelayedRetries();
+        adaptiveRate.start();
+        return;
+      case "paused":
+        freezeDelayedRetries();
+        adaptiveRate.pause();
+        return;
+      case "stopped":
+        freezeDelayedRetries();
+        adaptiveRate.stop();
+        return;
+      case "aborted":
+        adaptiveRate.stop();
+        discardPendingWork();
+        abortController.abort();
+        notifyIdle();
+        return;
+      case "failed":
+        // Adaptive rate stopped itself before reporting the failure.
+        discardPendingWork();
+        for (const waiter of idleWaiters.splice(0)) waiter.reject(error);
+    }
   }
 
   function isRetryable(item: QueueItem, outcome: RateFailureOutcome | undefined) {
@@ -156,7 +176,7 @@ export function createScheduler(options: ThrottleOptions, adaptiveRateOptions: A
   }
 
   function handleResult(item: QueueItem, outcome: RateFailureOutcome | undefined, reportSettlement: SettlementReporter) {
-    if (isAborted) return;
+    if (lifecycle.state === "aborted" || lifecycle.state === "failed") return;
     if (outcome) cnt_failed++;
     else cnt_succeeded++;
     if (isRetryable(item, outcome)) {
@@ -231,39 +251,35 @@ export function createScheduler(options: ThrottleOptions, adaptiveRateOptions: A
   }
 
   function start() {
-    if (isAborted || isPaused || isStopped) return;
-    adaptiveRate.start();
+    if (lifecycle.state === "running") adaptiveRate.start();
   }
 
   function enqueue(callback: ThrottleCallback) {
-    if (isAborted) throw new Error("Cannot enqueue work after the queue has been aborted");
-    adaptiveRate.throwIfFailed();
+    if (lifecycle.state === "aborted") throw new Error("Cannot enqueue work after the queue has been aborted");
+    if (lifecycle.state === "failed") throw lifecycle.error;
     if (reserved_count >= max_queue_size) throw new Error("Cannot enqueue work: maxQueueSize has been reached");
     reserved_count++;
     queue.push({ fn: callback, retries: retry });
-    const wasStopped = isStopped;
-    isStopped = false;
-    if (wasStopped) resumeDelayedRetries();
-    start();
+    if (lifecycle.state === "stopped") transition("restart");
+    else start();
   }
 
-  function getLifecycleState() {
-    if (isAborted) return "aborted" as const;
-    if (isStopped) return "stopped" as const;
-    if (isPaused) return "paused" as const;
-    return "running" as const;
-  }
-
-  enqueue.pause = pause;
-  enqueue.resume = resume;
-  enqueue.stop = stop;
-  enqueue.abort = abort;
-  enqueue.waitForIdle = async () => isIdle() ? Promise.resolve() : new Promise<void>(resolve => { idleWaiters.push(resolve); });
+  enqueue.pause = () => transition("pause");
+  enqueue.resume = () => transition("resume");
+  enqueue.stop = () => transition("stop");
+  enqueue.abort = () => transition("abort");
+  enqueue.waitForIdle = async () => {
+    if (lifecycle.state === "failed") throw lifecycle.error;
+    if (isIdle()) return;
+    const waiter = Promise.withResolvers<void>();
+    idleWaiters.push(waiter);
+    return waiter.promise;
+  };
   enqueue.getState = (): QueueState => Object.freeze({
     rate: adaptiveRate.rate,
     pending: queue.length - head + delayedRetries.length,
     active: active_count,
-    state: getLifecycleState(),
+    state: lifecycle.state,
     started: cnt_started,
     succeeded: cnt_succeeded,
     failed: cnt_failed,

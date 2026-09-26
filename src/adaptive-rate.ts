@@ -30,8 +30,12 @@ export type AdaptiveRateOptions = {
 export type AdaptiveRateHost = {
   /** Whether accepted work is waiting to start. */
   hasPendingWork: () => boolean;
-  /** Called after every pacing transition. A transition to `open` begins fresh pacing. */
-  onPacingChange: (pacing: Pacing) => void;
+  /** Begins fresh pacing: the next paced start is one spacing from now. */
+  resumeStarts: () => void;
+  /** Cancels the next paced start, or reschedules it `deferBy` ms beyond one spacing from now. */
+  holdStarts: (deferBy?: number) => void;
+  /** Observation ended: cancel the next paced start. */
+  idle: () => void;
 };
 
 export type AdaptiveRate = {
@@ -39,7 +43,7 @@ export type AdaptiveRate = {
   readonly rateIncreases: number;
   readonly rateDecreases: number;
   readonly pacing: Pacing;
-  /** Ends a pause, then begins observing if idle, not failed, and work is pending. */
+  /** Ends a pause, then begins observing if idle and work is pending. */
   start: () => void;
   /** Reports that every queued callback has started. */
   drained: () => void;
@@ -65,10 +69,15 @@ type TimingContext = {
   readonly pacing: Pacing;
   hasPendingWork: () => boolean;
   record: SettlementReporter;
-  clearErrors: () => void;
   /** Makes one rate decision and returns whether starts must be held for a backoff. */
   decide: () => boolean;
-  setPacing: (pacing: "open" | "held") => void;
+  /** Opens starts with fresh pacing. */
+  resume: () => void;
+  /** Holds starts; `deferBy` keeps a deferred next start armed for when the hold ends. */
+  hold: (deferBy?: number) => void;
+  /** Opens starts without touching the deferred next start. */
+  reopen: () => void;
+  endBackoff: () => void;
   idle: () => void;
 };
 
@@ -98,8 +107,8 @@ function intervalTiming(context: TimingContext): Timing {
     const current = run;
     const hold = context.decide();
     if (current !== run) return;
-    if (hold) context.setPacing("held");
-    else if (context.pacing === "held") context.setPacing("open");
+    if (hold) context.hold(context.interval);
+    else if (context.pacing === "held") context.reopen();
     tick = setTimeout(adjust, context.interval);
   }
 
@@ -112,7 +121,7 @@ function intervalTiming(context: TimingContext): Timing {
 
   return {
     start() {
-      context.setPacing("open");
+      context.resume();
       tick = setTimeout(adjust, context.interval);
     },
     started: () => context.record,
@@ -126,7 +135,6 @@ function settledTiming(context: TimingContext): Timing {
   let timer: ReturnType<typeof setTimeout> | undefined;
   let window = 0;
   let collecting = false;
-  let starts = 0;
   let outstanding = 0;
 
   function open() {
@@ -137,30 +145,30 @@ function settledTiming(context: TimingContext): Timing {
     }
     window++;
     collecting = true;
-    starts = 0;
     outstanding = 0;
-    context.clearErrors();
-    context.setPacing("open");
+    context.resume();
     timer = setTimeout(close, context.interval);
   }
 
   function close() {
     timer = undefined;
     collecting = false;
-    context.setPacing("held");
+    context.hold();
     if (outstanding === 0) finish();
   }
 
   function finish() {
-    if (starts === 0) {
-      open();
-      return;
-    }
     const current = window;
     const hold = context.decide();
     if (current !== window) return;
-    if (hold) timer = setTimeout(open, context.interval);
+    if (hold) timer = setTimeout(endBackoff, context.interval);
     else open();
+  }
+
+  function endBackoff() {
+    timer = undefined;
+    context.endBackoff();
+    if (context.hasPendingWork()) open();
   }
 
   return {
@@ -168,7 +176,6 @@ function settledTiming(context: TimingContext): Timing {
     started() {
       if (!collecting) return ignoreSettlement;
       const startedIn = window;
-      starts++;
       outstanding++;
       return outcome => {
         if (startedIn !== window) return;
@@ -198,11 +205,6 @@ export function createAdaptiveRate(options: AdaptiveRateOptions, host: AdaptiveR
   let ignoringSettlements = false;
   let pacing: Pacing = "idle";
   let failure: { error: unknown; } | undefined;
-
-  function setPacing(next: Pacing) {
-    pacing = next;
-    host.onPacingChange(next);
-  }
 
   function isRateReducing(outcome: RateFailureOutcome) {
     try {
@@ -256,14 +258,25 @@ export function createAdaptiveRate(options: AdaptiveRateOptions, host: AdaptiveR
     record(outcome) {
       if (!ignoringSettlements && outcome && isRateReducing(outcome)) errorCount++;
     },
-    clearErrors() {
-      errorCount = 0;
-    },
     decide,
-    setPacing,
+    resume() {
+      pacing = "open";
+      host.resumeStarts();
+    },
+    hold(deferBy) {
+      pacing = "held";
+      host.holdStarts(deferBy);
+    },
+    reopen() {
+      pacing = "open";
+    },
+    endBackoff() {
+      wasBackedOff = false;
+    },
     idle() {
       wasBackedOff = false;
-      setPacing("idle");
+      pacing = "idle";
+      host.idle();
     },
   };
   const timing = options.adjustmentTiming === "settled" ? settledTiming(context) : intervalTiming(context);
@@ -283,7 +296,7 @@ export function createAdaptiveRate(options: AdaptiveRateOptions, host: AdaptiveR
     },
     start() {
       ignoringSettlements = false;
-      if (failure || pacing !== "idle" || !host.hasPendingWork()) return;
+      if (pacing !== "idle" || !host.hasPendingWork()) return;
       timing.start();
     },
     drained() {

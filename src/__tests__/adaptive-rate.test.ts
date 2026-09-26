@@ -28,7 +28,9 @@ function observe(options: Partial<AdaptiveRateOptions> = {}, { pending = true } 
     ...options,
   }, {
     hasPendingWork: () => work.pending,
-    onPacingChange: () => {},
+    resumeStarts: () => {},
+    holdStarts: () => {},
+    idle: () => {},
   });
   adaptive.start();
   return { adaptive, work };
@@ -229,16 +231,13 @@ describe("adaptive rate", () => {
         strategy: (() => ({ nextRate: 1, shouldBackOff: 1 })) as unknown as RateStrategy,
         error: TypeError,
       },
-    ])("permanently halts on $name", ({ strategy, error }) => {
+    ])("halts and records the failure on $name", ({ strategy, error }) => {
       const { adaptive } = observe({ rateStrategy: strategy });
 
       expect(() => vi.advanceTimersByTime(1000)).toThrow(error);
       expect(adaptive.pacing).toBe("idle");
       expect(vi.getTimerCount()).toBe(0);
       expect(() => adaptive.throwIfFailed()).toThrow(error);
-
-      adaptive.start();
-      expect(adaptive.pacing).toBe("idle");
       expect(adaptive.rate).toBe(3);
     });
   });
@@ -260,15 +259,6 @@ describe("adaptive rate", () => {
       expect(adaptive.pacing).toBe("open");
     });
 
-    it("makes no decision for a collection interval with no starts", () => {
-      const { adaptive } = observe({ adjustmentTiming: "settled" });
-
-      vi.advanceTimersByTime(3000);
-
-      expect(adaptive.rate).toBe(3);
-      expect(adaptive.pacing).toBe("open");
-    });
-
     it("goes idle after a decision when no work is pending", () => {
       const { adaptive, work } = observe({ adjustmentTiming: "settled" });
 
@@ -280,7 +270,7 @@ describe("adaptive rate", () => {
       expect(vi.getTimerCount()).toBe(0);
     });
 
-    it("backs off for one interval, then collects a window whose clean decision cannot increase", () => {
+    it("backs off for one interval before collecting the next window", () => {
       const { adaptive } = observe({ adjustmentTiming: "settled", back_off: true });
 
       settleStarts(adaptive, 1, returnedFalse);
@@ -292,14 +282,6 @@ describe("adaptive rate", () => {
       expect(adaptive.pacing).toBe("held");
       vi.advanceTimersByTime(1);
       expect(adaptive.pacing).toBe("open");
-
-      settleStarts(adaptive, 1);
-      vi.advanceTimersByTime(1000);
-      expect(adaptive.rate).toBe(1);
-
-      settleStarts(adaptive, 1);
-      vi.advanceTimersByTime(1000);
-      expect(adaptive.rate).toBe(2);
     });
 
     it.each([ "pause", "stop" ] as const)("discards the in-progress window on %s", method => {

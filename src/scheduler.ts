@@ -1,5 +1,5 @@
 import { createAdaptiveRate } from "./adaptive-rate.ts";
-import type { AdaptiveRateOptions, Pacing, SettlementReporter } from "./adaptive-rate.ts";
+import type { AdaptiveRateOptions, SettlementReporter } from "./adaptive-rate.ts";
 import type { QueueState, RateFailureOutcome, ThrottleCallback, ThrottleHandle, ThrottleOptions } from "./dynamic-throttled-queue.ts";
 import { calculateRetryDelay } from "./retry-backoff.ts";
 
@@ -42,24 +42,27 @@ export function createScheduler(options: ThrottleOptions, adaptiveRateOptions: A
   const idleWaiters: Array<() => void> = [];
   const adaptiveRate = createAdaptiveRate(adaptiveRateOptions, {
     hasPendingWork: () => queue.length > head,
-    onPacingChange,
+    resumeStarts() {
+      last_called = Date.now();
+      clearTimeout(timeout);
+      timeout = setTimeout(dequeue, spacing());
+    },
+    holdStarts(deferBy) {
+      clearTimeout(timeout);
+      timeout = deferBy === undefined ? undefined : setTimeout(dequeue, spacing() + deferBy);
+    },
+    idle() {
+      clearTimeout(timeout);
+      timeout = undefined;
+      if (head >= queue.length) {
+        queue.length = 0;
+        head = 0;
+      }
+    },
   });
 
   function spacing() {
     return evenly_spaced ? interval / adaptiveRate.rate : interval;
-  }
-
-  function onPacingChange(pacing: Pacing) {
-    clearTimeout(timeout);
-    timeout = undefined;
-    if (pacing === "open") {
-      last_called = Date.now();
-      timeout = setTimeout(dequeue, spacing());
-    }
-    else if (pacing === "idle" && head >= queue.length) {
-      queue.length = 0;
-      head = 0;
-    }
   }
 
   function isIdle() {

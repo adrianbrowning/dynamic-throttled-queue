@@ -1,15 +1,11 @@
 import { createAdaptiveRate } from "./adaptive-rate.ts";
 import type { AdaptiveRateOptions, SettlementReporter } from "./adaptive-rate.ts";
 import type { QueueLifecycleState, QueueState, RateFailureOutcome, ThrottleCallback, ThrottleHandle, ThrottleOptions } from "./dynamic-throttled-queue.ts";
+import { createPendingWork } from "./pending-work.ts";
+import type { Retry } from "./pending-work.ts";
 import { calculateRetryDelay } from "./retry-backoff.ts";
 
 type QueueItem = { fn: ThrottleCallback; retries: number; };
-type DelayedRetry = {
-  item: QueueItem;
-  remaining: number;
-  due?: number;
-  timeout?: ReturnType<typeof setTimeout>;
-};
 
 type Lifecycle =
   | Readonly<{ state: Exclude<QueueLifecycleState, "failed">; }>
@@ -38,7 +34,6 @@ export function createScheduler(options: ThrottleOptions, adaptiveRateOptions: A
   } = options;
   let last_called = 0;
   let timeout: ReturnType<typeof setTimeout> | undefined;
-  let active_count = 0;
   let lifecycle: Lifecycle = { state: "running" };
   let cnt_started = 0;
   let cnt_succeeded = 0;
@@ -46,14 +41,12 @@ export function createScheduler(options: ThrottleOptions, adaptiveRateOptions: A
   let cnt_retried = 0;
   const abortController = new AbortController();
   const max_concurrency = concurrency ?? Infinity;
-  const max_queue_size = maxQueueSize ?? Infinity;
-  const queue: Array<QueueItem> = [];
-  const delayedRetries: Array<DelayedRetry> = [];
-  let head = 0;
-  let reserved_count = 0;
-  const idleWaiters: Array<PromiseWithResolvers<void>> = [];
+  const work = createPendingWork<QueueItem>(
+    { capacity: maxQueueSize ?? Infinity, compactThreshold: compact_threshold },
+    { retryQueued: start }
+  );
   const adaptiveRate = createAdaptiveRate(adaptiveRateOptions, {
-    hasPendingWork: () => queue.length > head,
+    hasPendingWork: () => work.queued > 0,
     resumeStarts() {
       last_called = Date.now();
       clearTimeout(timeout);
@@ -66,10 +59,6 @@ export function createScheduler(options: ThrottleOptions, adaptiveRateOptions: A
     idle() {
       clearTimeout(timeout);
       timeout = undefined;
-      if (head >= queue.length) {
-        queue.length = 0;
-        head = 0;
-      }
     },
     failed(error) {
       transition("fail", error);
@@ -80,60 +69,6 @@ export function createScheduler(options: ThrottleOptions, adaptiveRateOptions: A
     return evenly_spaced ? interval / adaptiveRate.rate : interval;
   }
 
-  function isIdle() {
-    return active_count === 0 && queue.length <= head && delayedRetries.length === 0;
-  }
-
-  function notifyIdle() {
-    if (!isIdle()) return;
-    for (const waiter of idleWaiters.splice(0)) waiter.resolve();
-  }
-
-  function releaseDelayedRetry(delayedRetry: DelayedRetry) {
-    const index = delayedRetries.indexOf(delayedRetry);
-    if (index < 0) return;
-    delayedRetries.splice(index, 1);
-    queue.push(delayedRetry.item);
-    start();
-  }
-
-  function startDelayedRetry(delayedRetry: DelayedRetry) {
-    delayedRetry.due = Date.now() + delayedRetry.remaining;
-    delayedRetry.timeout = setTimeout(() => {
-      releaseDelayedRetry(delayedRetry);
-    }, delayedRetry.remaining);
-  }
-
-  function freezeDelayedRetries() {
-    for (const delayedRetry of delayedRetries) {
-      if (delayedRetry.timeout === undefined) continue;
-      if (delayedRetry.due === undefined) continue;
-      clearTimeout(delayedRetry.timeout);
-      delayedRetry.timeout = undefined;
-      delayedRetry.remaining = Math.max(0, delayedRetry.due - Date.now());
-    }
-  }
-
-  function resumeDelayedRetries() {
-    for (const delayedRetry of delayedRetries) {
-      if (delayedRetry.timeout === undefined) startDelayedRetry(delayedRetry);
-    }
-  }
-
-  function scheduleDelayedRetry(item: QueueItem, delay: number) {
-    const delayedRetry: DelayedRetry = { item, remaining: delay };
-    delayedRetries.push(delayedRetry);
-    if (lifecycle.state === "running") startDelayedRetry(delayedRetry);
-  }
-
-  function discardPendingWork() {
-    for (const delayedRetry of delayedRetries) clearTimeout(delayedRetry.timeout);
-    delayedRetries.length = 0;
-    queue.length = 0;
-    head = 0;
-    reserved_count = 0;
-  }
-
   /** Moves the lifecycle for `event` and runs the cleanup that entering the new state requires. */
   function transition(event: LifecycleEvent, error?: unknown) {
     const next = lifecycleTransitions[lifecycle.state][event];
@@ -141,27 +76,25 @@ export function createScheduler(options: ThrottleOptions, adaptiveRateOptions: A
     lifecycle = next === "failed" ? { state: next, error } : { state: next };
     switch (next) {
       case "running":
-        resumeDelayedRetries();
+        work.thaw();
         adaptiveRate.start();
         return;
       case "paused":
-        freezeDelayedRetries();
+        work.freeze();
         adaptiveRate.pause();
         return;
       case "stopped":
-        freezeDelayedRetries();
+        work.freeze();
         adaptiveRate.stop();
         return;
       case "aborted":
         adaptiveRate.stop();
-        discardPendingWork();
+        work.discard();
         abortController.abort();
-        notifyIdle();
         return;
       case "failed":
         adaptiveRate.stop();
-        discardPendingWork();
-        for (const waiter of idleWaiters.splice(0)) waiter.reject(error);
+        work.fail(error);
     }
   }
 
@@ -175,37 +108,30 @@ export function createScheduler(options: ThrottleOptions, adaptiveRateOptions: A
     }
   }
 
-  function handleResult(item: QueueItem, outcome: RateFailureOutcome | undefined, reportSettlement: SettlementReporter) {
-    if (lifecycle.state === "aborted" || lifecycle.state === "failed") return;
-    if (outcome) cnt_failed++;
-    else cnt_succeeded++;
-    if (isRetryable(item, outcome)) {
-      cnt_retried++;
-      const retryItem = { fn: item.fn, retries: item.retries - 1 };
-      if (retryBackoff === undefined) {
-        queue.push(retryItem);
-        start();
-      }
-      else {
-        const retryIndex = retry - item.retries + 1;
-        scheduleDelayedRetry(retryItem, calculateRetryDelay(retryBackoff, retryIndex));
-      }
-    }
-    else reserved_count--;
-    reportSettlement(outcome);
+  function nextAttempt(item: QueueItem, outcome: RateFailureOutcome | undefined): Retry<QueueItem> | undefined {
+    if (!isRetryable(item, outcome)) return undefined;
+    cnt_retried++;
+    const retryItem = { fn: item.fn, retries: item.retries - 1 };
+    if (retryBackoff === undefined) return { item: retryItem };
+    return { item: retryItem, delay: calculateRetryDelay(retryBackoff, retry - item.retries + 1) };
   }
 
   function handleSettlement(item: QueueItem, outcome: RateFailureOutcome | undefined, reportSettlement: SettlementReporter, resume = false) {
-    active_count--;
-    handleResult(item, outcome, reportSettlement);
-    if (resume && adaptiveRate.pacing === "open" && queue.length > head) dequeue();
-    notifyIdle();
+    if (lifecycle.state === "aborted" || lifecycle.state === "failed") {
+      work.settle();
+      return;
+    }
+    if (outcome) cnt_failed++;
+    else cnt_succeeded++;
+    work.settle(() => nextAttempt(item, outcome), () => {
+      reportSettlement(outcome);
+      if (resume && adaptiveRate.pacing === "open" && work.queued > 0) dequeue();
+    });
   }
 
   function execute(item: QueueItem) {
     const reportSettlement = adaptiveRate.started();
     cnt_started++;
-    active_count++;
     let result: ReturnType<ThrottleCallback>;
     try {
       result = item.fn({ signal: abortController.signal });
@@ -233,20 +159,17 @@ export function createScheduler(options: ThrottleOptions, adaptiveRateOptions: A
       return;
     }
 
-    const end = Math.min(head + (evenly_spaced ? 1 : adaptiveRate.rate), queue.length);
+    const batch = Math.min(evenly_spaced ? 1 : adaptiveRate.rate, work.queued);
     let started = 0;
-    while (head < end && active_count < max_concurrency) {
-      const item = queue[head++]!;
+    while (started < batch && work.active < max_concurrency) {
+      const item = work.take();
+      if (item === undefined) break;
       if (started++ === 0) last_called = Date.now();
       execute(item);
     }
 
-    if (head > compact_threshold && head > queue.length / 2) {
-      queue.splice(0, head);
-      head = 0;
-    }
-    if (head >= queue.length) adaptiveRate.drained();
-    if (adaptiveRate.pacing !== "open" || active_count >= max_concurrency) return;
+    if (work.queued === 0) adaptiveRate.drained();
+    if (adaptiveRate.pacing !== "open" || work.active >= max_concurrency) return;
     timeout = setTimeout(dequeue, spacing());
   }
 
@@ -257,9 +180,7 @@ export function createScheduler(options: ThrottleOptions, adaptiveRateOptions: A
   function enqueue(callback: ThrottleCallback) {
     if (lifecycle.state === "aborted") throw new Error("Cannot enqueue work after the queue has been aborted");
     if (lifecycle.state === "failed") throw lifecycle.error;
-    if (reserved_count >= max_queue_size) throw new Error("Cannot enqueue work: maxQueueSize has been reached");
-    reserved_count++;
-    queue.push({ fn: callback, retries: retry });
+    work.accept({ fn: callback, retries: retry });
     if (lifecycle.state === "stopped") transition("restart");
     else start();
   }
@@ -270,15 +191,12 @@ export function createScheduler(options: ThrottleOptions, adaptiveRateOptions: A
   enqueue.abort = () => transition("abort");
   enqueue.waitForIdle = async () => {
     if (lifecycle.state === "failed") throw lifecycle.error;
-    if (isIdle()) return;
-    const waiter = Promise.withResolvers<void>();
-    idleWaiters.push(waiter);
-    return waiter.promise;
+    return work.whenIdle();
   };
   enqueue.getState = (): QueueState => Object.freeze({
     rate: adaptiveRate.rate,
-    pending: queue.length - head + delayedRetries.length,
-    active: active_count,
+    pending: work.pending,
+    active: work.active,
     state: lifecycle.state,
     started: cnt_started,
     succeeded: cnt_succeeded,
@@ -287,6 +205,6 @@ export function createScheduler(options: ThrottleOptions, adaptiveRateOptions: A
     rateIncreases: adaptiveRate.rateIncreases,
     rateDecreases: adaptiveRate.rateDecreases,
   });
-  Object.defineProperty(enqueue, "pending", { get: () => queue.length - head + delayedRetries.length });
+  Object.defineProperty(enqueue, "pending", { get: () => work.pending });
   return enqueue as ThrottleHandle;
 }

@@ -36,7 +36,7 @@ export type AdaptiveRateHost = {
   holdStarts: (deferBy?: number) => void;
   /** Observation ended: cancel the next paced start. */
   idle: () => void;
-  /** The rate strategy failed. Adaptive rate has already stopped; the error is rethrown after this returns. */
+  /** The rate strategy failed; the host must call `stop()`. The error is rethrown after this returns. */
   failed: (error: unknown) => void;
 };
 
@@ -237,7 +237,6 @@ export function createAdaptiveRate(options: AdaptiveRateOptions, host: AdaptiveR
       decision = validateDecision(rateStrategy(observation));
     }
     catch (error) {
-      timing.stop();
       host.failed(error);
       throw error;
     }

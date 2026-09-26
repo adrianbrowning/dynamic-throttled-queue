@@ -159,7 +159,7 @@ export function createScheduler(options: ThrottleOptions, adaptiveRateOptions: A
         notifyIdle();
         return;
       case "failed":
-        // Adaptive rate stopped itself before reporting the failure.
+        adaptiveRate.stop();
         discardPendingWork();
         for (const waiter of idleWaiters.splice(0)) waiter.reject(error);
     }

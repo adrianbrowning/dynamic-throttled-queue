@@ -233,11 +233,10 @@ describe("adaptive rate", () => {
         strategy: (() => ({ nextRate: 1, shouldBackOff: 1 })) as unknown as RateStrategy,
         error: TypeError,
       },
-    ])("halts and reports the failure on $name", ({ strategy, error }) => {
+    ])("reports the failure on $name without applying a decision or scheduling another", ({ strategy, error }) => {
       const { adaptive, failures } = observe({ rateStrategy: strategy });
 
       expect(() => vi.advanceTimersByTime(1000)).toThrow(error);
-      expect(adaptive.pacing).toBe("idle");
       expect(vi.getTimerCount()).toBe(0);
       expect(failures).toHaveLength(1);
       expect(() => { throw failures[0]; }).toThrow(error);

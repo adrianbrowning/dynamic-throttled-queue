@@ -77,7 +77,6 @@ type TimingContext = {
   hold: (deferBy?: number) => void;
   /** Opens starts without touching the deferred next start. */
   reopen: () => void;
-  endBackoff: () => void;
   idle: () => void;
 };
 
@@ -135,6 +134,7 @@ function settledTiming(context: TimingContext): Timing {
   let timer: ReturnType<typeof setTimeout> | undefined;
   let window = 0;
   let collecting = false;
+  let starts = 0;
   let outstanding = 0;
 
   function open() {
@@ -145,6 +145,7 @@ function settledTiming(context: TimingContext): Timing {
     }
     window++;
     collecting = true;
+    starts = 0;
     outstanding = 0;
     context.resume();
     timer = setTimeout(close, context.interval);
@@ -152,6 +153,11 @@ function settledTiming(context: TimingContext): Timing {
 
   function close() {
     timer = undefined;
+    // An empty collection interval makes no decision; collect again, or go idle when nothing is pending.
+    if (starts === 0) {
+      open();
+      return;
+    }
     collecting = false;
     context.hold();
     if (outstanding === 0) finish();
@@ -161,14 +167,8 @@ function settledTiming(context: TimingContext): Timing {
     const current = window;
     const hold = context.decide();
     if (current !== window) return;
-    if (hold) timer = setTimeout(endBackoff, context.interval);
+    if (hold) timer = setTimeout(open, context.interval);
     else open();
-  }
-
-  function endBackoff() {
-    timer = undefined;
-    context.endBackoff();
-    if (context.hasPendingWork()) open();
   }
 
   return {
@@ -176,6 +176,7 @@ function settledTiming(context: TimingContext): Timing {
     started() {
       if (!collecting) return ignoreSettlement;
       const startedIn = window;
+      starts++;
       outstanding++;
       return outcome => {
         if (startedIn !== window) return;
@@ -267,9 +268,6 @@ export function createAdaptiveRate(options: AdaptiveRateOptions, host: AdaptiveR
     },
     reopen() {
       pacing = "open";
-    },
-    endBackoff() {
-      wasBackedOff = false;
     },
     idle() {
       wasBackedOff = false;

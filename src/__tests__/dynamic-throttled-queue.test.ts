@@ -1,5 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { createThrottledQueue } from "../dynamic-throttled-queue.ts";
+import type { RateStrategy } from "../dynamic-throttled-queue.ts";
 
 function deferred() {
   let settle!: () => void;
@@ -487,6 +488,37 @@ describe("createThrottledQueue", () => {
         await vi.advanceTimersByTimeAsync(500);
         expect(rates).toEqual([ 1 ]);
         expect(started).toEqual([ "slow", "fast" ]);
+      });
+
+      it("makes no settled decision while a discarded window's callback holds the only slot, then starts and decides queued work", async () => {
+        const strategy = vi.fn<RateStrategy>(({ currentRate }) => ({ nextRate: currentRate, shouldBackOff: false }));
+        const throttle = createThrottledQueue({
+          min_rpi: 1,
+          max_rpi: 5,
+          interval: 1000,
+          concurrency: 1,
+          adjustmentTiming: "settled",
+          rateStrategy: strategy,
+        });
+        const held = deferred();
+        const started: Array<number> = [];
+
+        throttle(async () => held.promise);
+        for (let i = 0; i < 3; i++) throttle(() => { started.push(i); });
+        await vi.advanceTimersByTimeAsync(500);
+        throttle.pause();
+        throttle.resume();
+
+        await vi.advanceTimersByTimeAsync(3000);
+        expect(strategy).not.toHaveBeenCalled();
+        expect(started).toEqual([]);
+
+        held.resolve();
+        await vi.advanceTimersByTimeAsync(2000);
+        expect(started).toEqual([ 0, 1, 2 ]);
+        expect(strategy).toHaveBeenCalled();
+        expect(strategy.mock.calls.every(([ observation ]) => observation.errorCount === 0)).toBe(true);
+        expect(throttle.getState()).toMatchObject({ state: "running", pending: 0, active: 0 });
       });
     });
 

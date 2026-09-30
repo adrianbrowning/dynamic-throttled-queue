@@ -286,6 +286,62 @@ describe("adaptive rate", () => {
       expect(adaptive.pacing).toBe("open");
     });
 
+    it("holds the rate steady in the window collected right after a backoff", () => {
+      const { adaptive } = observe({ adjustmentTiming: "settled", back_off: true });
+
+      settleStarts(adaptive, 1, returnedFalse);
+      vi.advanceTimersByTime(2000);
+      expect(adaptive.pacing).toBe("open");
+
+      settleStarts(adaptive, 1);
+      vi.advanceTimersByTime(1000);
+      expect(adaptive.rate).toBe(1);
+
+      settleStarts(adaptive, 1);
+      vi.advanceTimersByTime(1000);
+      expect(adaptive.rate).toBe(2);
+    });
+
+    it("goes idle when a backoff ends with no pending work, and observes again on the next start", () => {
+      const { adaptive, work } = observe({ adjustmentTiming: "settled", back_off: true });
+
+      settleStarts(adaptive, 1, returnedFalse);
+      work.pending = false;
+      vi.advanceTimersByTime(2000);
+      expect(adaptive.pacing).toBe("idle");
+      expect(vi.getTimerCount()).toBe(0);
+
+      work.pending = true;
+      adaptive.start();
+      expect(adaptive.pacing).toBe("open");
+    });
+
+    it("makes no decision for a collection interval in which nothing started", () => {
+      const strategy = vi.fn(aimd());
+      const { adaptive } = observe({ adjustmentTiming: "settled", rateStrategy: strategy });
+
+      vi.advanceTimersByTime(1000);
+      expect(strategy).not.toHaveBeenCalled();
+      expect(adaptive.pacing).toBe("open");
+
+      settleStarts(adaptive, 1);
+      vi.advanceTimersByTime(1000);
+      expect(strategy).toHaveBeenCalledOnce();
+      expect(adaptive.rate).toBe(4);
+    });
+
+    it("goes idle after an empty collection interval when no work is pending", () => {
+      const strategy = vi.fn(aimd());
+      const { adaptive, work } = observe({ adjustmentTiming: "settled", rateStrategy: strategy });
+
+      work.pending = false;
+      vi.advanceTimersByTime(1000);
+
+      expect(strategy).not.toHaveBeenCalled();
+      expect(adaptive.pacing).toBe("idle");
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
     it.each([ "pause", "stop" ] as const)("discards the in-progress window on %s", method => {
       const { adaptive } = observe({ adjustmentTiming: "settled" });
 

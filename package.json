@@ -49,18 +49,18 @@
   "devDependencies": {
     "@commitlint/cli": "21.2.3",
     "@commitlint/config-conventional": "20.0.0",
-    "@gingacodemonkey/config": "^0.0.36",
+    "@gingacodemonkey/config": "^0.0.38",
     "@types/node": "^24.13.3",
     "@varlock/bumpy": "^1.18.1",
     "eslint": "^9.39.5",
-    "husky": "9.0.6",
+    "husky": "9.1.7",
     "jscpd": "^4.2.5",
     "knip": "5.70.1",
     "lint-staged": "17.6.0",
     "only-allow": "^1.2.2",
     "typescript": "^6.0.3",
     "vitest": "^5.0.2",
-    "zshy": "^0.7.0"
+    "zshy": "^0.8.0"
   },
   "engines": {
     "node": ">=24.0.0",

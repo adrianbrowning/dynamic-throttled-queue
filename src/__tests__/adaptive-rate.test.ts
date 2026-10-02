@@ -174,6 +174,24 @@ describe("adaptive rate", () => {
       expect(dueTimes(due)).toEqual([ 250 ]);
       expect(vi.getTimerCount()).toBe(0);
     });
+
+    it("paces from the resume after a pause and resume during startsDue, with one start due per spacing", () => {
+      let resumed = false;
+      const { adaptive, due } = observe({ min_rpi: 4, max_rpi: 4 }, {
+        slots: Infinity,
+        during: observed => {
+          if (resumed) return;
+          resumed = true;
+          observed.pause();
+          observed.start();
+        },
+      });
+
+      vi.advanceTimersByTime(1000);
+
+      expect(dueTimes(due)).toEqual([ 250, 500, 750, 1000 ]);
+      expect(adaptive.rate).toBe(4);
+    });
   });
 
   describe("interval timing", () => {

@@ -23,8 +23,6 @@ const lifecycleTransitions: Readonly<Record<QueueLifecycleState, Partial<Readonl
 
 export function createScheduler(options: ThrottleOptions, adaptiveRateOptions: AdaptiveRateOptions): ThrottleHandle {
   const {
-    interval,
-    evenly_spaced = true,
     retry = 0,
     retryBackoff,
     concurrency,
@@ -32,8 +30,6 @@ export function createScheduler(options: ThrottleOptions, adaptiveRateOptions: A
     compact_threshold = 512,
     retryClassifier,
   } = options;
-  let last_called = 0;
-  let timeout: ReturnType<typeof setTimeout> | undefined;
   let lifecycle: Lifecycle = { state: "running" };
   let cnt_started = 0;
   let cnt_succeeded = 0;
@@ -47,27 +43,19 @@ export function createScheduler(options: ThrottleOptions, adaptiveRateOptions: A
   );
   const adaptiveRate = createAdaptiveRate(adaptiveRateOptions, {
     hasPendingWork: () => work.queued > 0,
-    resumeStarts() {
-      last_called = Date.now();
-      clearTimeout(timeout);
-      timeout = setTimeout(dequeue, spacing());
-    },
-    holdStarts(deferBy) {
-      clearTimeout(timeout);
-      timeout = deferBy === undefined ? undefined : setTimeout(dequeue, spacing() + deferBy);
-    },
-    idle() {
-      clearTimeout(timeout);
-      timeout = undefined;
+    startsDue(limit) {
+      const batch = Math.min(limit, work.queued);
+      for (let started = 0; started < batch && work.active < max_concurrency; started++) {
+        const item = work.take();
+        if (item === undefined) break;
+        execute(item);
+      }
+      return work.active < max_concurrency;
     },
     failed(error) {
       transition("fail", error);
     },
   });
-
-  function spacing() {
-    return evenly_spaced ? interval / adaptiveRate.rate : interval;
-  }
 
   /** Moves the lifecycle for `event` and runs the cleanup that entering the new state requires. */
   function transition(event: LifecycleEvent, error?: unknown) {
@@ -125,7 +113,8 @@ export function createScheduler(options: ThrottleOptions, adaptiveRateOptions: A
     else cnt_succeeded++;
     work.settle(() => nextAttempt(item, outcome), () => {
       reportSettlement(outcome);
-      if (resume && adaptiveRate.pacing === "open" && work.queued > 0) dequeue();
+      // An async settlement frees a slot; a start may be due if concurrency held one back.
+      if (resume) start();
     });
   }
 
@@ -148,29 +137,6 @@ export function createScheduler(options: ThrottleOptions, adaptiveRateOptions: A
       return;
     }
     handleSettlement(item, result === false ? { kind: "returned-false" } : undefined, reportSettlement);
-  }
-
-  function dequeue() {
-    const threshold = last_called + spacing();
-    const now = Date.now();
-    if (now < threshold) {
-      clearTimeout(timeout);
-      timeout = setTimeout(dequeue, threshold - now);
-      return;
-    }
-
-    const batch = Math.min(evenly_spaced ? 1 : adaptiveRate.rate, work.queued);
-    let started = 0;
-    while (started < batch && work.active < max_concurrency) {
-      const item = work.take();
-      if (item === undefined) break;
-      if (started++ === 0) last_called = Date.now();
-      execute(item);
-    }
-
-    if (work.queued === 0) adaptiveRate.drained();
-    if (adaptiveRate.pacing !== "open" || work.active >= max_concurrency) return;
-    timeout = setTimeout(dequeue, spacing());
   }
 
   function start() {

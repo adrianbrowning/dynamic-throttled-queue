@@ -1,0 +1,30 @@
+version: 2
+updates:
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+    # Matches pnpm's minimumReleaseAge (4320 minutes) in pnpm-workspace.yaml.
+    cooldown:
+      default-days: 3
+    # Today every dependency is a devDependency, so updates don't change the published package.
+    # If a runtime dependency is added, remove `no-bump` from its update PRs and add a bump file.
+    labels: [no-bump]
+    commit-message:
+      prefix: chore
+      include: scope
+    groups:
+      dev-dependencies:
+        dependency-type: development
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directories: [/, /.github/actions/*]
+    schedule:
+      interval: weekly
+    labels: [no-bump]
+    commit-message:
+      prefix: ci
+    groups:
+      github-actions:
+        patterns: ["*"]

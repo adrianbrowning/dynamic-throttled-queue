@@ -51,14 +51,15 @@
     "@commitlint/config-conventional": "20.0.0",
     "@gingacodemonkey/config": "^0.0.36",
     "@types/node": "^24.13.3",
+    "@varlock/bumpy": "^1.18.1",
     "eslint": "^9.39.5",
     "husky": "9.0.6",
     "jscpd": "^4.2.5",
     "knip": "5.70.1",
-    "lint-staged": "15.2.10",
+    "lint-staged": "15.5.2",
     "only-allow": "^1.2.2",
     "typescript": "^6.0.3",
-    "vitest": "^3.0.0",
+    "vitest": "^4.1.11",
     "zshy": "^0.7.0"
   },
   "engines": {
@@ -72,9 +73,6 @@
       "types": "./dist/dynamic-throttled-queue.d.ts",
       "default": "./dist/dynamic-throttled-queue.js"
     }
-  },
-  "dependencies": {
-    "@varlock/bumpy": "^1.18.1"
   },
   "packageManager": "pnpm@10.34.5"
 }

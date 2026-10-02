@@ -47,7 +47,7 @@
     "url": "https://github.com/adrianbrowning/dynamic-throttled-queue/issues"
   },
   "devDependencies": {
-    "@commitlint/cli": "20.0.0",
+    "@commitlint/cli": "21.2.3",
     "@commitlint/config-conventional": "20.0.0",
     "@gingacodemonkey/config": "^0.0.36",
     "@types/node": "^24.13.3",

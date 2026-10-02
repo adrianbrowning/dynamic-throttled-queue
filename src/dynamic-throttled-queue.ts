@@ -1,12 +1,9 @@
+import { createRetryPolicy } from "./retry-policy.ts";
+import type { RetryBackoff, RetryClassifier } from "./retry-policy.ts";
 import { createScheduler } from "./scheduler.ts";
 
-export type RetryBackoff = {
-  strategy: "fixed" | "linear" | "exponential";
-  baseDelay: number;
-  maxDelay?: number;
-  jitter?: number;
-  random?: () => number;
-};
+// eslint-disable-next-line no-barrel-files/no-barrel-files -- The package entry exposes types owned by the retry policy module.
+export type { RetryBackoff, RetryClassifier } from "./retry-policy.ts";
 
 export type RateStrategyObservation = Readonly<{
   currentRate: number;
@@ -36,8 +33,6 @@ export type RateFailureOutcome =
   | Readonly<{ kind: "rejected"; error: unknown; }>;
 
 export type RateOutcomeClassifier = (outcome: RateFailureOutcome) => boolean;
-
-export type RetryClassifier = (outcome: RateFailureOutcome, attempt: number) => boolean;
 
 export type AdjustmentTiming = "interval" | "settled";
 
@@ -142,21 +137,8 @@ export type ThrottleHandle = ThrottleFn & {
   readonly pending: number;
 };
 
-function validateRetryBackoff(retryBackoff: RetryBackoff | undefined) {
-  if (retryBackoff === undefined) return;
-  if (!Number.isFinite(retryBackoff.baseDelay) || retryBackoff.baseDelay < 0) {
-    throw new Error("retryBackoff.baseDelay must be a finite non-negative number");
-  }
-  if (retryBackoff.maxDelay !== undefined && (!Number.isFinite(retryBackoff.maxDelay) || retryBackoff.maxDelay < 0)) {
-    throw new Error("retryBackoff.maxDelay must be a finite non-negative number");
-  }
-  if (retryBackoff.jitter !== undefined && (!Number.isFinite(retryBackoff.jitter) || retryBackoff.jitter < 0 || retryBackoff.jitter > 1)) {
-    throw new Error("retryBackoff.jitter must be a finite number from 0 through 1");
-  }
-}
-
 export function createThrottledQueue(options: ThrottleOptions): ThrottleHandle {
-  const { min_rpi, interval, max_rpi = min_rpi, concurrency, maxQueueSize, retry = 0, compact_threshold = 512 } = options;
+  const { min_rpi, interval, max_rpi = min_rpi, concurrency, maxQueueSize, compact_threshold = 512 } = options;
 
   const errors_per_interval = options.errors_per_interval ?? 5;
 
@@ -179,16 +161,13 @@ export function createThrottledQueue(options: ThrottleOptions): ThrottleHandle {
   if (!Number.isInteger(errors_per_interval) || errors_per_interval < 1) {
     throw new Error("errors_per_interval must be a positive integer");
   }
-  if (!Number.isInteger(retry) || retry < 0) {
-    throw new Error("retry must be a non-negative integer");
-  }
   if (!Number.isInteger(compact_threshold) || compact_threshold < 0) {
     throw new Error("compact_threshold must be a non-negative integer");
   }
   if (options.adjustmentTiming !== undefined && !adjustmentTimings.has(options.adjustmentTiming)) {
     throw new Error("adjustmentTiming must be either interval or settled");
   }
-  validateRetryBackoff(options.retryBackoff);
+  const retryPolicy = createRetryPolicy(options);
   return createScheduler(options, {
     min_rpi,
     max_rpi,
@@ -200,5 +179,5 @@ export function createThrottledQueue(options: ThrottleOptions): ThrottleHandle {
     rateStrategy: options.rateStrategy ?? linear,
     rateOutcomeClassifier: options.rateOutcomeClassifier,
     onRateChange: options.onRateChange,
-  });
+  }, retryPolicy);
 }

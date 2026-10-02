@@ -3,9 +3,10 @@ import type { AdaptiveRateOptions, SettlementReporter } from "./adaptive-rate.ts
 import type { QueueLifecycleState, QueueState, RateFailureOutcome, ThrottleCallback, ThrottleHandle, ThrottleOptions } from "./dynamic-throttled-queue.ts";
 import { createPendingWork } from "./pending-work.ts";
 import type { Retry } from "./pending-work.ts";
-import { calculateRetryDelay } from "./retry-backoff.ts";
+import type { RetryPolicy } from "./retry-policy.ts";
 
-type QueueItem = { fn: ThrottleCallback; retries: number; };
+/** `attempt` is the one-based number of the attempt this item runs next. */
+type QueueItem = { fn: ThrottleCallback; attempt: number; };
 
 type Lifecycle =
   | Readonly<{ state: Exclude<QueueLifecycleState, "failed">; }>
@@ -21,14 +22,11 @@ const lifecycleTransitions: Readonly<Record<QueueLifecycleState, Partial<Readonl
   failed: {},
 };
 
-export function createScheduler(options: ThrottleOptions, adaptiveRateOptions: AdaptiveRateOptions): ThrottleHandle {
+export function createScheduler(options: ThrottleOptions, adaptiveRateOptions: AdaptiveRateOptions, retryPolicy: RetryPolicy): ThrottleHandle {
   const {
-    retry = 0,
-    retryBackoff,
     concurrency,
     maxQueueSize,
     compact_threshold = 512,
-    retryClassifier,
   } = options;
   let lifecycle: Lifecycle = { state: "running" };
   let cnt_started = 0;
@@ -86,22 +84,12 @@ export function createScheduler(options: ThrottleOptions, adaptiveRateOptions: A
     }
   }
 
-  function isRetryable(item: QueueItem, outcome: RateFailureOutcome | undefined) {
-    if (!outcome || item.retries === 0) return false;
-    try {
-      return retryClassifier ? retryClassifier(outcome, retry - item.retries + 1) === true : true;
-    }
-    catch {
-      return true;
-    }
-  }
-
   function nextAttempt(item: QueueItem, outcome: RateFailureOutcome | undefined): Retry<QueueItem> | undefined {
-    if (!isRetryable(item, outcome)) return undefined;
+    if (!outcome) return undefined;
+    const decision = retryPolicy.decide(outcome, item.attempt);
+    if (!decision) return undefined;
     cnt_retried++;
-    const retryItem = { fn: item.fn, retries: item.retries - 1 };
-    if (retryBackoff === undefined) return { item: retryItem };
-    return { item: retryItem, delay: calculateRetryDelay(retryBackoff, retry - item.retries + 1) };
+    return { item: { fn: item.fn, attempt: item.attempt + 1 }, ...decision };
   }
 
   function handleSettlement(item: QueueItem, outcome: RateFailureOutcome | undefined, reportSettlement: SettlementReporter, resume = false) {
@@ -146,7 +134,7 @@ export function createScheduler(options: ThrottleOptions, adaptiveRateOptions: A
   function enqueue(callback: ThrottleCallback) {
     if (lifecycle.state === "aborted") throw new Error("Cannot enqueue work after the queue has been aborted");
     if (lifecycle.state === "failed") throw lifecycle.error;
-    work.accept({ fn: callback, retries: retry });
+    work.accept({ fn: callback, attempt: 1 });
     if (lifecycle.state === "stopped") transition("restart");
     else start();
   }

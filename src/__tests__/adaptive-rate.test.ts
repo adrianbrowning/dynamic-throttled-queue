@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createAdaptiveRate } from "../adaptive-rate.ts";
-import type { AdaptiveRate, AdaptiveRateOptions } from "../adaptive-rate.ts";
+import type { AdaptiveRate, AdaptiveRateOptions, SettlementReporter } from "../adaptive-rate.ts";
 import { aimd } from "../dynamic-throttled-queue.ts";
 import type { RateFailureOutcome, RateStrategy } from "../dynamic-throttled-queue.ts";
 
@@ -14,57 +14,177 @@ afterEach(() => {
   vi.useRealTimers();
 });
 
-/** Starts observing over a 1..5 range (midpoint 3) with a one-failure threshold and a 1000 ms interval. */
-function observe(options: Partial<AdaptiveRateOptions> = {}, { pending = true } = {}) {
-  const work = { pending };
+type HostOptions = {
+  /** Callbacks waiting to start. */
+  queued?: number;
+  /** Free concurrency slots. The default of none makes every due start find concurrency full. */
+  slots?: number;
+  /** Runs inside each `startsDue` call, after its starts. */
+  during?: (adaptive: AdaptiveRate) => void;
+};
+
+/**
+ * Starts observing over a 1..5 range (midpoint 3) with a one-failure threshold and a 1000 ms interval.
+ * The host records when starts become due (ms since observing began) and with what limit, and starts
+ * up to `limit` callbacks as its queue and free slots allow.
+ */
+function observe(options: Partial<AdaptiveRateOptions> = {}, { queued = Infinity, slots = 0, during }: HostOptions = {}) {
+  const work = { queued, slots };
+  const due: Array<{ at: number; limit: number; }> = [];
+  const reporters: Array<SettlementReporter> = [];
   const failures: Array<unknown> = [];
-  const adaptive = createAdaptiveRate({
+  const begin = Date.now();
+  const adaptive: AdaptiveRate = createAdaptiveRate({
     min_rpi: 1,
     max_rpi: 5,
     interval: 1000,
+    evenly_spaced: true,
     errors_per_interval: 1,
     back_off: false,
     adjustmentTiming: "interval",
     rateStrategy: aimd(),
     ...options,
   }, {
-    hasPendingWork: () => work.pending,
-    resumeStarts: () => {},
-    holdStarts: () => {},
-    idle: () => {},
+    hasPendingWork: () => work.queued > 0,
+    startsDue(limit) {
+      due.push({ at: Date.now() - begin, limit });
+      const count = Math.min(limit, work.queued, work.slots);
+      for (let i = 0; i < count; i++) {
+        work.queued--;
+        work.slots--;
+        reporters.push(adaptive.started());
+      }
+      during?.(adaptive);
+      return work.slots > 0;
+    },
     failed: error => failures.push(error),
   });
   adaptive.start();
-  return { adaptive, work, failures };
+  return { adaptive, work, due, reporters, failures };
 }
 
 function settleStarts(adaptive: AdaptiveRate, count: number, outcome?: RateFailureOutcome) {
   for (let i = 0; i < count; i++) adaptive.started()(outcome);
 }
 
+const dueTimes = (due: Array<{ at: number; }>) => due.map(({ at }) => at);
+
 describe("adaptive rate", () => {
-  describe("interval timing", () => {
-    it("starts at the midpoint of its range and stays idle until work is pending", () => {
-      const { adaptive, work } = observe({}, { pending: false });
+  describe("start clock", () => {
+    it("makes no start due until work is pending, then the first one spacing after observing begins", () => {
+      const { adaptive, work, due } = observe({ interval: 1200 }, { queued: 0 });
 
       expect(adaptive.rate).toBe(3);
-      expect(adaptive.pacing).toBe("idle");
+      vi.advanceTimersByTime(5000);
+      expect(due).toEqual([]);
+      expect(vi.getTimerCount()).toBe(0);
 
-      work.pending = true;
+      work.queued = Infinity;
       adaptive.start();
-      expect(adaptive.pacing).toBe("open");
+      vi.advanceTimersByTime(400);
+      expect(due).toEqual([{ at: 5400, limit: 1 }]);
     });
 
+    it("makes one start due every spacing while starts happen", () => {
+      const { due } = observe({ min_rpi: 4, max_rpi: 4 }, { slots: Infinity });
+
+      vi.advanceTimersByTime(1000);
+
+      expect(due).toEqual([ 250, 500, 750, 1000 ].map(at => ({ at, limit: 1 })));
+    });
+
+    it("makes the whole rate due once per interval when not evenly spaced", () => {
+      const { due } = observe({ evenly_spaced: false }, { slots: Infinity });
+
+      vi.advanceTimersByTime(2000);
+
+      expect(due).toEqual([{ at: 1000, limit: 3 }, { at: 2000, limit: 4 }]);
+    });
+
+    it("waits for the longer spacing when the rate falls before the next start is due", () => {
+      const { adaptive, due } = observe({ interval: 1200 }, { slots: Infinity });
+
+      settleStarts(adaptive, 1, returnedFalse);
+      vi.advanceTimersByTime(2000);
+
+      expect(adaptive.rate).toBe(1);
+      expect(dueTimes(due)).toEqual([ 400, 800, 2000 ]);
+    });
+
+    it("makes no further start due once a batch fills concurrency, until start() reports a freed slot", () => {
+      const { adaptive, work, due } = observe({ evenly_spaced: false }, { slots: 1 });
+
+      vi.advanceTimersByTime(5000);
+      expect(due).toEqual([{ at: 1000, limit: 3 }]);
+
+      work.slots = 1;
+      adaptive.start();
+      expect(dueTimes(due)).toEqual([ 1000, 5000 ]);
+    });
+
+    it("waits out the rest of the spacing when start() reports a freed slot early", () => {
+      const { adaptive, work, due } = observe({ evenly_spaced: false }, { slots: 1 });
+
+      vi.advanceTimersByTime(1500);
+      work.slots = 1;
+      adaptive.start();
+      expect(dueTimes(due)).toEqual([ 1000 ]);
+
+      vi.advanceTimersByTime(500);
+      expect(dueTimes(due)).toEqual([ 1000, 2000 ]);
+    });
+
+    it("leaves a scheduled start in place when start() reports a freed slot", () => {
+      const { adaptive, work, due } = observe({ min_rpi: 4, max_rpi: 4 }, { slots: 2 });
+
+      vi.advanceTimersByTime(300);
+      work.slots = 2;
+      adaptive.start();
+      expect(dueTimes(due)).toEqual([ 250 ]);
+
+      vi.advanceTimersByTime(200);
+      expect(dueTimes(due)).toEqual([ 250, 500 ]);
+    });
+
+    it("goes idle when a batch leaves nothing pending, and observes again on the next start()", () => {
+      const { adaptive, work, due } = observe({ min_rpi: 4, max_rpi: 4 }, { queued: 1, slots: Infinity });
+
+      vi.advanceTimersByTime(250);
+      expect(vi.getTimerCount()).toBe(0);
+
+      work.queued = 1;
+      adaptive.start();
+      vi.advanceTimersByTime(250);
+      expect(dueTimes(due)).toEqual([ 250, 500 ]);
+    });
+
+    it("makes no nested batch when start() is called during startsDue", () => {
+      const { due } = observe({ min_rpi: 4, max_rpi: 4 }, { slots: Infinity, during: adaptive => adaptive.start() });
+
+      vi.advanceTimersByTime(500);
+
+      expect(dueTimes(due)).toEqual([ 250, 500 ]);
+    });
+
+    it("makes no further start due after a pause during startsDue", () => {
+      const { due } = observe({ min_rpi: 4, max_rpi: 4 }, { slots: Infinity, during: adaptive => adaptive.pause() });
+
+      vi.advanceTimersByTime(5000);
+
+      expect(dueTimes(due)).toEqual([ 250 ]);
+      expect(vi.getTimerCount()).toBe(0);
+    });
+  });
+
+  describe("interval timing", () => {
     it.each([
-      { name: "lowers the rate when failures reach the threshold", failures: 2, pending: true, expectedRate: 1 },
-      { name: "holds the rate when failures stay below the threshold", failures: 1, pending: true, expectedRate: 3 },
-      { name: "raises the rate after a clean interval with pending work", failures: 0, pending: true, expectedRate: 4 },
-      { name: "holds the rate after a clean interval without pending work", failures: 0, pending: false, expectedRate: 3 },
-    ])("$name", ({ failures, pending, expectedRate }) => {
-      const { adaptive, work } = observe({ errors_per_interval: 2 });
+      { name: "lowers the rate when failures reach the threshold", failures: 2, expectedRate: 1 },
+      { name: "holds the rate when failures stay below the threshold", failures: 1, expectedRate: 3 },
+      { name: "raises the rate after a clean interval with pending work", failures: 0, expectedRate: 4 },
+    ])("$name", ({ failures, expectedRate }) => {
+      const { adaptive } = observe({ errors_per_interval: 2 });
 
       settleStarts(adaptive, failures, returnedFalse);
-      work.pending = pending;
       vi.advanceTimersByTime(1000);
 
       expect(adaptive.rate).toBe(expectedRate);
@@ -83,16 +203,16 @@ describe("adaptive rate", () => {
     });
 
     it("keeps failures that settle while idle for the first decision after a restart", () => {
-      const { adaptive } = observe();
+      const { adaptive, work, reporters } = observe({}, { queued: 1, slots: 1 });
 
-      const report = adaptive.started();
-      adaptive.drained();
-      expect(adaptive.pacing).toBe("idle");
+      vi.advanceTimersByTime(400);
+      expect(vi.getTimerCount()).toBe(0);
 
-      report(returnedFalse);
+      reporters[0]?.(returnedFalse);
       vi.advanceTimersByTime(5000);
       expect(adaptive.rate).toBe(3);
 
+      work.queued = Infinity;
       adaptive.start();
       vi.advanceTimersByTime(1000);
       expect(adaptive.rate).toBe(1);
@@ -114,7 +234,7 @@ describe("adaptive rate", () => {
       settleStarts(adaptive, 1, returnedFalse);
       const report = adaptive.started();
       adaptive.pause();
-      expect(adaptive.pacing).toBe("idle");
+      expect(vi.getTimerCount()).toBe(0);
 
       report(returnedFalse);
       adaptive.start();
@@ -193,30 +313,22 @@ describe("adaptive rate", () => {
   });
 
   describe("backoff", () => {
-    it("holds starts for one interval and makes no increase in the interval that follows", () => {
-      const { adaptive } = observe({ back_off: true });
+    it("makes no start due for one interval, even when a slot frees, then makes no increase in the interval that follows", () => {
+      const { adaptive, work, due } = observe({ interval: 1200, back_off: true });
 
       settleStarts(adaptive, 1, returnedFalse);
-      vi.advanceTimersByTime(1000);
+      vi.advanceTimersByTime(1500);
       expect(adaptive.rate).toBe(1);
-      expect(adaptive.pacing).toBe("held");
 
-      vi.advanceTimersByTime(1000);
+      work.slots = Infinity;
+      adaptive.start();
+      vi.advanceTimersByTime(900);
       expect(adaptive.rate).toBe(1);
-      expect(adaptive.pacing).toBe("open");
+      expect(dueTimes(due)).toEqual([ 400 ]);
 
-      vi.advanceTimersByTime(1000);
+      vi.advanceTimersByTime(1200);
+      expect(dueTimes(due)).toEqual([ 400, 3600 ]);
       expect(adaptive.rate).toBe(2);
-    });
-
-    it("keeps starts open when back_off is disabled", () => {
-      const { adaptive } = observe({ back_off: false });
-
-      settleStarts(adaptive, 1, returnedFalse);
-      vi.advanceTimersByTime(1000);
-
-      expect(adaptive.rate).toBe(1);
-      expect(adaptive.pacing).toBe("open");
     });
   });
 
@@ -245,45 +357,56 @@ describe("adaptive rate", () => {
   });
 
   describe("settled timing", () => {
-    it("decides only after every start from the collection interval settles", () => {
-      const { adaptive } = observe({ adjustmentTiming: "settled" });
+    it("decides only after every start from the collection interval settles, then opens fresh pacing", () => {
+      const { adaptive, due } = observe({ adjustmentTiming: "settled", interval: 1200 });
 
       const slow = adaptive.started();
       settleStarts(adaptive, 1);
-      vi.advanceTimersByTime(1000);
-      expect(adaptive.pacing).toBe("held");
-
-      vi.advanceTimersByTime(5000);
+      vi.advanceTimersByTime(6000);
       expect(adaptive.rate).toBe(3);
+      expect(dueTimes(due)).toEqual([ 400 ]);
 
       slow(returnedFalse);
       expect(adaptive.rate).toBe(1);
-      expect(adaptive.pacing).toBe("open");
+      vi.advanceTimersByTime(1200);
+      expect(dueTimes(due)).toEqual([ 400, 7200 ]);
     });
 
-    it("goes idle after a decision when no work is pending", () => {
+    it("keeps making starts due every spacing while a window is open with nothing queued", () => {
+      const { adaptive, work, due } = observe({ adjustmentTiming: "settled", min_rpi: 4, max_rpi: 4 }, { queued: 1, slots: Infinity });
+
+      vi.advanceTimersByTime(600);
+      expect(dueTimes(due)).toEqual([ 250, 500 ]);
+
+      work.queued = 1;
+      adaptive.start();
+      vi.advanceTimersByTime(150);
+      expect(dueTimes(due)).toEqual([ 250, 500, 750 ]);
+      expect(work.queued).toBe(0);
+    });
+
+    it("holds the rate and goes idle after a decision when no work is pending", () => {
       const { adaptive, work } = observe({ adjustmentTiming: "settled" });
 
       settleStarts(adaptive, 1);
-      work.pending = false;
+      work.queued = 0;
       vi.advanceTimersByTime(1000);
 
-      expect(adaptive.pacing).toBe("idle");
+      expect(adaptive.rate).toBe(3);
       expect(vi.getTimerCount()).toBe(0);
     });
 
-    it("backs off for one interval before collecting the next window", () => {
-      const { adaptive } = observe({ adjustmentTiming: "settled", back_off: true });
+    it("backs off for one interval, then opens a window with fresh pacing", () => {
+      const { adaptive, due } = observe({ adjustmentTiming: "settled", back_off: true, interval: 1200 });
 
       settleStarts(adaptive, 1, returnedFalse);
-      vi.advanceTimersByTime(1000);
+      vi.advanceTimersByTime(1200);
       expect(adaptive.rate).toBe(1);
-      expect(adaptive.pacing).toBe("held");
 
-      vi.advanceTimersByTime(999);
-      expect(adaptive.pacing).toBe("held");
+      vi.advanceTimersByTime(2399);
+      expect(dueTimes(due)).toEqual([ 400 ]);
       vi.advanceTimersByTime(1);
-      expect(adaptive.pacing).toBe("open");
+      expect(dueTimes(due)).toEqual([ 400, 3600 ]);
     });
 
     it("holds the rate steady in the window collected right after a backoff", () => {
@@ -291,7 +414,6 @@ describe("adaptive rate", () => {
 
       settleStarts(adaptive, 1, returnedFalse);
       vi.advanceTimersByTime(2000);
-      expect(adaptive.pacing).toBe("open");
 
       settleStarts(adaptive, 1);
       vi.advanceTimersByTime(1000);
@@ -303,17 +425,17 @@ describe("adaptive rate", () => {
     });
 
     it("goes idle when a backoff ends with no pending work, and observes again on the next start", () => {
-      const { adaptive, work } = observe({ adjustmentTiming: "settled", back_off: true });
+      const { adaptive, work, due } = observe({ adjustmentTiming: "settled", back_off: true });
 
       settleStarts(adaptive, 1, returnedFalse);
-      work.pending = false;
+      work.queued = 0;
       vi.advanceTimersByTime(2000);
-      expect(adaptive.pacing).toBe("idle");
       expect(vi.getTimerCount()).toBe(0);
 
-      work.pending = true;
+      work.queued = Infinity;
       adaptive.start();
-      expect(adaptive.pacing).toBe("open");
+      vi.advanceTimersByTime(1000);
+      expect(due.at(-1)?.at).toBe(3000);
     });
 
     it("makes no decision for a collection interval in which nothing started", () => {
@@ -322,7 +444,6 @@ describe("adaptive rate", () => {
 
       vi.advanceTimersByTime(1000);
       expect(strategy).not.toHaveBeenCalled();
-      expect(adaptive.pacing).toBe("open");
 
       settleStarts(adaptive, 1);
       vi.advanceTimersByTime(1000);
@@ -332,13 +453,12 @@ describe("adaptive rate", () => {
 
     it("goes idle after an empty collection interval when no work is pending", () => {
       const strategy = vi.fn(aimd());
-      const { adaptive, work } = observe({ adjustmentTiming: "settled", rateStrategy: strategy });
+      const { work } = observe({ adjustmentTiming: "settled", rateStrategy: strategy });
 
-      work.pending = false;
+      work.queued = 0;
       vi.advanceTimersByTime(1000);
 
       expect(strategy).not.toHaveBeenCalled();
-      expect(adaptive.pacing).toBe("idle");
       expect(vi.getTimerCount()).toBe(0);
     });
 
@@ -347,7 +467,7 @@ describe("adaptive rate", () => {
 
       const report = adaptive.started();
       adaptive[method]();
-      expect(adaptive.pacing).toBe("idle");
+      expect(vi.getTimerCount()).toBe(0);
 
       report(returnedFalse);
       adaptive.start();

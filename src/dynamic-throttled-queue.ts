@@ -193,6 +193,7 @@ export function createThrottledQueue(options: ThrottleOptions): ThrottleHandle {
     min_rpi,
     max_rpi,
     interval,
+    evenly_spaced: options.evenly_spaced ?? true,
     errors_per_interval,
     back_off: options.back_off ?? false,
     adjustmentTiming: options.adjustmentTiming ?? "interval",

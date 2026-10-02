@@ -7,10 +7,10 @@ import type {
 } from "./dynamic-throttled-queue.ts";
 
 /**
- * Whether callbacks may start. `open` allows paced starts, `held` blocks starts until the module
+ * Whether starts may become due. `open` makes paced starts due, `held` makes none due until the module
  * reopens them, and `idle` means the module is not observing and waits for `start()`.
  */
-export type Pacing = "idle" | "open" | "held";
+type Pacing = "idle" | "open" | "held";
 
 /** Reports how one started callback settled: `undefined` for success, otherwise the failure. */
 export type SettlementReporter = (outcome: RateFailureOutcome | undefined) => void;
@@ -19,6 +19,8 @@ export type AdaptiveRateOptions = {
   min_rpi: number;
   max_rpi: number;
   interval: number;
+  /** Makes one start due every `interval / rate` ms instead of `rate` starts once per interval. */
+  evenly_spaced: boolean;
   errors_per_interval: number;
   back_off: boolean;
   adjustmentTiming: AdjustmentTiming;
@@ -30,12 +32,12 @@ export type AdaptiveRateOptions = {
 export type AdaptiveRateHost = {
   /** Whether accepted work is waiting to start. */
   hasPendingWork: () => boolean;
-  /** Begins fresh pacing: the next paced start is one spacing from now. */
-  resumeStarts: () => void;
-  /** Cancels the next paced start, or reschedules it `deferBy` ms beyond one spacing from now. */
-  holdStarts: (deferBy?: number) => void;
-  /** Observation ended: cancel the next paced start. */
-  idle: () => void;
+  /**
+   * Starts are due: start up to `limit` queued callbacks as concurrency allows, calling `started()` for each.
+   * Returns whether a slot is still free. When none is, no further start becomes due until `start()`
+   * reports a freed slot.
+   */
+  startsDue: (limit: number) => boolean;
   /** The rate strategy failed; the host must call `stop()`. The error is rethrown after this returns. */
   failed: (error: unknown) => void;
 };
@@ -44,11 +46,12 @@ export type AdaptiveRate = {
   readonly rate: number;
   readonly rateIncreases: number;
   readonly rateDecreases: number;
-  readonly pacing: Pacing;
-  /** Ends a pause, then begins observing if idle and work is pending. */
+  /**
+   * Ends a pause, then begins observing if idle and work is pending. While starts are open and no start
+   * is scheduled (concurrency was full), makes starts due now once a spacing has passed since the last
+   * start, or schedules them for when it has. During `startsDue`, the batch's own follow-up covers it.
+   */
   start: () => void;
-  /** Reports that every queued callback has started. */
-  drained: () => void;
   /** Ends observation. Settled timing discards its in-progress window. */
   stop: () => void;
   /** Stops and discards the observation. Settlements are ignored until `start()` or `stop()`. */
@@ -71,11 +74,11 @@ type TimingContext = {
   record: SettlementReporter;
   /** Makes one rate decision and returns whether starts must be held for a backoff. */
   decide: () => boolean;
-  /** Opens starts with fresh pacing. */
+  /** Opens starts with fresh pacing: the next start is due one spacing from now. */
   resume: () => void;
-  /** Holds starts; `deferBy` keeps a deferred next start armed for when the hold ends. */
+  /** Holds starts; `deferBy` keeps the next start due `deferBy` ms beyond one spacing from now. */
   hold: (deferBy?: number) => void;
-  /** Opens starts without touching the deferred next start. */
+  /** Opens starts without moving the next due start. */
   reopen: () => void;
   idle: () => void;
 };
@@ -197,7 +200,17 @@ function settledTiming(context: TimingContext): Timing {
 }
 
 export function createAdaptiveRate(options: AdaptiveRateOptions, host: AdaptiveRateHost): AdaptiveRate {
-  const { min_rpi, max_rpi, errors_per_interval, back_off, rateStrategy, rateOutcomeClassifier, onRateChange } = options;
+  const {
+    min_rpi,
+    max_rpi,
+    interval,
+    evenly_spaced,
+    errors_per_interval,
+    back_off,
+    rateStrategy,
+    rateOutcomeClassifier,
+    onRateChange,
+  } = options;
   let rate = Math.ceil((max_rpi + min_rpi) / 2);
   let rateIncreases = 0;
   let rateDecreases = 0;
@@ -205,6 +218,10 @@ export function createAdaptiveRate(options: AdaptiveRateOptions, host: AdaptiveR
   let wasBackedOff = false;
   let ignoringSettlements = false;
   let pacing: Pacing = "idle";
+  let lastStart = 0;
+  let startTimer: ReturnType<typeof setTimeout> | undefined;
+  let dispatching = false;
+  let batchStarts = 0;
 
   function isRateReducing(outcome: RateFailureOutcome) {
     try {
@@ -248,8 +265,43 @@ export function createAdaptiveRate(options: AdaptiveRateOptions, host: AdaptiveR
     return hold;
   }
 
+  function spacing() {
+    return evenly_spaced ? interval / rate : interval;
+  }
+
+  function scheduleStart(delay: number) {
+    clearTimeout(startTimer);
+    startTimer = setTimeout(startDue, delay);
+  }
+
+  function cancelStart() {
+    clearTimeout(startTimer);
+    startTimer = undefined;
+  }
+
+  /** Makes a batch of starts due once one spacing has passed since the last start. */
+  function startDue() {
+    startTimer = undefined;
+    const wait = lastStart + spacing() - Date.now();
+    if (wait > 0) {
+      scheduleStart(wait);
+      return;
+    }
+    dispatching = true;
+    batchStarts = 0;
+    let slotFree: boolean;
+    try {
+      slotFree = host.startsDue(evenly_spaced ? 1 : rate);
+    }
+    finally {
+      dispatching = false;
+    }
+    if (!host.hasPendingWork()) timing.drained();
+    if (pacing === "open" && slotFree) scheduleStart(spacing());
+  }
+
   const context: TimingContext = {
-    interval: options.interval,
+    interval,
     get pacing() {
       return pacing;
     },
@@ -260,11 +312,13 @@ export function createAdaptiveRate(options: AdaptiveRateOptions, host: AdaptiveR
     decide,
     resume() {
       pacing = "open";
-      host.resumeStarts();
+      lastStart = Date.now();
+      scheduleStart(spacing());
     },
     hold(deferBy) {
       pacing = "held";
-      host.holdStarts(deferBy);
+      if (deferBy === undefined) cancelStart();
+      else scheduleStart(spacing() + deferBy);
     },
     reopen() {
       pacing = "open";
@@ -272,7 +326,7 @@ export function createAdaptiveRate(options: AdaptiveRateOptions, host: AdaptiveR
     idle() {
       wasBackedOff = false;
       pacing = "idle";
-      host.idle();
+      cancelStart();
     },
   };
   const timing = options.adjustmentTiming === "settled" ? settledTiming(context) : intervalTiming(context);
@@ -287,16 +341,11 @@ export function createAdaptiveRate(options: AdaptiveRateOptions, host: AdaptiveR
     get rateDecreases() {
       return rateDecreases;
     },
-    get pacing() {
-      return pacing;
-    },
     start() {
       ignoringSettlements = false;
-      if (pacing !== "idle" || !host.hasPendingWork()) return;
-      timing.start();
-    },
-    drained() {
-      timing.drained();
+      if (!host.hasPendingWork()) return;
+      if (pacing === "idle") timing.start();
+      else if (pacing === "open" && startTimer === undefined && !dispatching) startDue();
     },
     stop() {
       ignoringSettlements = false;
@@ -307,6 +356,9 @@ export function createAdaptiveRate(options: AdaptiveRateOptions, host: AdaptiveR
       errorCount = 0;
       ignoringSettlements = true;
     },
-    started: () => timing.started(),
+    started() {
+      if (dispatching && batchStarts++ === 0) lastStart = Date.now();
+      return timing.started();
+    },
   };
 }

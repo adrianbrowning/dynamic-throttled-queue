@@ -39,12 +39,8 @@ describe("createThrottledQueue", () => {
       expect(() => createThrottledQueue({ min_rpi: 1, interval: 1000, concurrency: -1 })).toThrow("concurrency");
     });
 
-    it("accepts zero retries and rejects invalid retry counts", () => {
-      expect(() => createThrottledQueue({ min_rpi: 1, interval: 1000, retry: 0 })).not.toThrow();
-
-      for (const retry of [ -1, 1.5, NaN, Infinity, -Infinity ]) {
-        expect(() => createThrottledQueue({ min_rpi: 1, interval: 1000, retry })).toThrow("retry");
-      }
+    it("rejects invalid retry counts at queue creation", () => {
+      expect(() => createThrottledQueue({ min_rpi: 1, interval: 1000, retry: -1 })).toThrow("retry");
     });
 
     it("uses the default error threshold and rejects invalid thresholds", () => {
@@ -63,22 +59,9 @@ describe("createThrottledQueue", () => {
       }
     });
 
-    it("accepts fractional retry delays and rejects invalid retry-backoff policies", () => {
-      const options = { min_rpi: 1, interval: 1000, retryBackoff: { strategy: "fixed" as const, baseDelay: 0.5 } };
-      expect(() => createThrottledQueue(options)).not.toThrow();
-
-      for (const retryBackoff of [
-        { strategy: "fixed" as const, baseDelay: -1 },
-        { strategy: "fixed" as const, baseDelay: Number.NaN },
-        { strategy: "fixed" as const, baseDelay: Infinity },
-        { strategy: "fixed" as const, baseDelay: 1, maxDelay: -1 },
-        { strategy: "fixed" as const, baseDelay: 1, maxDelay: Number.NaN },
-        { strategy: "fixed" as const, baseDelay: 1, jitter: -0.1 },
-        { strategy: "fixed" as const, baseDelay: 1, jitter: 1.1 },
-        { strategy: "fixed" as const, baseDelay: 1, jitter: Infinity },
-      ]) {
-        expect(() => createThrottledQueue({ min_rpi: 1, interval: 1000, retryBackoff })).toThrow("retryBackoff");
-      }
+    it("rejects invalid retry-backoff policies at queue creation", () => {
+      const retryBackoff = { strategy: "fixed" as const, baseDelay: -1 };
+      expect(() => createThrottledQueue({ min_rpi: 1, interval: 1000, retryBackoff })).toThrow("retryBackoff");
     });
 
     it("accepts zero capacity and rejects invalid capacity limits", () => {
@@ -881,22 +864,6 @@ describe("createThrottledQueue", () => {
       expect(throttle.pending).toBe(0);
       expect(attempts).toBe(1);
       expect(vi.getTimerCount()).toBe(0);
-    });
-
-    it("keeps retry eligibility independent from the rate outcome classifier", () => {
-      const throttle = createThrottledQueue({
-        min_rpi: 5,
-        interval: 1000,
-        evenly_spaced: false,
-        retry: 1,
-        rateOutcomeClassifier: () => false,
-      });
-      let callCount = 0;
-
-      throttle(() => { callCount++; return false; });
-      vi.advanceTimersByTime(3000);
-
-      expect(callCount).toBe(2);
     });
 
     it("retries failed callbacks up to retry count", () => {

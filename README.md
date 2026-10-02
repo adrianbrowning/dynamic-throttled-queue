@@ -62,7 +62,7 @@ Set `maxQueueSize` to bound accepted work. Capacity is reserved from enqueue thr
 | `retryClassifier` | `RetryClassifier` | — | Decides whether a failed callback outcome is eligible for another attempt |
 | `onRateChange` | `(rate: number) => void` | — | Called when the current rate changes |
 
-`retry`, `errors_per_interval`, `compact_threshold`, and `maxQueueSize` reject fractional and non-finite values. `errors_per_interval` must be at least `1`; `retry` and `compact_threshold` may be `0`. `retryBackoff.baseDelay` and optional `maxDelay` are finite non-negative millisecond values (fractional values are accepted); optional `jitter` is finite from `0` through `1`.
+`retry`, `errors_per_interval`, `compact_threshold`, and `maxQueueSize` reject fractional and non-finite values. `errors_per_interval` must be at least `1`; `retry` and `compact_threshold` may be `0`. `retryBackoff.strategy` must be `fixed`, `linear`, or `exponential`. `retryBackoff.baseDelay` and optional `maxDelay` are finite non-negative millisecond values (fractional values are accepted); optional `jitter` is finite from `0` through `1`.
 
 `retryBackoff` is `{ strategy: "fixed" | "linear" | "exponential"; baseDelay: number; maxDelay?: number; jitter?: number; random?: () => number }`. The first retry has index `1`: fixed uses `baseDelay`, linear uses `baseDelay × retryIndex`, and exponential uses `baseDelay × 2^(retryIndex - 1)`. The calculated delay is capped at `maxDelay`, when supplied, then optional symmetric percentage jitter is applied and capped again. `random` makes jitter deterministic for tests; a thrown, non-finite, or out-of-range result safely falls back to no jitter. Retry backoff begins when the failed attempt settles and is independent of adaptive-rate `back_off`.
 

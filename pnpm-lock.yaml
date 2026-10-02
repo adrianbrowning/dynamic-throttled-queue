@@ -16,7 +16,7 @@ importers:
         version: 20.0.0
       '@gingacodemonkey/config':
         specifier: ^0.0.36
-        version: 0.0.36(@commitlint/cli@21.2.3(@types/node@24.13.3)(conventional-commits-parser@7.1.2)(typescript@6.0.3))(@commitlint/config-conventional@20.0.0)(@typescript-eslint/eslint-plugin@8.63.0(@typescript-eslint/parser@8.63.0(eslint@9.39.5(jiti@2.7.0))(typescript@6.0.3))(eslint@9.39.5(jiti@2.7.0))(typescript@6.0.3))(@typescript-eslint/utils@8.63.0(eslint@9.39.5(jiti@2.7.0))(typescript@6.0.3))(eslint@9.39.5(jiti@2.7.0))(husky@9.0.6)(jscpd@4.2.5)(knip@5.70.1(@types/node@24.13.3)(typescript@6.0.3))(lint-staged@17.6.0)(semantic-release-unsquash@0.4.0(semantic-release@25.0.6(typescript@6.0.3)))(typescript@6.0.3)(vitest@5.0.2(@types/node@24.13.3)(vite@7.3.6(@types/node@24.13.3)(jiti@2.7.0)(yaml@2.9.1)))
+        version: 0.0.36(@commitlint/cli@21.2.3(@types/node@24.13.3)(conventional-commits-parser@7.1.2)(typescript@6.0.3))(@commitlint/config-conventional@20.0.0)(@typescript-eslint/eslint-plugin@8.63.0(@typescript-eslint/parser@8.63.0(eslint@9.39.5(jiti@2.7.0))(typescript@6.0.3))(eslint@9.39.5(jiti@2.7.0))(typescript@6.0.3))(@typescript-eslint/utils@8.63.0(eslint@9.39.5(jiti@2.7.0))(typescript@6.0.3))(eslint@9.39.5(jiti@2.7.0))(husky@9.0.6)(jscpd@4.3.0)(knip@5.70.1(@types/node@24.13.3)(typescript@6.0.3))(lint-staged@17.6.0)(semantic-release-unsquash@0.4.0(semantic-release@25.0.6(typescript@6.0.3)))(typescript@6.0.3)(vitest@5.0.2(@types/node@24.13.3)(vite@7.3.6(@types/node@24.13.3)(jiti@2.7.0)(yaml@2.9.1)))
       '@types/node':
         specifier: ^24.13.3
         version: 24.13.3
@@ -31,7 +31,7 @@ importers:
         version: 9.0.6
       jscpd:
         specifier: ^4.2.5
-        version: 4.2.5
+        version: 4.3.0
       knip:
         specifier: 5.70.1
         version: 5.70.1(@types/node@24.13.3)(typescript@6.0.3)
@@ -642,14 +642,14 @@ packages:
   '@jscpd/core@4.2.5':
     resolution: {integrity: sha512-Esf2deHxaoNEjePwf2jqP6Urzj+BAOsJVPFLbnnSsV+q7rLNMcn0UEEoKBXIOOt4qMkrkhl9DfwpMyPPOr6GkQ==}
 
-  '@jscpd/finder@4.2.5':
-    resolution: {integrity: sha512-Rw0dtwp/EeLANbujOubuQeJIuXXXkAlT+f5geZhwkB9TxEYP0hqNrdOJUK/TDBKQjRGrOizEtdNy+S4UlbdzOQ==}
+  '@jscpd/finder@4.3.0':
+    resolution: {integrity: sha512-MnEUyier0D6P9zRIhAlBoyJUV8BYT6d5FDZuhR7X23FdZAgdMV8yaRRO1Q1EveK9/ReA6WVHT1HE8F15rij71A==}
 
   '@jscpd/html-reporter@4.2.5':
     resolution: {integrity: sha512-zMMIKbvi43dMgeNeHXlHQy1ovf+KJrzNlUubaBvCAVatqP23ksW8d3fmsevIQG9mMMTH0D1xOz+SxUn1FREOPg==}
 
-  '@jscpd/tokenizer@4.2.5':
-    resolution: {integrity: sha512-UM8Wx/jwahmflqQExlcKMQTYOAy58N/fn7Pv6NYrkD3EZm/FTk7gW97wkXy5aDE1Ts9oBUpT9tLY2rz7ogCHAQ==}
+  '@jscpd/tokenizer@4.2.6':
+    resolution: {integrity: sha512-/eyFjINWLs2mrBTU4H681bs855r5oRyl1O3mZxcd7TpL1JIG85a7pps0RkRPAe9c/2KcjVCc82HbhOz86M0n5g==}
 
   '@listr2/prompt-adapter-enquirer@3.0.5':
     resolution: {integrity: sha512-qWYAtMf+JRhUm+3pY9dD6PsByCe2gXd2l4y/bznfS1zyfmz5Tg8ZCEA8KnunO9UcFldNimU2/eZETn6oLk+g1Q==}
@@ -1833,8 +1833,8 @@ packages:
     resolution: {integrity: sha512-YGRs8knHhKHVShLkFET/rWAU8kmHbOV5LwN938RHI0pljAJ1Gf6SzXsSmRaEzcXTtOOmVqJ5+WtQPL5uigY50Q==}
     engines: {node: '>=14'}
 
-  end-of-stream@1.4.4:
-    resolution: {integrity: sha512-+uw1inIHVPQoaVuHzRyXd21icM+cnt4CzD5rW+NC1wjOUSTOs+Te7FOv7AhN7vS9x/oIyhLP5PR1H+phQAHu5Q==}
+  end-of-stream@1.4.5:
+    resolution: {integrity: sha512-ooEGc6HP26xXq/N+GCGOT0JKCLDGrq2bQUZrQ7gyrJiZANJ/8YDTxTpQBXGMn+WbIQXNVpyWymm7KYVICQnyOg==}
 
   enquirer@2.4.1:
     resolution: {integrity: sha512-rRqJg/6gd538VHvR3PSrdRBb/1Vy2YfzHqzvbhGIQpDRKIa4FgV/54b5Q1xYSxOOwKvjXweS26E0Q+nAMwp2pQ==}
@@ -2244,10 +2244,6 @@ packages:
   from2@2.3.0:
     resolution: {integrity: sha512-OMcX/4IC/uqEPVgGeyfN22LJk6AZrMkRZHxcHBMBvHScDGgwTm2GT2Wkgtocyd3JfZffjj2kYUDXXII0Fk9W0g==}
 
-  fs-extra@11.3.6:
-    resolution: {integrity: sha512-w8ZNZr2mKIc7qeNaQ9AVPT1+iFaI+Avd4xudVOvdDJ8VytREi1Ft5Ih7hd9jjehod8vAM5GMsfQ/TpPf4EyoEA==}
-    engines: {node: '>=14.14'}
-
   fs-extra@11.4.1:
     resolution: {integrity: sha512-KYAb4c9BJQI6QqGKthV68OHe0badztdXJWKo0WtBA9IuCFPTKvE5ZdUBglP833aMjhaSPNO4A5j/EkzZtGlKjA==}
     engines: {node: '>=14.14'}
@@ -2562,10 +2558,6 @@ packages:
     resolution: {integrity: sha512-1BC0BVFhS/p0qtw6enp8e+8OD0UrK0oFLztSjNzhcKA3WDuJxxAPXzPuPtKkjEY9UUoEWlX/8fgKeu2S8i9JTA==}
     engines: {node: '>= 0.4'}
 
-  is-core-module@2.15.1:
-    resolution: {integrity: sha512-z0vtXSwucUJtANQWldhbtbt7BnL0vxiFjIdDLAatwhDYty2bad6s+rijD6Ri4YuYJubLzIJLUidCh09e1djEVQ==}
-    engines: {node: '>= 0.4'}
-
   is-core-module@2.16.2:
     resolution: {integrity: sha512-evOr8xfXKxE6qSR0hSXL2r3sd7ALj8+7jQEUvPYcm5sgZFdJ+AYzT6yNmJenvIYQBgIGwfwz08sL8zoL7yq2BA==}
     engines: {node: '>= 0.4'}
@@ -2748,8 +2740,8 @@ packages:
   jscpd-sarif-reporter@4.2.5:
     resolution: {integrity: sha512-O8LcM9grAS5yO5x1Q0yegYaYcUX//IEBEyvzGFSYCeo1YzHbMnAI6EK7oTrwD+7Csjvfg9m8B8G7OOxzcSlr9w==}
 
-  jscpd@4.2.5:
-    resolution: {integrity: sha512-KDpApYw1ChGelfHb7MwYTEx694OnW52pv3McAasidUV4ILcGDQMiVJzB+vI8ox+ZPVfOSvdXQCk8uRa9B0LXnw==}
+  jscpd@4.3.0:
+    resolution: {integrity: sha512-yUqcHy/USHvzFamS6Loo49MCSW0Dc+4RL6ELH+Un9o2/jRSQbs9+a5hjfFceV2d3Zgv1opv5PXJ0eZ3fEQdjkg==}
     hasBin: true
 
   jsesc@2.5.2:
@@ -3548,10 +3540,6 @@ packages:
   resolve@1.22.12:
     resolution: {integrity: sha512-TyeJ1zif53BPfHootBGwPRYT1RUt6oGWsaQr8UyZW/eAm9bKoijtvruSDEmZHm92CwS9nj7/fWttqPCgzep8CA==}
     engines: {node: '>= 0.4'}
-    hasBin: true
-
-  resolve@1.22.8:
-    resolution: {integrity: sha512-oKWePCxqpd6FlLvGV1VU0x7bkPmmCNolxzjMf4NczoDnQcIWrAF+cPtZn5i6n+RfD2d9i0tzpKnG6Yk168yIyw==}
     hasBin: true
 
   resolve@2.0.0-next.7:
@@ -4882,7 +4870,7 @@ snapshots:
       '@eslint/core': 1.2.1
       levn: 0.4.1
 
-  '@gingacodemonkey/config@0.0.36(@commitlint/cli@21.2.3(@types/node@24.13.3)(conventional-commits-parser@7.1.2)(typescript@6.0.3))(@commitlint/config-conventional@20.0.0)(@typescript-eslint/eslint-plugin@8.63.0(@typescript-eslint/parser@8.63.0(eslint@9.39.5(jiti@2.7.0))(typescript@6.0.3))(eslint@9.39.5(jiti@2.7.0))(typescript@6.0.3))(@typescript-eslint/utils@8.63.0(eslint@9.39.5(jiti@2.7.0))(typescript@6.0.3))(eslint@9.39.5(jiti@2.7.0))(husky@9.0.6)(jscpd@4.2.5)(knip@5.70.1(@types/node@24.13.3)(typescript@6.0.3))(lint-staged@17.6.0)(semantic-release-unsquash@0.4.0(semantic-release@25.0.6(typescript@6.0.3)))(typescript@6.0.3)(vitest@5.0.2(@types/node@24.13.3)(vite@7.3.6(@types/node@24.13.3)(jiti@2.7.0)(yaml@2.9.1)))':
+  '@gingacodemonkey/config@0.0.36(@commitlint/cli@21.2.3(@types/node@24.13.3)(conventional-commits-parser@7.1.2)(typescript@6.0.3))(@commitlint/config-conventional@20.0.0)(@typescript-eslint/eslint-plugin@8.63.0(@typescript-eslint/parser@8.63.0(eslint@9.39.5(jiti@2.7.0))(typescript@6.0.3))(eslint@9.39.5(jiti@2.7.0))(typescript@6.0.3))(@typescript-eslint/utils@8.63.0(eslint@9.39.5(jiti@2.7.0))(typescript@6.0.3))(eslint@9.39.5(jiti@2.7.0))(husky@9.0.6)(jscpd@4.3.0)(knip@5.70.1(@types/node@24.13.3)(typescript@6.0.3))(lint-staged@17.6.0)(semantic-release-unsquash@0.4.0(semantic-release@25.0.6(typescript@6.0.3)))(typescript@6.0.3)(vitest@5.0.2(@types/node@24.13.3)(vite@7.3.6(@types/node@24.13.3)(jiti@2.7.0)(yaml@2.9.1)))':
     dependencies:
       '@commitlint/cli': 21.2.3(@types/node@24.13.3)(conventional-commits-parser@7.1.2)(typescript@6.0.3)
       '@commitlint/config-conventional': 20.0.0
@@ -4917,7 +4905,7 @@ snapshots:
       eslint-plugin-unused-imports: 4.4.1(@typescript-eslint/eslint-plugin@8.63.0(@typescript-eslint/parser@8.63.0(eslint@9.39.5(jiti@2.7.0))(typescript@6.0.3))(eslint@9.39.5(jiti@2.7.0))(typescript@6.0.3))(eslint@9.39.5(jiti@2.7.0))
       globals: 16.5.0
       husky: 9.0.6
-      jscpd: 4.2.5
+      jscpd: 4.3.0
       knip: 5.70.1(@types/node@24.13.3)(typescript@6.0.3)
       lint-staged: 17.6.0
       listr2: 9.0.5
@@ -4982,32 +4970,32 @@ snapshots:
     dependencies:
       badgen: 3.3.2
       colors: 1.4.0
-      fs-extra: 11.3.6
+      fs-extra: 11.4.1
 
   '@jscpd/core@4.2.5':
     dependencies:
       eventemitter3: 5.0.4
 
-  '@jscpd/finder@4.2.5':
+  '@jscpd/finder@4.3.0':
     dependencies:
       '@jscpd/core': 4.2.5
-      '@jscpd/tokenizer': 4.2.5
+      '@jscpd/tokenizer': 4.2.6
       blamer: 1.0.7
       bytes: 3.1.2
       cli-table3: 0.6.5
       colors: 1.4.0
       fast-glob: 3.3.3
-      fs-extra: 11.3.6
+      fs-extra: 11.4.1
       markdown-table: 2.0.0
       pug: 3.0.4
 
   '@jscpd/html-reporter@4.2.5':
     dependencies:
       colors: 1.4.0
-      fs-extra: 11.3.6
+      fs-extra: 11.4.1
       pug: 3.0.4
 
-  '@jscpd/tokenizer@4.2.5':
+  '@jscpd/tokenizer@4.2.6':
     dependencies:
       '@jscpd/core': 4.2.5
       spark-md5: 3.0.2
@@ -5749,7 +5737,7 @@ snapshots:
 
   babel-walk@3.0.0-canary-5:
     dependencies:
-      '@babel/types': 7.25.4
+      '@babel/types': 7.29.8
 
   badgen@3.3.2: {}
 
@@ -5935,8 +5923,8 @@ snapshots:
 
   constantinople@4.0.1:
     dependencies:
-      '@babel/parser': 7.25.4
-      '@babel/types': 7.25.4
+      '@babel/parser': 7.29.9
+      '@babel/types': 7.29.8
 
   content-type@3.1.1: {}
 
@@ -6130,7 +6118,7 @@ snapshots:
 
   empathic@2.0.1: {}
 
-  end-of-stream@1.4.4:
+  end-of-stream@1.4.5:
     dependencies:
       once: 1.4.0
 
@@ -6797,12 +6785,6 @@ snapshots:
       inherits: 2.0.4
       readable-stream: 2.3.8
 
-  fs-extra@11.3.6:
-    dependencies:
-      graceful-fs: 4.2.11
-      jsonfile: 6.2.1
-      universalify: 2.0.1
-
   fs-extra@11.4.1:
     dependencies:
       graceful-fs: 4.2.11
@@ -7102,10 +7084,6 @@ snapshots:
 
   is-callable@1.2.7: {}
 
-  is-core-module@2.15.1:
-    dependencies:
-      hasown: 2.0.2
-
   is-core-module@2.16.2:
     dependencies:
       hasown: 2.0.4
@@ -7278,19 +7256,19 @@ snapshots:
   jscpd-sarif-reporter@4.2.5:
     dependencies:
       colors: 1.4.0
-      fs-extra: 11.3.6
+      fs-extra: 11.4.1
       node-sarif-builder: 4.1.0
 
-  jscpd@4.2.5:
+  jscpd@4.3.0:
     dependencies:
       '@jscpd/badge-reporter': 4.2.5
       '@jscpd/core': 4.2.5
-      '@jscpd/finder': 4.2.5
+      '@jscpd/finder': 4.3.0
       '@jscpd/html-reporter': 4.2.5
-      '@jscpd/tokenizer': 4.2.5
+      '@jscpd/tokenizer': 4.2.6
       colors: 1.4.0
       commander: 15.0.0
-      fs-extra: 11.3.6
+      fs-extra: 11.4.1
       jscpd-sarif-reporter: 4.2.5
 
   jsesc@2.5.2: {}
@@ -7579,7 +7557,7 @@ snapshots:
   node-sarif-builder@4.1.0:
     dependencies:
       '@types/sarif': 2.1.7
-      fs-extra: 11.3.6
+      fs-extra: 11.4.1
 
   normalize-package-data@2.5.0:
     dependencies:
@@ -7888,7 +7866,7 @@ snapshots:
       jstransformer: 1.0.0
       pug-error: 2.1.0
       pug-walk: 2.0.0
-      resolve: 1.22.8
+      resolve: 1.22.12
 
   pug-lexer@5.0.1:
     dependencies:
@@ -7932,7 +7910,7 @@ snapshots:
 
   pump@3.0.4:
     dependencies:
-      end-of-stream: 1.4.4
+      end-of-stream: 1.4.5
       once: 1.4.0
 
   punycode@2.3.1: {}
@@ -8069,12 +8047,6 @@ snapshots:
     dependencies:
       es-errors: 1.3.0
       is-core-module: 2.17.0
-      path-parse: 1.0.7
-      supports-preserve-symlinks-flag: 1.0.0
-
-  resolve@1.22.8:
-    dependencies:
-      is-core-module: 2.15.1
       path-parse: 1.0.7
       supports-preserve-symlinks-flag: 1.0.0
 
@@ -8793,8 +8765,8 @@ snapshots:
 
   with@7.0.2:
     dependencies:
-      '@babel/parser': 7.25.4
-      '@babel/types': 7.25.4
+      '@babel/parser': 7.29.9
+      '@babel/types': 7.29.8
       assert-never: 1.4.0
       babel-walk: 3.0.0-canary-5
 

@@ -1,10 +1,69 @@
-import type {
-  AdjustmentTiming,
-  RateFailureOutcome,
-  RateOutcomeClassifier,
-  RateStrategy,
-  RateStrategyDecision
-} from "./dynamic-throttled-queue.ts";
+export type RateStrategyObservation = Readonly<{
+  currentRate: number;
+  minRate: number;
+  maxRate: number;
+  errorCount: number;
+  errorThreshold: number;
+  hasPendingWork: boolean;
+  wasBackedOff: boolean;
+}>;
+
+export type RateStrategyDecision = Readonly<{
+  nextRate: number;
+  shouldBackOff: boolean;
+}>;
+
+export type RateStrategy = (observation: RateStrategyObservation) => RateStrategyDecision;
+
+export type AimdOptions = {
+  increaseBy?: number;
+  decreaseFactor?: number;
+};
+
+export type RateFailureOutcome =
+  | Readonly<{ kind: "returned-false"; }>
+  | Readonly<{ kind: "thrown"; error: unknown; }>
+  | Readonly<{ kind: "rejected"; error: unknown; }>;
+
+export type RateOutcomeClassifier = (outcome: RateFailureOutcome) => boolean;
+
+export type AdjustmentTiming = "interval" | "settled";
+
+export const linear: RateStrategy = ({
+  minRate,
+  maxRate,
+  currentRate,
+  errorCount,
+  errorThreshold,
+  hasPendingWork,
+  wasBackedOff,
+}) => {
+  if (errorCount >= errorThreshold) {
+    return { nextRate: Math.max(minRate, currentRate - 1), shouldBackOff: true };
+  }
+  if (!wasBackedOff && errorCount === 0 && hasPendingWork) {
+    return { nextRate: Math.min(maxRate, currentRate + 1), shouldBackOff: false };
+  }
+  return { nextRate: currentRate, shouldBackOff: false };
+};
+
+export function aimd({ increaseBy = 1, decreaseFactor = 0.5 }: AimdOptions = {}): RateStrategy {
+  if (!Number.isInteger(increaseBy) || increaseBy < 1) {
+    throw new Error("increaseBy must be a positive integer");
+  }
+  if (!Number.isFinite(decreaseFactor) || decreaseFactor <= 0 || decreaseFactor >= 1) {
+    throw new Error("decreaseFactor must be a number greater than 0 and less than 1");
+  }
+  return ({ currentRate, errorCount, errorThreshold, hasPendingWork, wasBackedOff }) => {
+    if (errorCount >= errorThreshold) {
+      return { nextRate: Math.floor(currentRate * decreaseFactor), shouldBackOff: true };
+    }
+    if (!wasBackedOff && errorCount === 0 && hasPendingWork) {
+      return { nextRate: currentRate + increaseBy, shouldBackOff: false };
+    }
+    return { nextRate: currentRate, shouldBackOff: false };
+  };
+}
 
 /**
  * Whether starts may become due. `open` makes paced starts due, `held` makes none due until the module

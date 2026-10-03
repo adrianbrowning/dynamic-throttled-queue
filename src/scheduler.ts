@@ -1,9 +1,43 @@
 import { createAdaptiveRate } from "./adaptive-rate.ts";
-import type { AdaptiveRateOptions, SettlementReporter } from "./adaptive-rate.ts";
-import type { QueueLifecycleState, QueueState, RateFailureOutcome, ThrottleCallback, ThrottleHandle, ThrottleOptions } from "./dynamic-throttled-queue.ts";
+import type { AdaptiveRateOptions, RateFailureOutcome, SettlementReporter } from "./adaptive-rate.ts";
+import type { ThrottleOptions } from "./dynamic-throttled-queue.ts";
 import { createPendingWork } from "./pending-work.ts";
 import type { Retry } from "./pending-work.ts";
 import type { RetryPolicy } from "./retry-policy.ts";
+
+export type ExecutionContext = Readonly<{
+  signal: AbortSignal;
+}>;
+
+/** Return `false` to signal failure (increments error count, triggers retry if configured). */
+export type ThrottleCallback = (context: ExecutionContext) => boolean | void | Promise<boolean | void>;
+
+export type ThrottleFn = (callback: ThrottleCallback) => void;
+
+export type QueueLifecycleState = "running" | "paused" | "stopped" | "aborted" | "failed";
+
+export type QueueState = Readonly<{
+  rate: number;
+  pending: number;
+  active: number;
+  state: QueueLifecycleState;
+  started: number;
+  succeeded: number;
+  failed: number;
+  retried: number;
+  rateIncreases: number;
+  rateDecreases: number;
+}>;
+
+export type ThrottleHandle = ThrottleFn & {
+  pause: () => void;
+  resume: () => void;
+  stop: () => void;
+  abort: () => void;
+  waitForIdle: () => Promise<void>;
+  getState: () => QueueState;
+  readonly pending: number;
+};
 
 /** `attempt` is the one-based number of the attempt this item runs next. */
 type QueueItem = { fn: ThrottleCallback; attempt: number; };

@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { aimd, linear } from "../dynamic-throttled-queue.ts";
+import { aimd, linear } from "../adaptive-rate.ts";
 
 describe("rate strategies", () => {
   it("exports AIMD with a one-step increase and half-rate decrease by default", () => {

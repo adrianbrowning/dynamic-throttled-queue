@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import type { RateFailureOutcome } from "../dynamic-throttled-queue.ts";
+import type { RateFailureOutcome } from "../adaptive-rate.ts";
 import { createRetryPolicy } from "../retry-policy.ts";
 import type { RetryBackoff } from "../retry-policy.ts";
 

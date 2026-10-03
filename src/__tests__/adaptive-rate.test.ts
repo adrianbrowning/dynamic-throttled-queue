@@ -1,8 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { createAdaptiveRate } from "../adaptive-rate.ts";
-import type { AdaptiveRate, AdaptiveRateOptions, SettlementReporter } from "../adaptive-rate.ts";
-import { aimd } from "../dynamic-throttled-queue.ts";
-import type { RateFailureOutcome, RateStrategy } from "../dynamic-throttled-queue.ts";
+import { aimd, createAdaptiveRate } from "../adaptive-rate.ts";
+import type { AdaptiveRate, AdaptiveRateOptions, RateFailureOutcome, RateStrategy, SettlementReporter } from "../adaptive-rate.ts";
 
 const returnedFalse: RateFailureOutcome = { kind: "returned-false" };
 

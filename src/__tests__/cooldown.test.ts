@@ -295,5 +295,25 @@ describe("cooldownFor", () => {
       // The cooldown ends at 700 ms; the decisions at 1700 and 2700 ms see no counted failure.
       expect(throttle.getState()).toMatchObject({ failed: 1, rate: 8, rateIncreases: 2, rateDecreases: 0 });
     });
+
+    it("counts an outcome that settles after resume() but before the cooldown ends (interval timing)", async () => {
+      const { throttle, add } = queue({ min_rpi: 1, max_rpi: 10, errors_per_interval: 1 });
+      const slow = Promise.withResolvers<boolean>();
+      throttle(async () => slow.promise);
+      add(20);
+
+      await vi.advanceTimersByTimeAsync(200);
+      throttle.pause();
+      throttle.cooldownFor(1000);
+      await vi.advanceTimersByTimeAsync(100);
+      throttle.resume();
+      slow.resolve(false);
+      await vi.advanceTimersByTimeAsync(899);
+      expect(throttle.getState()).toMatchObject({ failed: 1, rate: 6, rateDecreases: 0 });
+
+      // The cooldown ends at 1200 ms; the fresh interval decides at 2200 ms.
+      await vi.advanceTimersByTimeAsync(1001);
+      expect(throttle.getState()).toMatchObject({ rate: 5, rateDecreases: 1, rateIncreases: 0 });
+    });
   });
 });

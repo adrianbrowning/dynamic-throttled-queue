@@ -12,7 +12,7 @@ export type { AdjustmentTiming, AimdOptions, RateFailureOutcome, RateOutcomeClas
 // eslint-disable-next-line no-barrel-files/no-barrel-files -- The package entry exposes types owned by the retry policy module.
 export type { RetryBackoff, RetryClassifier } from "./retry-policy.ts";
 // eslint-disable-next-line no-barrel-files/no-barrel-files -- The package entry exposes types owned by the scheduler module.
-export type { ExecutionContext, QueueLifecycleState, QueueState, ThrottleCallback, ThrottleFn, ThrottleHandle } from "./scheduler.ts";
+export type { ExecutionContext, QueueLifecycleState, QueueState, TaskCallback, TaskHandle, ThrottleCallback, ThrottleFn, ThrottleHandle } from "./scheduler.ts";
 
 const adjustmentTimings = new Set<string>([ "interval", "settled" ]);
 

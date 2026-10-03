@@ -29,6 +29,8 @@ export type PendingWork<T> = {
   accept: (item: T) => void;
   /** Makes the oldest queued item active and returns it, or `undefined` when nothing is queued. */
   take: () => T | undefined;
+  /** Drops `item`, which must be queued or held, and releases its reservation. */
+  remove: (item: T) => void;
   /**
    * Ends one active item. `decide` runs once the item no longer counts as active but still holds its
    * reservation; returning a retry keeps that reservation, returning nothing releases it. `observe`
@@ -59,6 +61,8 @@ export function createPendingWork<T>(options: PendingWorkOptions, host: PendingW
   const { capacity, compactThreshold } = options;
   const queue: Array<T> = [];
   let head = 0;
+  /** Queued items that were removed but still sit between `head` and the tail; `take` skips them. */
+  const removed = new Set<T>();
   const held: Array<HeldRetry<T>> = [];
   let frozen = false;
   let active = 0;
@@ -67,7 +71,7 @@ export function createPendingWork<T>(options: PendingWorkOptions, host: PendingW
   const idleWaiters: Array<PromiseWithResolvers<void>> = [];
 
   function queued() {
-    return queue.length - head;
+    return queue.length - head - removed.size;
   }
 
   function pending() {
@@ -105,6 +109,18 @@ export function createPendingWork<T>(options: PendingWorkOptions, host: PendingW
     held.length = 0;
     queue.length = 0;
     head = 0;
+    removed.clear();
+  }
+
+  function compact() {
+    if (head === queue.length) {
+      queue.length = 0;
+      head = 0;
+    }
+    else if (head > compactThreshold && head > queue.length / 2) {
+      queue.splice(0, head);
+      head = 0;
+    }
   }
 
   return {
@@ -122,18 +138,21 @@ export function createPendingWork<T>(options: PendingWorkOptions, host: PendingW
       queue.push(item);
     },
     take() {
-      if (head === queue.length) return undefined;
-      const item = queue[head++]!;
-      active++;
-      if (head === queue.length) {
-        queue.length = 0;
-        head = 0;
+      while (head < queue.length) {
+        const item = queue[head++]!;
+        if (removed.delete(item)) continue;
+        active++;
+        compact();
+        return item;
       }
-      else if (head > compactThreshold && head > queue.length / 2) {
-        queue.splice(0, head);
-        head = 0;
-      }
-      return item;
+      compact();
+      return undefined;
+    },
+    remove(item) {
+      const index = held.findIndex(retry => retry.item === item);
+      if (index === -1) removed.add(item);
+      else clearTimeout(held.splice(index, 1)[0]!.timeout);
+      notifyIdle();
     },
     settle(decide, observe) {
       active--;

@@ -28,7 +28,7 @@ throttle(() => {
 
 Callbacks can return `false` to signal a failure (used for dynamic rate adjustment and retry). Async callbacks (returning a Promise) are also supported — rejections and `false` resolutions count as failures. By default, every failure reduces the adaptive rate; use `rateOutcomeClassifier` when only selected failures should do so. Use `retryClassifier` to separately decide whether a failure is eligible for retry.
 
-Each callback receives an execution context containing the queue-owned `AbortSignal`. Existing zero-argument callbacks remain supported. Use the signal to cooperatively cancel in-flight work:
+Each callback receives an execution context containing an `AbortSignal` and the one-based `attempt` number (retries count up from 1). Fire-and-forget callbacks get the queue-owned signal, which only `abort()` aborts. Callbacks passed to [`submit()`](#task-handles) get a signal scoped to their item instead. Existing zero-argument callbacks remain supported. Use the signal to cooperatively cancel in-flight work:
 
 ```ts
 throttle(async ({ signal }) => {
@@ -40,6 +40,29 @@ throttle(async ({ signal }) => {
 Set `concurrency` to bound callbacks that are still awaiting asynchronous completion. This limit is independent of the request-start rate; omitting it preserves the existing unlimited in-flight behavior.
 
 Set `maxQueueSize` to bound accepted work. Capacity is reserved from enqueue through terminal success or failure, including pending callbacks, active callbacks, and retries. A full queue makes `enqueue()` throw synchronously in v2; unlimited capacity remains the default. In v3, a full queue will return `false` instead.
+
+### Task handles
+
+`submit()` accepts a callback like the fire-and-forget form, but returns a handle for that one item, covering every attempt it makes:
+
+```ts
+const task = queue.submit(async ({ signal, attempt }) => {
+  const response = await fetch("/api/data", { signal });
+  if (!response.ok) throw new Error(`HTTP ${response.status} on attempt ${attempt}`);
+  return response.json();
+});
+
+task.cancel();
+const data = await task.result;
+```
+
+- **Results.** Every value the callback returns or resolves, including `false`, is the result. Only a throw or a rejection is a failure, and it goes through `retry`, `retryClassifier`, and `rateOutcomeClassifier` the same as any other failure. `result` fulfills once, with the final successful value, or rejects once, with the final attempt's error after retries end.
+- **Cancellation.** `cancel(reason?)` rejects `result` immediately with `reason`, or with an `AbortError` when no reason is given. A canceled item that has not started (including one waiting on a delayed retry) is removed: it never starts, frees its `maxQueueSize` slot, and does not use a start slot. A canceled active item has its own signal aborted, and only that signal; other work and the queue signal are unaffected. It keeps its concurrency slot until the callback returns, and `waitForIdle()` waits for it. Its outcome never retries and never counts as a success, a failure, or a rate-reducing error. Calling `cancel()` again, or after `result` has settled, does nothing.
+- **Queue termination.** `abort()` rejects every unsettled item at once with the queue signal's `AbortError` and aborts each item's signal. A strategy failure (see [Lifecycle](#lifecycle)) does the same with the strategy error. Values that arrive later are discarded.
+- **Retained work.** `pause()` and `stop()` keep items and leave their results pending.
+- **Admission.** `submit()` throws synchronously and returns no handle when `enqueue()` would throw: the queue is full, aborted, or failed.
+
+`result` is an ordinary promise. If you cancel or abort without awaiting it, attach a handler (for example `task.result.catch(() => {})`) so the rejection is not reported as unhandled.
 
 ## Options
 
@@ -78,6 +101,7 @@ With `adjustmentTiming: "settled"`, an observation window contains every callbac
 
 | Property | Type | Description |
 | -------- | ---- | ----------- |
+| `submit(callback)` | `<T>(callback) => TaskHandle<T>` | Enqueue one item and return its `{ result, cancel }` handle; see [Task handles](#task-handles) |
 | `pause()` | `() => void` | Temporarily prevent new callback starts while retaining accepted work |
 | `resume()` | `() => void` | Resume a paused queue with a fresh pacing and observation window |
 | `stop()` | `() => void` | Stop processing the queue immediately |
@@ -115,7 +139,7 @@ In settled timing, `pause()` discards the in-progress observation window rather 
 
 A queue fails when `rateStrategy` throws or returns a malformed decision. The queue clears its timers, discards pending callbacks and delayed retries, and reports `state: "failed"`. The original error is still rethrown where the decision ran: an uncaught exception from the adaptive-rate timer, or an unhandled rejection when a slow asynchronous callback completes a settled-timing window. Pending `waitForIdle()` promises reject with that error immediately, even while callbacks are still active; later `waitForIdle()` calls reject with it and later enqueues throw it. Unlike `abort()`, failure does not wait for active callbacks to settle. Create a new queue to resume work.
 
-`getState()` returns a frozen `QueueState` snapshot. Each call is independent; mutations to the returned object do not affect the queue. Fields: `rate` (current rate), `pending` (queued + delayed retries), `active` (callbacks executing), `state` (`"running"` | `"paused"` | `"stopped"` | `"aborted"` | `"failed"`), and monotonic lifetime counters `started`, `succeeded`, `failed`, `retried`, `rateIncreases`, `rateDecreases`. `started`/`succeeded`/`failed` count callback attempts: a retry is a new attempt; a failure is counted even when a later retry succeeds. `retried` increments only when another attempt is actually scheduled. Rate-direction counters match applied rate changes and `onRateChange` notifications exactly. Counters do not change for settlements after `abort()` or a strategy failure.
+`getState()` returns a frozen `QueueState` snapshot. Each call is independent; mutations to the returned object do not affect the queue. Fields: `rate` (current rate), `pending` (queued + delayed retries), `active` (callbacks executing), `state` (`"running"` | `"paused"` | `"stopped"` | `"aborted"` | `"failed"`), and monotonic lifetime counters `started`, `succeeded`, `failed`, `retried`, `canceled`, `rateIncreases`, `rateDecreases`. `started`/`succeeded`/`failed` count callback attempts: a retry is a new attempt; a failure is counted even when a later retry succeeds. `retried` increments only when another attempt is actually scheduled. `canceled` counts submitted items whose result `cancel()` rejected; a canceled active attempt counts as neither succeeded nor failed. Rate-direction counters match applied rate changes and `onRateChange` notifications exactly. Counters do not change for settlements after `abort()` or a strategy failure.
 
 `waitForIdle()` returns a `Promise<void>` that resolves once all pending callbacks, active executions, and delayed retries have reached a terminal outcome. If the queue is already idle the promise resolves immediately. Each call is one-shot: a later enqueue does not affect a promise that has already resolved. Multiple simultaneous callers all resolve at the same idle transition without retaining waiter state. A callback failure that triggers a retry never exposes a transient idle transition between the failed attempt and the retry. `stop()` retains pending work, so existing waiters remain pending until that work completes after a later enqueue resumes the queue. `abort()` discards pending work, so waiters resolve as soon as no callback is active: immediately when none is running, otherwise when the last active callback settles. Post-abort settlements do not create new retry work. A paused queue resolves waiters only when both pending and active work are zero. A failed queue rejects every waiter with the strategy error at once, without waiting for active callbacks.
 

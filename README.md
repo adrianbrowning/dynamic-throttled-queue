@@ -78,6 +78,7 @@ const data = await task.result;
 | `retryBackoff` | `RetryBackoff` | — | Per-retry fixed, linear, or exponential delay policy; omit for immediate retries |
 | `concurrency` | `number` | — | Maximum callbacks awaiting asynchronous completion; omit for no limit |
 | `maxQueueSize` | `number` | — | Maximum accepted callbacks not yet terminal, including pending, active, and retried work; omit for no limit |
+| `maxCooldown` | `number` | `2147483647` | Longest cooldown, in milliseconds, that `cooldownFor()` applies; longer requests are clamped. Must be positive and at most `2147483647`, the largest delay timers honor |
 | `compact_threshold` | `number` | `512` | Non-negative integer minimum dead slots before internal queue compaction triggers; `0` compacts at the earliest eligible point |
 | `rateStrategy` | `RateStrategy` | `linear` | Pure policy that requests the next rate and an optional backoff after each observation window |
 | `rateOutcomeClassifier` | `RateOutcomeClassifier` | — | Decides whether a failed callback outcome contributes to adaptive-rate error counting |
@@ -106,6 +107,7 @@ With `adjustmentTiming: "settled"`, an observation window contains every callbac
 | `resume()` | `() => void` | Resume a paused queue with a fresh pacing and observation window |
 | `stop()` | `() => void` | Stop processing the queue immediately |
 | `abort()` | `() => void` | Terminally discard queued work and signal active callbacks |
+| `cooldownFor(delay)` | `(delay: number) => void` | Start nothing new for `delay` ms, for example after a server's `Retry-After`; see [Server-directed cooldown](#server-directed-cooldown) |
 | `waitForIdle()` | `() => Promise<void>` | Resolves when all pending, active, and delayed-retry work has completed |
 | `getState()` | `() => QueueState` | Returns a frozen point-in-time snapshot of queue state and counters |
 | `pending` | `number` (readonly) | Number of callbacks waiting in the queue, including delayed retries |
@@ -139,7 +141,7 @@ In settled timing, `pause()` discards the in-progress observation window rather 
 
 A queue fails when `rateStrategy` throws or returns a malformed decision. The queue clears its timers, discards pending callbacks and delayed retries, and reports `state: "failed"`. The original error is still rethrown where the decision ran: an uncaught exception from the adaptive-rate timer, or an unhandled rejection when a slow asynchronous callback completes a settled-timing window. Pending `waitForIdle()` promises reject with that error immediately, even while callbacks are still active; later `waitForIdle()` calls reject with it and later enqueues throw it. Unlike `abort()`, failure does not wait for active callbacks to settle. Create a new queue to resume work.
 
-`getState()` returns a frozen `QueueState` snapshot. Each call is independent; mutations to the returned object do not affect the queue. Fields: `rate` (current rate), `pending` (queued + delayed retries), `active` (callbacks executing), `state` (`"running"` | `"paused"` | `"stopped"` | `"aborted"` | `"failed"`), and monotonic lifetime counters `started`, `succeeded`, `failed`, `retried`, `canceled`, `rateIncreases`, `rateDecreases`. `started`/`succeeded`/`failed` count callback attempts: a retry is a new attempt; a failure is counted even when a later retry succeeds. `retried` increments only when another attempt is actually scheduled. `canceled` counts submitted items whose result `cancel()` rejected; a canceled active attempt counts as neither succeeded nor failed. Rate-direction counters match applied rate changes and `onRateChange` notifications exactly. Counters do not change for settlements after `abort()` or a strategy failure.
+`getState()` returns a frozen `QueueState` snapshot. Each call is independent; mutations to the returned object do not affect the queue. Fields: `rate` (current rate), `pending` (queued + delayed retries), `active` (callbacks executing), `state` (`"running"` | `"paused"` | `"stopped"` | `"aborted"` | `"failed"`), `cooldownRemaining` (milliseconds, rounded up, until an active cooldown ends; `0` when none is active), and monotonic lifetime counters `started`, `succeeded`, `failed`, `retried`, `canceled`, `rateIncreases`, `rateDecreases`, `cooldowns`, `cooldownTotal`. `started`/`succeeded`/`failed` count callback attempts: a retry is a new attempt; a failure is counted even when a later retry succeeds. `retried` increments only when another attempt is actually scheduled. `canceled` counts submitted items whose result `cancel()` rejected; a canceled active attempt counts as neither succeeded nor failed. Rate-direction counters match applied rate changes and `onRateChange` notifications exactly. `cooldowns` counts `cooldownFor()` calls that moved the deadline later, and `cooldownTotal` is the milliseconds they added. Counters do not change for settlements after `abort()` or a strategy failure.
 
 `waitForIdle()` returns a `Promise<void>` that resolves once all pending callbacks, active executions, and delayed retries have reached a terminal outcome. If the queue is already idle the promise resolves immediately. Each call is one-shot: a later enqueue does not affect a promise that has already resolved. Multiple simultaneous callers all resolve at the same idle transition without retaining waiter state. A callback failure that triggers a retry never exposes a transient idle transition between the failed attempt and the retry. `stop()` retains pending work, so existing waiters remain pending until that work completes after a later enqueue resumes the queue. `abort()` discards pending work, so waiters resolve as soon as no callback is active: immediately when none is running, otherwise when the last active callback settles. Post-abort settlements do not create new retry work. A paused queue resolves waiters only when both pending and active work are zero. A failed queue rejects every waiter with the strategy error at once, without waiting for active callbacks.
 
@@ -332,6 +334,31 @@ const throttle = createThrottledQueue({
 ```
 
 Delayed retries remain pending, return to the normal queue tail when due, and then obey normal scheduler pacing. Equal due times preserve the order their retry delays were scheduled. `abort()` discards delayed retries along with other pending work.
+
+### Server-directed cooldown
+
+`cooldownFor(delay)` stops the queue from starting anything new for `delay` milliseconds. Use it when a server says when capacity returns, such as HTTP 429 with `Retry-After`. The queue does not read HTTP responses: convert the hint to milliseconds yourself, clamping past dates to `0`.
+
+```ts
+const throttle = createThrottledQueue({ min_rpi: 1, max_rpi: 10, interval: 1000, maxCooldown: 60_000 });
+
+throttle.submit(async () => {
+  const res = await fetch("https://api.example.com/data");
+  if (res.status === 429) {
+    const seconds = Number(res.headers.get("Retry-After"));
+    if (Number.isFinite(seconds) && seconds >= 0) throttle.cooldownFor(seconds * 1000);
+    throw new Error("rate limited");
+  }
+  return res.json();
+});
+```
+
+- **Scheduling.** Pending work, new enqueues, and retries are kept and do not start. Active callbacks keep running and settle normally. When the cooldown ends, starts resume without a new enqueue; the first one is due one spacing later, as after any fresh start. Delayed retries keep counting down and join the queue when due.
+- **Overlaps.** Each call asks for "nothing before now + `delay`". A later deadline replaces the current one; an earlier one is ignored. Two 60-second hints that arrive together give one 60-second cooldown, not two.
+- **Validation.** `NaN`, negative, and infinite delays throw a `RangeError`. Delays above `maxCooldown` are clamped to it. `0` does nothing.
+- **Lifecycle.** `pause()` and cooldown are separate: a cooldown keeps elapsing while paused, its end does not resume a paused queue, and `resume()` does not end it. `stop()` clears the cooldown timer but keeps the deadline, so the enqueue that restarts the queue still waits for it. `abort()` and a strategy failure clear the cooldown; later calls do nothing.
+- **Adaptive rate.** No rate decision is made while cooling down, so quiet intervals do not raise the rate. Failures that settle during the cooldown still count toward the first decision after it. In interval timing, a fresh interval begins when the cooldown ends. In settled timing, a cooldown closes the open collection interval early; once it ends and every callback started in that window has settled, the queue decides that window and opens the next. A cooldown replaces any adaptive-rate backoff already in progress. Outcomes that settle while paused stay ignored, as without a cooldown.
+- **Separate decisions.** A cooldown does not reduce the rate or retry anything. Use `rateOutcomeClassifier` and `retryClassifier` for those; the three can be combined freely.
 
 ## Migration from v1
 

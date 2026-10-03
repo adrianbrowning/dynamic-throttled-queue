@@ -76,13 +76,17 @@ export function createThrottledQueue(options: ThrottleOptions): ThrottleHandle {
     throw new Error("adjustmentTiming must be either interval or settled");
   }
   const retryPolicy = createRetryPolicy(options);
-  return createScheduler(options, {
-    min_rpi,
-    max_rpi,
+  return createScheduler({
+    concurrency: concurrency ?? Infinity,
+    capacity: maxQueueSize ?? Infinity,
+    compactThreshold: compact_threshold,
+  }, {
+    minRate: min_rpi,
+    maxRate: max_rpi,
     interval,
-    evenly_spaced: options.evenly_spaced ?? true,
-    errors_per_interval,
-    back_off: options.back_off ?? false,
+    evenlySpaced: options.evenly_spaced ?? true,
+    errorThreshold: errors_per_interval,
+    backOff: options.back_off ?? false,
     adjustmentTiming: options.adjustmentTiming ?? "interval",
     rateStrategy: options.rateStrategy ?? linear,
     rateOutcomeClassifier: options.rateOutcomeClassifier,

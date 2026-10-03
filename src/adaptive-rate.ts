@@ -75,13 +75,13 @@ type Pacing = "idle" | "open" | "held";
 export type SettlementReporter = (outcome: RateFailureOutcome | undefined) => void;
 
 export type AdaptiveRateOptions = {
-  min_rpi: number;
-  max_rpi: number;
+  minRate: number;
+  maxRate: number;
   interval: number;
   /** Makes one start due every `interval / rate` ms instead of `rate` starts once per interval. */
-  evenly_spaced: boolean;
-  errors_per_interval: number;
-  back_off: boolean;
+  evenlySpaced: boolean;
+  errorThreshold: number;
+  backOff: boolean;
   adjustmentTiming: AdjustmentTiming;
   rateStrategy: RateStrategy;
   rateOutcomeClassifier?: RateOutcomeClassifier;
@@ -260,17 +260,17 @@ function settledTiming(context: TimingContext): Timing {
 
 export function createAdaptiveRate(options: AdaptiveRateOptions, host: AdaptiveRateHost): AdaptiveRate {
   const {
-    min_rpi,
-    max_rpi,
+    minRate,
+    maxRate,
     interval,
-    evenly_spaced,
-    errors_per_interval,
-    back_off,
+    evenlySpaced,
+    errorThreshold,
+    backOff,
     rateStrategy,
     rateOutcomeClassifier,
     onRateChange,
   } = options;
-  let rate = Math.ceil((max_rpi + min_rpi) / 2);
+  let rate = Math.ceil((maxRate + minRate) / 2);
   let rateIncreases = 0;
   let rateDecreases = 0;
   let errorCount = 0;
@@ -302,10 +302,10 @@ export function createAdaptiveRate(options: AdaptiveRateOptions, host: AdaptiveR
   function decide() {
     const observation = Object.freeze({
       currentRate: rate,
-      minRate: min_rpi,
-      maxRate: max_rpi,
+      minRate,
+      maxRate,
       errorCount,
-      errorThreshold: errors_per_interval,
+      errorThreshold,
       hasPendingWork: host.hasPendingWork(),
       wasBackedOff,
     });
@@ -317,15 +317,15 @@ export function createAdaptiveRate(options: AdaptiveRateOptions, host: AdaptiveR
       host.failed(error);
       throw error;
     }
-    const hold = back_off && decision.shouldBackOff;
+    const hold = backOff && decision.shouldBackOff;
     errorCount = 0;
     wasBackedOff = hold;
-    applyRate(Math.min(max_rpi, Math.max(min_rpi, decision.nextRate)));
+    applyRate(Math.min(maxRate, Math.max(minRate, decision.nextRate)));
     return hold;
   }
 
   function spacing() {
-    return evenly_spaced ? interval / rate : interval;
+    return evenlySpaced ? interval / rate : interval;
   }
 
   function scheduleStart(delay: number) {
@@ -350,7 +350,7 @@ export function createAdaptiveRate(options: AdaptiveRateOptions, host: AdaptiveR
     batchStarts = 0;
     let slotFree: boolean;
     try {
-      slotFree = host.startsDue(evenly_spaced ? 1 : rate);
+      slotFree = host.startsDue(evenlySpaced ? 1 : rate);
     }
     finally {
       dispatching = false;

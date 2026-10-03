@@ -229,6 +229,7 @@ describe("cooldownFor", () => {
 
       expect(throttle.getState()).toMatchObject({ state: "failed", cooldownRemaining: 0, cooldowns: 0 });
       expect(vi.getTimerCount()).toBe(0);
+      expect(() => throttle.cooldownFor(NaN)).toThrow(RangeError);
     });
   });
 

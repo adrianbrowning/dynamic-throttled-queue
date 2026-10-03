@@ -1,10 +1,69 @@
-import type {
-  AdjustmentTiming,
-  RateFailureOutcome,
-  RateOutcomeClassifier,
-  RateStrategy,
-  RateStrategyDecision
-} from "./dynamic-throttled-queue.ts";
+export type RateStrategyObservation = Readonly<{
+  currentRate: number;
+  minRate: number;
+  maxRate: number;
+  errorCount: number;
+  errorThreshold: number;
+  hasPendingWork: boolean;
+  wasBackedOff: boolean;
+}>;
+
+export type RateStrategyDecision = Readonly<{
+  nextRate: number;
+  shouldBackOff: boolean;
+}>;
+
+export type RateStrategy = (observation: RateStrategyObservation) => RateStrategyDecision;
+
+export type AimdOptions = {
+  increaseBy?: number;
+  decreaseFactor?: number;
+};
+
+export type RateFailureOutcome =
+  | Readonly<{ kind: "returned-false"; }>
+  | Readonly<{ kind: "thrown"; error: unknown; }>
+  | Readonly<{ kind: "rejected"; error: unknown; }>;
+
+export type RateOutcomeClassifier = (outcome: RateFailureOutcome) => boolean;
+
+export type AdjustmentTiming = "interval" | "settled";
+
+export const linear: RateStrategy = ({
+  minRate,
+  maxRate,
+  currentRate,
+  errorCount,
+  errorThreshold,
+  hasPendingWork,
+  wasBackedOff,
+}) => {
+  if (errorCount >= errorThreshold) {
+    return { nextRate: Math.max(minRate, currentRate - 1), shouldBackOff: true };
+  }
+  if (!wasBackedOff && errorCount === 0 && hasPendingWork) {
+    return { nextRate: Math.min(maxRate, currentRate + 1), shouldBackOff: false };
+  }
+  return { nextRate: currentRate, shouldBackOff: false };
+};
+
+export function aimd({ increaseBy = 1, decreaseFactor = 0.5 }: AimdOptions = {}): RateStrategy {
+  if (!Number.isInteger(increaseBy) || increaseBy < 1) {
+    throw new Error("increaseBy must be a positive integer");
+  }
+  if (!Number.isFinite(decreaseFactor) || decreaseFactor <= 0 || decreaseFactor >= 1) {
+    throw new Error("decreaseFactor must be a number greater than 0 and less than 1");
+  }
+  return ({ currentRate, errorCount, errorThreshold, hasPendingWork, wasBackedOff }) => {
+    if (errorCount >= errorThreshold) {
+      return { nextRate: Math.floor(currentRate * decreaseFactor), shouldBackOff: true };
+    }
+    if (!wasBackedOff && errorCount === 0 && hasPendingWork) {
+      return { nextRate: currentRate + increaseBy, shouldBackOff: false };
+    }
+    return { nextRate: currentRate, shouldBackOff: false };
+  };
+}
 
 /**
  * Whether starts may become due. `open` makes paced starts due, `held` makes none due until the module
@@ -16,13 +75,13 @@ type Pacing = "idle" | "open" | "held";
 export type SettlementReporter = (outcome: RateFailureOutcome | undefined) => void;
 
 export type AdaptiveRateOptions = {
-  min_rpi: number;
-  max_rpi: number;
+  minRate: number;
+  maxRate: number;
   interval: number;
   /** Makes one start due every `interval / rate` ms instead of `rate` starts once per interval. */
-  evenly_spaced: boolean;
-  errors_per_interval: number;
-  back_off: boolean;
+  evenlySpaced: boolean;
+  errorThreshold: number;
+  backOff: boolean;
   adjustmentTiming: AdjustmentTiming;
   rateStrategy: RateStrategy;
   rateOutcomeClassifier?: RateOutcomeClassifier;
@@ -201,17 +260,17 @@ function settledTiming(context: TimingContext): Timing {
 
 export function createAdaptiveRate(options: AdaptiveRateOptions, host: AdaptiveRateHost): AdaptiveRate {
   const {
-    min_rpi,
-    max_rpi,
+    minRate,
+    maxRate,
     interval,
-    evenly_spaced,
-    errors_per_interval,
-    back_off,
+    evenlySpaced,
+    errorThreshold,
+    backOff,
     rateStrategy,
     rateOutcomeClassifier,
     onRateChange,
   } = options;
-  let rate = Math.ceil((max_rpi + min_rpi) / 2);
+  let rate = Math.ceil((maxRate + minRate) / 2);
   let rateIncreases = 0;
   let rateDecreases = 0;
   let errorCount = 0;
@@ -243,10 +302,10 @@ export function createAdaptiveRate(options: AdaptiveRateOptions, host: AdaptiveR
   function decide() {
     const observation = Object.freeze({
       currentRate: rate,
-      minRate: min_rpi,
-      maxRate: max_rpi,
+      minRate,
+      maxRate,
       errorCount,
-      errorThreshold: errors_per_interval,
+      errorThreshold,
       hasPendingWork: host.hasPendingWork(),
       wasBackedOff,
     });
@@ -258,15 +317,15 @@ export function createAdaptiveRate(options: AdaptiveRateOptions, host: AdaptiveR
       host.failed(error);
       throw error;
     }
-    const hold = back_off && decision.shouldBackOff;
+    const hold = backOff && decision.shouldBackOff;
     errorCount = 0;
     wasBackedOff = hold;
-    applyRate(Math.min(max_rpi, Math.max(min_rpi, decision.nextRate)));
+    applyRate(Math.min(maxRate, Math.max(minRate, decision.nextRate)));
     return hold;
   }
 
   function spacing() {
-    return evenly_spaced ? interval / rate : interval;
+    return evenlySpaced ? interval / rate : interval;
   }
 
   function scheduleStart(delay: number) {
@@ -291,7 +350,7 @@ export function createAdaptiveRate(options: AdaptiveRateOptions, host: AdaptiveR
     batchStarts = 0;
     let slotFree: boolean;
     try {
-      slotFree = host.startsDue(evenly_spaced ? 1 : rate);
+      slotFree = host.startsDue(evenlySpaced ? 1 : rate);
     }
     finally {
       dispatching = false;

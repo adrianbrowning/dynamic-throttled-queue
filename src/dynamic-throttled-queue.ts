@@ -1,85 +1,20 @@
+import { linear } from "./adaptive-rate.ts";
+import type { AdjustmentTiming, RateOutcomeClassifier, RateStrategy } from "./adaptive-rate.ts";
 import { createRetryPolicy } from "./retry-policy.ts";
 import type { RetryBackoff, RetryClassifier } from "./retry-policy.ts";
 import { createScheduler } from "./scheduler.ts";
+import type { ThrottleHandle } from "./scheduler.ts";
 
+// eslint-disable-next-line no-barrel-files/no-barrel-files -- The package entry exposes the rate strategies owned by the adaptive-rate module.
+export { aimd, linear } from "./adaptive-rate.ts";
+// eslint-disable-next-line no-barrel-files/no-barrel-files -- The package entry exposes types owned by the adaptive-rate module.
+export type { AdjustmentTiming, AimdOptions, RateFailureOutcome, RateOutcomeClassifier, RateStrategy, RateStrategyDecision, RateStrategyObservation } from "./adaptive-rate.ts";
 // eslint-disable-next-line no-barrel-files/no-barrel-files -- The package entry exposes types owned by the retry policy module.
 export type { RetryBackoff, RetryClassifier } from "./retry-policy.ts";
-
-export type RateStrategyObservation = Readonly<{
-  currentRate: number;
-  minRate: number;
-  maxRate: number;
-  errorCount: number;
-  errorThreshold: number;
-  hasPendingWork: boolean;
-  wasBackedOff: boolean;
-}>;
-
-export type RateStrategyDecision = Readonly<{
-  nextRate: number;
-  shouldBackOff: boolean;
-}>;
-
-export type RateStrategy = (observation: RateStrategyObservation) => RateStrategyDecision;
-
-export type AimdOptions = {
-  increaseBy?: number;
-  decreaseFactor?: number;
-};
-
-export type RateFailureOutcome =
-  | Readonly<{ kind: "returned-false"; }>
-  | Readonly<{ kind: "thrown"; error: unknown; }>
-  | Readonly<{ kind: "rejected"; error: unknown; }>;
-
-export type RateOutcomeClassifier = (outcome: RateFailureOutcome) => boolean;
-
-export type AdjustmentTiming = "interval" | "settled";
+// eslint-disable-next-line no-barrel-files/no-barrel-files -- The package entry exposes types owned by the scheduler module.
+export type { ExecutionContext, QueueLifecycleState, QueueState, ThrottleCallback, ThrottleFn, ThrottleHandle } from "./scheduler.ts";
 
 const adjustmentTimings = new Set<string>([ "interval", "settled" ]);
-
-export const linear: RateStrategy = ({
-  minRate,
-  maxRate,
-  currentRate,
-  errorCount,
-  errorThreshold,
-  hasPendingWork,
-  wasBackedOff,
-}) => {
-  if (errorCount >= errorThreshold) {
-    return { nextRate: Math.max(minRate, currentRate - 1), shouldBackOff: true };
-  }
-  if (!wasBackedOff && errorCount === 0 && hasPendingWork) {
-    return { nextRate: Math.min(maxRate, currentRate + 1), shouldBackOff: false };
-  }
-  return { nextRate: currentRate, shouldBackOff: false };
-};
-
-export function aimd({ increaseBy = 1, decreaseFactor = 0.5 }: AimdOptions = {}): RateStrategy {
-  if (!Number.isInteger(increaseBy) || increaseBy < 1) {
-    throw new Error("increaseBy must be a positive integer");
-  }
-  if (!Number.isFinite(decreaseFactor) || decreaseFactor <= 0 || decreaseFactor >= 1) {
-    throw new Error("decreaseFactor must be a number greater than 0 and less than 1");
-  }
-  return ({ currentRate, errorCount, errorThreshold, hasPendingWork, wasBackedOff }) => {
-    if (errorCount >= errorThreshold) {
-      return { nextRate: Math.floor(currentRate * decreaseFactor), shouldBackOff: true };
-    }
-    if (!wasBackedOff && errorCount === 0 && hasPendingWork) {
-      return { nextRate: currentRate + increaseBy, shouldBackOff: false };
-    }
-    return { nextRate: currentRate, shouldBackOff: false };
-  };
-}
-
-export type ExecutionContext = Readonly<{
-  signal: AbortSignal;
-}>;
-
-/** Return `false` to signal failure (increments error count, triggers retry if configured). */
-export type ThrottleCallback = (context: ExecutionContext) => boolean | void | Promise<boolean | void>;
 
 export type ThrottleOptions = {
   min_rpi: number;
@@ -108,33 +43,6 @@ export type ThrottleOptions = {
   /** When adaptive-rate observations are adjusted. Defaults to interval compatibility behavior. */
   adjustmentTiming?: AdjustmentTiming;
   onRateChange?: (rate: number) => void;
-};
-
-export type ThrottleFn = (callback: ThrottleCallback) => void;
-
-export type QueueLifecycleState = "running" | "paused" | "stopped" | "aborted" | "failed";
-
-export type QueueState = Readonly<{
-  rate: number;
-  pending: number;
-  active: number;
-  state: QueueLifecycleState;
-  started: number;
-  succeeded: number;
-  failed: number;
-  retried: number;
-  rateIncreases: number;
-  rateDecreases: number;
-}>;
-
-export type ThrottleHandle = ThrottleFn & {
-  pause: () => void;
-  resume: () => void;
-  stop: () => void;
-  abort: () => void;
-  waitForIdle: () => Promise<void>;
-  getState: () => QueueState;
-  readonly pending: number;
 };
 
 export function createThrottledQueue(options: ThrottleOptions): ThrottleHandle {
@@ -168,13 +76,17 @@ export function createThrottledQueue(options: ThrottleOptions): ThrottleHandle {
     throw new Error("adjustmentTiming must be either interval or settled");
   }
   const retryPolicy = createRetryPolicy(options);
-  return createScheduler(options, {
-    min_rpi,
-    max_rpi,
+  return createScheduler({
+    concurrency: concurrency ?? Infinity,
+    capacity: maxQueueSize ?? Infinity,
+    compactThreshold: compact_threshold,
+  }, {
+    minRate: min_rpi,
+    maxRate: max_rpi,
     interval,
-    evenly_spaced: options.evenly_spaced ?? true,
-    errors_per_interval,
-    back_off: options.back_off ?? false,
+    evenlySpaced: options.evenly_spaced ?? true,
+    errorThreshold: errors_per_interval,
+    backOff: options.back_off ?? false,
     adjustmentTiming: options.adjustmentTiming ?? "interval",
     rateStrategy: options.rateStrategy ?? linear,
     rateOutcomeClassifier: options.rateOutcomeClassifier,

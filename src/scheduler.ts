@@ -1,9 +1,42 @@
 import { createAdaptiveRate } from "./adaptive-rate.ts";
-import type { AdaptiveRateOptions, SettlementReporter } from "./adaptive-rate.ts";
-import type { QueueLifecycleState, QueueState, RateFailureOutcome, ThrottleCallback, ThrottleHandle, ThrottleOptions } from "./dynamic-throttled-queue.ts";
+import type { AdaptiveRateOptions, RateFailureOutcome, SettlementReporter } from "./adaptive-rate.ts";
 import { createPendingWork } from "./pending-work.ts";
-import type { Retry } from "./pending-work.ts";
+import type { PendingWorkOptions, Retry } from "./pending-work.ts";
 import type { RetryPolicy } from "./retry-policy.ts";
+
+export type ExecutionContext = Readonly<{
+  signal: AbortSignal;
+}>;
+
+/** Return `false` to signal failure (increments error count, triggers retry if configured). */
+export type ThrottleCallback = (context: ExecutionContext) => boolean | void | Promise<boolean | void>;
+
+export type ThrottleFn = (callback: ThrottleCallback) => void;
+
+export type QueueLifecycleState = "running" | "paused" | "stopped" | "aborted" | "failed";
+
+export type QueueState = Readonly<{
+  rate: number;
+  pending: number;
+  active: number;
+  state: QueueLifecycleState;
+  started: number;
+  succeeded: number;
+  failed: number;
+  retried: number;
+  rateIncreases: number;
+  rateDecreases: number;
+}>;
+
+export type ThrottleHandle = ThrottleFn & {
+  pause: () => void;
+  resume: () => void;
+  stop: () => void;
+  abort: () => void;
+  waitForIdle: () => Promise<void>;
+  getState: () => QueueState;
+  readonly pending: number;
+};
 
 /** `attempt` is the one-based number of the attempt this item runs next. */
 type QueueItem = { fn: ThrottleCallback; attempt: number; };
@@ -22,33 +55,30 @@ const lifecycleTransitions: Readonly<Record<QueueLifecycleState, Partial<Readonl
   failed: {},
 };
 
-export function createScheduler(options: ThrottleOptions, adaptiveRateOptions: AdaptiveRateOptions, retryPolicy: RetryPolicy): ThrottleHandle {
-  const {
-    concurrency,
-    maxQueueSize,
-    compact_threshold = 512,
-  } = options;
+export type SchedulerOptions = PendingWorkOptions & {
+  /** Most callbacks awaiting asynchronous settlement at once. */
+  concurrency: number;
+};
+
+export function createScheduler(options: SchedulerOptions, adaptiveRateOptions: AdaptiveRateOptions, retryPolicy: RetryPolicy): ThrottleHandle {
+  const { concurrency, ...pendingWorkOptions } = options;
   let lifecycle: Lifecycle = { state: "running" };
   let cnt_started = 0;
   let cnt_succeeded = 0;
   let cnt_failed = 0;
   let cnt_retried = 0;
   const abortController = new AbortController();
-  const max_concurrency = concurrency ?? Infinity;
-  const work = createPendingWork<QueueItem>(
-    { capacity: maxQueueSize ?? Infinity, compactThreshold: compact_threshold },
-    { retryQueued: start }
-  );
+  const work = createPendingWork<QueueItem>(pendingWorkOptions, { retryQueued: start });
   const adaptiveRate = createAdaptiveRate(adaptiveRateOptions, {
     hasPendingWork: () => work.queued > 0,
     startsDue(limit) {
       const batch = Math.min(limit, work.queued);
-      for (let started = 0; started < batch && work.active < max_concurrency; started++) {
+      for (let started = 0; started < batch && work.active < concurrency; started++) {
         const item = work.take();
         if (item === undefined) break;
         execute(item);
       }
-      return work.active < max_concurrency;
+      return work.active < concurrency;
     },
     failed(error) {
       transition("fail", error);

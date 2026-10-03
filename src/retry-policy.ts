@@ -1,4 +1,4 @@
-import type { RateFailureOutcome } from "./dynamic-throttled-queue.ts";
+import type { RateFailureOutcome } from "./adaptive-rate.ts";
 
 export type RetryBackoff = {
   strategy: "fixed" | "linear" | "exponential";

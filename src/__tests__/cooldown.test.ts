@@ -204,7 +204,7 @@ describe("cooldownFor", () => {
       expect(throttle.getState().cooldownRemaining).toBe(0);
     });
 
-    it("is cleared by abort(), and later requests do nothing", () => {
+    it("is cleared by abort(); later valid requests do nothing and invalid ones still throw", () => {
       const { throttle, add } = queue();
       add(1);
 
@@ -216,6 +216,7 @@ describe("cooldownFor", () => {
       throttle.cooldownFor(500);
       expect(vi.getTimerCount()).toBe(0);
       expect(throttle.getState()).toMatchObject({ cooldownRemaining: 0, cooldowns: 1 });
+      expect(() => throttle.cooldownFor(-1)).toThrow(RangeError);
     });
 
     it("does nothing after terminal failure and leaves no timer", () => {

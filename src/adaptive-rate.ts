@@ -115,6 +115,13 @@ export type AdaptiveRate = {
   stop: () => void;
   /** Stops and discards the observation. Settlements are ignored until `start()` or `stop()`. */
   pause: () => void;
+  /**
+   * Makes no start due and no rate decision until `start()`, while settlements keep counting toward the
+   * next decision. Settled timing closes its collection interval early and decides that window once
+   * `start()` is called and every callback started in it has settled; interval timing begins a fresh
+   * interval on `start()`.
+   */
+  suspend: () => void;
   /** Reports a callback start. Call the returned reporter once when that callback settles. */
   started: () => SettlementReporter;
 };
@@ -124,6 +131,7 @@ type Timing = {
   started: () => SettlementReporter;
   drained: () => void;
   stop: () => void;
+  suspend: () => void;
 };
 
 type TimingContext = {
@@ -188,6 +196,7 @@ function intervalTiming(context: TimingContext): Timing {
     started: () => context.record,
     drained: stop,
     stop,
+    suspend: stop,
   };
 }
 
@@ -198,6 +207,10 @@ function settledTiming(context: TimingContext): Timing {
   let collecting = false;
   let starts = 0;
   let outstanding = 0;
+  /** Collection has ended and the window's decision waits for its outstanding starts to settle. */
+  let closed = false;
+  /** Suspended: a closed window's decision waits for `start()` as well. */
+  let suspended = false;
 
   function open() {
     timer = undefined;
@@ -207,6 +220,7 @@ function settledTiming(context: TimingContext): Timing {
     }
     window++;
     collecting = true;
+    closed = false;
     starts = 0;
     outstanding = 0;
     context.resume();
@@ -221,11 +235,13 @@ function settledTiming(context: TimingContext): Timing {
       return;
     }
     collecting = false;
+    closed = true;
     context.hold();
     if (outstanding === 0) finish();
   }
 
   function finish() {
+    closed = false;
     const current = window;
     const hold = context.decide();
     if (current !== window) return;
@@ -234,7 +250,15 @@ function settledTiming(context: TimingContext): Timing {
   }
 
   return {
-    start: open,
+    start() {
+      suspended = false;
+      if (!closed) {
+        open();
+        return;
+      }
+      context.hold();
+      if (outstanding === 0) finish();
+    },
     started() {
       if (!collecting) return ignoreSettlement;
       const startedIn = window;
@@ -244,7 +268,7 @@ function settledTiming(context: TimingContext): Timing {
         if (startedIn !== window) return;
         context.record(outcome);
         outstanding--;
-        if (!collecting && outstanding === 0) finish();
+        if (closed && !suspended && outstanding === 0) finish();
       };
     },
     drained() {},
@@ -252,7 +276,19 @@ function settledTiming(context: TimingContext): Timing {
       clearTimeout(timer);
       timer = undefined;
       collecting = false;
+      closed = false;
+      suspended = false;
       window++;
+      context.idle();
+    },
+    suspend() {
+      clearTimeout(timer);
+      timer = undefined;
+      if (collecting) {
+        collecting = false;
+        closed = starts > 0;
+      }
+      suspended = true;
       context.idle();
     },
   };
@@ -414,6 +450,10 @@ export function createAdaptiveRate(options: AdaptiveRateOptions, host: AdaptiveR
       timing.stop();
       errorCount = 0;
       ignoringSettlements = true;
+    },
+    suspend() {
+      ignoringSettlements = false;
+      timing.suspend();
     },
     started() {
       if (dispatching && batchStarts++ === 0) lastStart = Date.now();

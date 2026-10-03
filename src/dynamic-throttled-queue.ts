@@ -15,6 +15,8 @@ export type { RetryBackoff, RetryClassifier } from "./retry-policy.ts";
 export type { ExecutionContext, QueueLifecycleState, QueueState, TaskCallback, TaskHandle, ThrottleCallback, ThrottleFn, ThrottleHandle } from "./scheduler.ts";
 
 const adjustmentTimings = new Set<string>([ "interval", "settled" ]);
+/** The longest delay `setTimeout` honors; longer delays fire almost immediately. */
+const maxTimerDelay = 2_147_483_647;
 
 export type ThrottleOptions = {
   min_rpi: number;
@@ -32,6 +34,8 @@ export type ThrottleOptions = {
   concurrency?: number;
   /** Maximum accepted callbacks that have not reached a terminal outcome. Omit for no limit. */
   maxQueueSize?: number;
+  /** Longest cooldown, in ms, that `cooldownFor()` applies; longer requests are clamped. Default and maximum 2147483647. */
+  maxCooldown?: number;
   /** Non-negative integer dead slots before queue compaction triggers. Default 512. */
   compact_threshold?: number;
   /** Policy used to request the next rate and any backoff after each observation window. */
@@ -46,7 +50,7 @@ export type ThrottleOptions = {
 };
 
 export function createThrottledQueue(options: ThrottleOptions): ThrottleHandle {
-  const { min_rpi, interval, max_rpi = min_rpi, concurrency, maxQueueSize, compact_threshold = 512 } = options;
+  const { min_rpi, interval, max_rpi = min_rpi, concurrency, maxQueueSize, compact_threshold = 512, maxCooldown = maxTimerDelay } = options;
 
   const errors_per_interval = options.errors_per_interval ?? 5;
 
@@ -72,6 +76,9 @@ export function createThrottledQueue(options: ThrottleOptions): ThrottleHandle {
   if (!Number.isInteger(compact_threshold) || compact_threshold < 0) {
     throw new Error("compact_threshold must be a non-negative integer");
   }
+  if (!Number.isFinite(maxCooldown) || maxCooldown <= 0 || maxCooldown > maxTimerDelay) {
+    throw new Error(`maxCooldown must be a positive number no greater than ${maxTimerDelay}`);
+  }
   if (options.adjustmentTiming !== undefined && !adjustmentTimings.has(options.adjustmentTiming)) {
     throw new Error("adjustmentTiming must be either interval or settled");
   }
@@ -80,6 +87,7 @@ export function createThrottledQueue(options: ThrottleOptions): ThrottleHandle {
     concurrency: concurrency ?? Infinity,
     capacity: maxQueueSize ?? Infinity,
     compactThreshold: compact_threshold,
+    maxCooldown,
   }, {
     minRate: min_rpi,
     maxRate: max_rpi,

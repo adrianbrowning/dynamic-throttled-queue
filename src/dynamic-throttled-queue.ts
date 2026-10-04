@@ -8,7 +8,7 @@ import type { ThrottleHandle } from "./scheduler.ts";
 // eslint-disable-next-line no-barrel-files/no-barrel-files -- The package entry exposes the rate strategies owned by the adaptive-rate module.
 export { aimd, linear } from "./adaptive-rate.ts";
 // eslint-disable-next-line no-barrel-files/no-barrel-files -- The package entry exposes types owned by the adaptive-rate module.
-export type { AdjustmentTiming, AimdOptions, RateFailureOutcome, RateOutcomeClassifier, RateStrategy, RateStrategyDecision, RateStrategyObservation } from "./adaptive-rate.ts";
+export type { AdjustmentTiming, AimdOptions, FailureOutcome, RateOutcomeClassifier, RateStrategy, RateStrategyDecision, RateStrategyObservation } from "./adaptive-rate.ts";
 // eslint-disable-next-line no-barrel-files/no-barrel-files -- The package entry exposes types owned by the retry policy module.
 export type { RetryBackoff, RetryClassifier } from "./retry-policy.ts";
 // eslint-disable-next-line no-barrel-files/no-barrel-files -- The package entry exposes types owned by the scheduler module.

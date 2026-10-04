@@ -1,0 +1,53 @@
+{
+  "version": 1,
+  "compiledAt": "2026-10-04T00:00:00.000Z",
+  "compiledBy": "claude",
+  "sources": [
+    {
+      "path": "AGENTS.md",
+      "scope": "**/*",
+      "sha": "e18570e66ca2530e36ccd84f217f0e1974ad6990de2f0565fa112911cd278110"
+    }
+  ],
+  "rules": [
+    {
+      "id": "issues-via-gh-cli",
+      "text": "Issues are tracked in GitHub Issues (adrianbrowning/dynamic-throttled-queue) through the `gh` CLI.",
+      "source": {
+        "path": "AGENTS.md",
+        "line": 5
+      },
+      "check": {
+        "type": "unenforceable",
+        "reason": "about how the agent tracks work, not the code"
+      },
+      "status": "active"
+    },
+    {
+      "id": "default-triage-labels",
+      "text": "The five triage roles use their default label names: `needs-triage`, `needs-info`, `ready-for-agent`, `ready-for-human`, `wontfix`.",
+      "source": {
+        "path": "AGENTS.md",
+        "line": 9
+      },
+      "check": {
+        "type": "unenforceable",
+        "reason": "about issue triage process, not the code"
+      },
+      "status": "active"
+    },
+    {
+      "id": "single-context-domain-docs",
+      "text": "Single-context: one `CONTEXT.md` and `docs/adr/` at the repo root.",
+      "source": {
+        "path": "AGENTS.md",
+        "line": 13
+      },
+      "check": {
+        "type": "unenforceable",
+        "reason": "tells agent skills where domain docs live; a process note, not a code rule"
+      },
+      "status": "active"
+    }
+  ]
+}

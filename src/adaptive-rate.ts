@@ -20,12 +20,12 @@ export type AimdOptions = {
   decreaseFactor?: number;
 };
 
-export type RateFailureOutcome =
+export type FailureOutcome =
   | Readonly<{ kind: "returned-false"; }>
   | Readonly<{ kind: "thrown"; error: unknown; }>
   | Readonly<{ kind: "rejected"; error: unknown; }>;
 
-export type RateOutcomeClassifier = (outcome: RateFailureOutcome) => boolean;
+export type RateOutcomeClassifier = (outcome: FailureOutcome) => boolean;
 
 export type AdjustmentTiming = "interval" | "settled";
 
@@ -72,7 +72,7 @@ export function aimd({ increaseBy = 1, decreaseFactor = 0.5 }: AimdOptions = {})
 type Pacing = "idle" | "open" | "held";
 
 /** Reports how one started callback settled: `undefined` for success, otherwise the failure. */
-export type SettlementReporter = (outcome: RateFailureOutcome | undefined) => void;
+export type SettlementReporter = (outcome: FailureOutcome | undefined) => void;
 
 export type AdaptiveRateOptions = {
   minRate: number;
@@ -318,7 +318,7 @@ export function createAdaptiveRate(options: AdaptiveRateOptions, host: AdaptiveR
   let dispatching = false;
   let batchStarts = 0;
 
-  function isRateReducing(outcome: RateFailureOutcome) {
+  function isRateReducing(outcome: FailureOutcome) {
     try {
       return rateOutcomeClassifier?.(outcome) ?? true;
     }

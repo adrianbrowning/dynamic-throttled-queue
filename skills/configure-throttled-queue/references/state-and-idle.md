@@ -10,7 +10,7 @@ Returns a frozen snapshot; mutating it does not affect the queue.
 | Field | Meaning |
 | --- | --- |
 | `rate` | Current starts per interval |
-| `pending` | Queued items plus delayed retries (same as the `pending` property) |
+| `pending` | Queued items plus delayed retries |
 | `active` | Callbacks currently executing |
 | `state` | `"running"`, `"paused"`, `"stopped"`, `"aborted"`, or `"failed"` |
 | `cooldownRemaining` | Ms until the cooldown ends, rounded up; `0` when none |

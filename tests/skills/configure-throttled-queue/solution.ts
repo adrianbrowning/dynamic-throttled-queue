@@ -1,4 +1,4 @@
-import { createThrottledQueue, type RateFailureOutcome } from "../../../src/dynamic-throttled-queue.ts";
+import { createThrottledQueue, type FailureOutcome } from "../../../src/dynamic-throttled-queue.ts";
 
 export type Response = { status: number; body: unknown; };
 export type Request = (signal: AbortSignal) => Promise<Response>;
@@ -9,7 +9,7 @@ class HttpError extends Error {
   }
 }
 
-const isHttpError = (outcome: RateFailureOutcome): outcome is Extract<RateFailureOutcome, { error: unknown; }> & { error: HttpError; } =>
+const isHttpError = (outcome: FailureOutcome): outcome is Extract<FailureOutcome, { error: unknown; }> & { error: HttpError; } =>
   outcome.kind !== "returned-false" && outcome.error instanceof HttpError;
 /** Reference solution following the configure-throttled-queue skill. */
 export function createApiQueue(request: Request, { concurrency = 2 }: { concurrency?: number; } = {}) {

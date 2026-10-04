@@ -85,7 +85,7 @@ skills:
           createThrottledQueue({ min_rpi: 1, max_rpi: 10, interval: 1000, retry: 2, retryClassifier: is429 });
         correct_pattern: |
           createThrottledQueue({ min_rpi: 1, max_rpi: 10, interval: 1000, retry: 2, retryClassifier: is429, rateOutcomeClassifier: is429 });
-        source: README.md Retry classification, Server-directed cooldown
+        source: README.md Failure classification, Server-directed cooldown
         priority: HIGH
         status: active
       - mistake: Leaving cancelled task results unhandled
@@ -107,7 +107,7 @@ skills:
         priority: MEDIUM
         status: active
       - mistake: Expecting maxQueueSize overflow to return a value
-        mechanism: In v2 a full queue throws synchronously from enqueue and submit; v3 will return false.
+        mechanism: A full queue throws synchronously from the queue function and submit().
         wrong_pattern: |
           if (!queue(work)) retryLater();
         correct_pattern: |
@@ -115,7 +115,6 @@ skills:
         source: src/pending-work.ts accept; README.md Usage
         priority: MEDIUM
         status: active
-        version_context: v3 plans to return false instead of throwing.
       - mistake: Returning malformed decisions from a custom rateStrategy
         mechanism: A throw or non-integer nextRate fails the queue permanently.
         wrong_pattern: |
@@ -124,6 +123,15 @@ skills:
           rateStrategy: ({ currentRate }) => ({ nextRate: Math.floor(currentRate * 0.5), shouldBackOff: true })
         source: src/adaptive-rate.ts validated decision; README.md Lifecycle
         priority: MEDIUM
+        status: active
+      - mistake: Starting a promise without returning or awaiting it
+        mechanism: The queue only tracks the returned value, so an unreturned promise cannot fail, retry, hold a concurrency slot, or delay waitForIdle().
+        wrong_pattern: |
+          queue(({ signal }) => { void fetch(url, { signal }); });
+        correct_pattern: |
+          queue(({ signal }) => fetch(url, { signal }));
+        source: README.md Queuing work
+        priority: CRITICAL
         status: active
 
 tensions:
@@ -140,6 +148,6 @@ gaps:
     context: v1 migration is two bullet points in the README; not assessed as an independent task in this batch.
     status: open
   - skill: configure-throttled-queue
-    question: Update guidance when v3 changes maxQueueSize overflow from throwing to returning false.
-    context: The skill documents the v2 throw behavior.
+    question: Should the v2 to v3 migration (pending property removed, RateFailureOutcome renamed to FailureOutcome) get its own skill?
+    context: The README "Migration" section has two bullets each for v1 and v2; not assessed as an independent task.
     status: open

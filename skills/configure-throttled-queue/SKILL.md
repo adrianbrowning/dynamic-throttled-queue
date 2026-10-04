@@ -84,8 +84,8 @@ const queue = createThrottledQueue({
 });
 ```
 
-When `maxQueueSize` is reached, enqueueing **throws synchronously** in v2
-(`Cannot enqueue work: maxQueueSize has been reached`). Capacity covers
+When `maxQueueSize` is reached, `queue(...)` and `submit(...)` **throw
+synchronously** (`Cannot enqueue work: maxQueueSize has been reached`). Capacity covers
 pending, active, and retrying work until each item is terminal.
 
 Check: `getState().active` never exceeds `concurrency`.
@@ -103,7 +103,7 @@ Count only capacity signals with `rateOutcomeClassifier`. It receives
 `{ kind: "rejected", error }` and returns whether the failure reduces the rate:
 
 ```ts
-import { createThrottledQueue, type RateFailureOutcome } from "dynamic-throttled-queue";
+import { createThrottledQueue, type FailureOutcome } from "dynamic-throttled-queue";
 
 class HttpError extends Error {
   constructor(readonly status: number) {
@@ -111,7 +111,7 @@ class HttpError extends Error {
   }
 }
 
-function isCapacitySignal(outcome: RateFailureOutcome): boolean {
+function isCapacitySignal(outcome: FailureOutcome): boolean {
   if (outcome.kind === "returned-false") return false;
   const { error } = outcome;
   return error instanceof HttpError && (error.status === 429 || error.status >= 500);
@@ -276,6 +276,22 @@ Cancellation is cooperative. A callback that ignores `signal` keeps running
 after `abort()` or `cancel()`; only its outcome is discarded. Source: README
 "Lifecycle"; `src/scheduler.ts`.
 
+### CRITICAL: Starting a promise without returning or awaiting it
+
+```ts
+import { createThrottledQueue } from "dynamic-throttled-queue";
+
+const queue = createThrottledQueue({ min_rpi: 5, interval: 1000, concurrency: 2, retry: 2 });
+// Wrong: the queue sees a synchronous success; no retry, no concurrency slot
+queue(({ signal }) => { void fetch("https://api.example.com/data", { signal }); });
+// Right: return (or await) the work
+queue(({ signal }) => fetch("https://api.example.com/data", { signal }));
+```
+
+The queue only tracks what the callback returns. An unreturned promise cannot
+fail, retry, hold a `concurrency` slot, or delay `waitForIdle()`. Source: README
+"Queuing work".
+
 ### HIGH: Using the rate to limit simultaneous requests
 
 `min_rpi: 3` allows 3 starts per interval; slow callbacks pile up without
@@ -284,14 +300,15 @@ bound. Add `concurrency` for an in-flight cap. Source: `ThrottleOptions.concurre
 ### HIGH: Returning `false` from `submit()` to signal failure
 
 In `submit()`, `false` is a successful result: no retry, no rate reduction.
-Throw instead. Fire-and-forget callbacks still treat `false` as failure. Source:
-`TaskCallback` in `src/scheduler.ts`.
+Throw instead. Fire-and-forget callbacks still treat `false` as failure; any
+other returned value is success. Source: `TaskCallback` and `ThrottleCallback`
+in `src/scheduler.ts`.
 
 ### HIGH: Expecting `retryClassifier` or cooldowns to change the rate
 
 Retry eligibility, rate counting (`rateOutcomeClassifier`), and `cooldownFor`
 are three independent decisions. Configure each one you need. Source: README
-"Retry classification" and "Server-directed cooldown".
+"Failure classification" and "Server-directed cooldown".
 
 ### HIGH: Unhandled rejections from cancelled or aborted tasks
 
@@ -305,7 +322,7 @@ are three independent decisions. Configure each one you need. Source: README
 
 ### MEDIUM: Catching the `maxQueueSize` overflow as a return value
 
-In v2, a full queue throws from `queue(...)` and `submit(...)`. Wrap enqueue
+A full queue throws from `queue(...)` and `submit(...)`. Wrap enqueue
 calls in `try`/`catch` when `maxQueueSize` is set.
 
 ## Completion

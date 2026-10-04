@@ -1,5 +1,5 @@
 import { createAdaptiveRate } from "./adaptive-rate.ts";
-import type { AdaptiveRateOptions, RateFailureOutcome, SettlementReporter } from "./adaptive-rate.ts";
+import type { AdaptiveRateOptions, FailureOutcome, SettlementReporter } from "./adaptive-rate.ts";
 import { createPendingWork } from "./pending-work.ts";
 import type { PendingWorkOptions, Retry } from "./pending-work.ts";
 import type { RetryPolicy } from "./retry-policy.ts";
@@ -10,8 +10,8 @@ export type ExecutionContext = Readonly<{
   attempt: number;
 }>;
 
-/** Return `false` to signal failure (increments error count, triggers retry if configured). */
-export type ThrottleCallback = (context: ExecutionContext) => boolean | void | Promise<boolean | void>;
+/** Return `false` to signal failure (counts as an error, retries if configured). Any other value is success. */
+export type ThrottleCallback = (context: ExecutionContext) => unknown;
 
 export type ThrottleFn = (callback: ThrottleCallback) => void;
 
@@ -62,7 +62,6 @@ export type ThrottleHandle = ThrottleFn & {
   cooldownFor: (delay: number) => void;
   waitForIdle: () => Promise<void>;
   getState: () => QueueState;
-  readonly pending: number;
 };
 
 /** The caller-facing side of a submitted item. Present in `tasks` until its result settles. */
@@ -77,7 +76,7 @@ type Task = {
 /** `attempt` is the one-based number of the attempt this item runs next. */
 type QueueItem = { fn: (context: ExecutionContext) => unknown; attempt: number; task?: Task; };
 
-const returnedFalse: RateFailureOutcome = Object.freeze({ kind: "returned-false" });
+const returnedFalse: FailureOutcome = Object.freeze({ kind: "returned-false" });
 
 type Lifecycle =
   | Readonly<{ state: Exclude<QueueLifecycleState, "failed">; }>
@@ -208,7 +207,7 @@ export function createScheduler(options: SchedulerOptions, adaptiveRateOptions: 
     }
   }
 
-  function nextAttempt(item: QueueItem, outcome: RateFailureOutcome | undefined, value: unknown): Retry<QueueItem> | undefined {
+  function nextAttempt(item: QueueItem, outcome: FailureOutcome | undefined, value: unknown): Retry<QueueItem> | undefined {
     const { task } = item;
     if (outcome) {
       const decision = retryPolicy.decide(outcome, item.attempt);
@@ -227,7 +226,7 @@ export function createScheduler(options: SchedulerOptions, adaptiveRateOptions: 
     return undefined;
   }
 
-  function handleSettlement(item: QueueItem, outcome: RateFailureOutcome | undefined, value: unknown, reportSettlement: SettlementReporter, resume = false) {
+  function handleSettlement(item: QueueItem, outcome: FailureOutcome | undefined, value: unknown, reportSettlement: SettlementReporter, resume = false) {
     if (lifecycle.state === "aborted" || lifecycle.state === "failed") {
       work.settle();
       return;
@@ -249,7 +248,7 @@ export function createScheduler(options: SchedulerOptions, adaptiveRateOptions: 
   }
 
   /** Only fire-and-forget callbacks report failure by returning `false`. */
-  function returnedOutcome(item: QueueItem, value: unknown): RateFailureOutcome | undefined {
+  function returnedOutcome(item: QueueItem, value: unknown): FailureOutcome | undefined {
     return value === false && item.task === undefined ? returnedFalse : undefined;
   }
 
@@ -359,6 +358,5 @@ export function createScheduler(options: SchedulerOptions, adaptiveRateOptions: 
     cooldowns: cnt_cooldowns,
     cooldownTotal,
   });
-  Object.defineProperty(enqueue, "pending", { get: () => work.pending });
-  return enqueue as ThrottleHandle;
+  return enqueue;
 }

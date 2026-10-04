@@ -204,7 +204,7 @@ describe("createThrottledQueue", () => {
       vi.advanceTimersByTime(1000);
 
       expect(seen).toEqual([{ active: 0, admitted: false }]);
-      expect(throttle.pending).toBe(1);
+      expect(throttle.getState().pending).toBe(1);
     });
 
     it.each([ "pause", "stop" ] as const)("retains reservations while the queue is $state", state => {
@@ -221,7 +221,7 @@ describe("createThrottledQueue", () => {
 
       for (let i = 0; i < 100; i++) throttle(() => {});
 
-      expect(throttle.pending).toBe(100);
+      expect(throttle.getState().pending).toBe(100);
     });
   });
 
@@ -801,7 +801,7 @@ describe("createThrottledQueue", () => {
       throttle(() => false);
       vi.advanceTimersByTime(1000);
 
-      expect(throttle.pending).toBe(1);
+      expect(throttle.getState().pending).toBe(1);
     });
 
     it("freezes a delayed retry's remaining delay while paused", () => {
@@ -861,7 +861,7 @@ describe("createThrottledQueue", () => {
       throttle.abort();
       vi.advanceTimersByTime(10_000);
 
-      expect(throttle.pending).toBe(0);
+      expect(throttle.getState().pending).toBe(0);
       expect(attempts).toBe(1);
       expect(vi.getTimerCount()).toBe(0);
     });
@@ -1102,7 +1102,7 @@ describe("createThrottledQueue", () => {
       await vi.advanceTimersByTimeAsync(0);
 
       expect(started).toBe(1);
-      expect(throttle.pending).toBe(outcome === "success" ? 1 : 2);
+      expect(throttle.getState().pending).toBe(outcome === "success" ? 1 : 2);
       expect(vi.getTimerCount()).toBe(0);
     });
 
@@ -1136,20 +1136,20 @@ describe("createThrottledQueue", () => {
         evenly_spaced: false,
       });
 
-      expect(throttle.pending).toBe(0);
+      expect(throttle.getState().pending).toBe(0);
 
       for (let i = 0; i < 5; i++) {
         throttle(() => {});
       }
 
-      expect(throttle.pending).toBe(5);
+      expect(throttle.getState().pending).toBe(5);
     });
 
     it("pending reflects count after partial processing", () => {
       const throttle = createThrottledQueue({ min_rpi: 2, interval: 1000, evenly_spaced: false });
       for (let i = 0; i < 5; i++) throttle(() => {});
       vi.advanceTimersByTime(1000);
-      expect(throttle.pending).toBe(3);
+      expect(throttle.getState().pending).toBe(3);
     });
 
     it("pending decreases as items are processed", () => {
@@ -1163,19 +1163,19 @@ describe("createThrottledQueue", () => {
         throttle(() => {});
       }
 
-      expect(throttle.pending).toBe(10);
+      expect(throttle.getState().pending).toBe(10);
 
       vi.advanceTimersByTime(1000);
-      expect(throttle.pending).toBe(7);
+      expect(throttle.getState().pending).toBe(7);
 
       vi.advanceTimersByTime(1000);
-      expect(throttle.pending).toBe(4);
+      expect(throttle.getState().pending).toBe(4);
 
       vi.advanceTimersByTime(1000);
-      expect(throttle.pending).toBe(1);
+      expect(throttle.getState().pending).toBe(1);
 
       vi.advanceTimersByTime(1000);
-      expect(throttle.pending).toBe(0);
+      expect(throttle.getState().pending).toBe(0);
     });
 
     it("enqueue after stop() resumes processing with old + new items", () => {
@@ -1331,7 +1331,7 @@ describe("createThrottledQueue", () => {
       throttle.abort();
       throttle.abort();
 
-      expect(throttle.pending).toBe(0);
+      expect(throttle.getState().pending).toBe(0);
       expect(vi.getTimerCount()).toBe(0);
       expect(() => throttle(() => { started++; })).toThrow("aborted");
 
@@ -1360,7 +1360,7 @@ describe("createThrottledQueue", () => {
       settle(false);
       await vi.advanceTimersByTimeAsync(10_000);
 
-      expect(throttle.pending).toBe(0);
+      expect(throttle.getState().pending).toBe(0);
       expect(vi.getTimerCount()).toBe(0);
       expect(rates).toEqual([]);
     });
@@ -1398,13 +1398,13 @@ describe("createThrottledQueue", () => {
       vi.advanceTimersByTime(10_000);
 
       expect(started).toEqual([]);
-      expect(throttle.pending).toBe(3);
+      expect(throttle.getState().pending).toBe(3);
 
       throttle.resume();
       vi.advanceTimersByTime(1000);
 
       expect(started).toEqual([ "first" ]);
-      expect(throttle.pending).toBe(2);
+      expect(throttle.getState().pending).toBe(2);
     });
 
     it("is idempotent when pause and resume are repeated", () => {
@@ -1441,7 +1441,7 @@ describe("createThrottledQueue", () => {
       await vi.advanceTimersByTimeAsync(10_000);
 
       expect(attempts).toBe(1);
-      expect(throttle.pending).toBe(1);
+      expect(throttle.getState().pending).toBe(1);
 
       throttle.resume();
       await vi.advanceTimersByTimeAsync(1000);
@@ -1461,7 +1461,7 @@ describe("createThrottledQueue", () => {
       vi.advanceTimersByTime(10_000);
 
       expect(started).toEqual([]);
-      expect(throttle.pending).toBe(1);
+      expect(throttle.getState().pending).toBe(1);
 
       throttle(() => { started.push("new"); });
       vi.advanceTimersByTime(2000);

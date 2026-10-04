@@ -1,8 +1,8 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { aimd, createAdaptiveRate } from "../adaptive-rate.ts";
-import type { AdaptiveRate, AdaptiveRateOptions, RateFailureOutcome, RateStrategy, SettlementReporter } from "../adaptive-rate.ts";
+import type { AdaptiveRate, AdaptiveRateOptions, FailureOutcome, RateStrategy, SettlementReporter } from "../adaptive-rate.ts";
 
-const returnedFalse: RateFailureOutcome = { kind: "returned-false" };
+const returnedFalse: FailureOutcome = { kind: "returned-false" };
 
 beforeEach(() => {
   vi.useFakeTimers();
@@ -61,7 +61,7 @@ function observe(options: Partial<AdaptiveRateOptions> = {}, { queued = Infinity
   return { adaptive, work, due, reporters, failures };
 }
 
-function settleStarts(adaptive: AdaptiveRate, count: number, outcome?: RateFailureOutcome) {
+function settleStarts(adaptive: AdaptiveRate, count: number, outcome?: FailureOutcome) {
   for (let i = 0; i < count; i++) adaptive.started()(outcome);
 }
 

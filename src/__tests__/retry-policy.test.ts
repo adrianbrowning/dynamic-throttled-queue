@@ -1,9 +1,9 @@
 import { describe, expect, it } from "vitest";
-import type { RateFailureOutcome } from "../adaptive-rate.ts";
+import type { FailureOutcome } from "../adaptive-rate.ts";
 import { createRetryPolicy } from "../retry-policy.ts";
 import type { RetryBackoff } from "../retry-policy.ts";
 
-const returnedFalse: RateFailureOutcome = { kind: "returned-false" };
+const returnedFalse: FailureOutcome = { kind: "returned-false" };
 
 function delays(retryBackoff: RetryBackoff, attempts: Array<number>) {
   const policy = createRetryPolicy({ retry: Math.max(...attempts), retryBackoff });
@@ -62,7 +62,7 @@ describe("retry budget", () => {
 describe("retry classifier", () => {
   it("receives the normalized outcome and one-based attempt number", () => {
     const calls: Array<unknown> = [];
-    const rejected: RateFailureOutcome = { kind: "rejected", error: new Error("rejected") };
+    const rejected: FailureOutcome = { kind: "rejected", error: new Error("rejected") };
     const policy = createRetryPolicy({
       retry: 2,
       retryClassifier: (outcome, attempt) => {

@@ -1,4 +1,4 @@
-import type { RateFailureOutcome } from "./adaptive-rate.ts";
+import type { FailureOutcome } from "./adaptive-rate.ts";
 
 export type RetryBackoff = {
   strategy: "fixed" | "linear" | "exponential";
@@ -8,7 +8,7 @@ export type RetryBackoff = {
   random?: () => number;
 };
 
-export type RetryClassifier = (outcome: RateFailureOutcome, attempt: number) => boolean;
+export type RetryClassifier = (outcome: FailureOutcome, attempt: number) => boolean;
 
 export type RetryPolicyOptions = {
   retry?: number;
@@ -21,7 +21,7 @@ type RetryDecision = Readonly<{ delay?: number; }>;
 
 export type RetryPolicy = {
   /** Decides whether failed attempt `attempt` (one-based) gets another attempt. `undefined` drops it. */
-  decide: (outcome: RateFailureOutcome, attempt: number) => RetryDecision | undefined;
+  decide: (outcome: FailureOutcome, attempt: number) => RetryDecision | undefined;
 };
 
 const strategies: Readonly<Record<RetryBackoff["strategy"], true>> = { fixed: true, linear: true, exponential: true };
@@ -76,7 +76,7 @@ function calculateRetryDelay(policy: RetryBackoff, retryIndex: number): number {
 export function createRetryPolicy({ retry = 0, retryBackoff, retryClassifier }: RetryPolicyOptions): RetryPolicy {
   validate(retry, retryBackoff);
 
-  function isRetryable(outcome: RateFailureOutcome, attempt: number) {
+  function isRetryable(outcome: FailureOutcome, attempt: number) {
     if (!retryClassifier) return true;
     try {
       return retryClassifier(outcome, attempt) === true;

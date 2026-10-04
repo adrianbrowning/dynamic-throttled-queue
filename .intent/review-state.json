@@ -1,0 +1,73 @@
+{
+  "schemaVersion": 1,
+  "baseline": "1d8b56f9ec79723193b0f686a5997445b10e3df0",
+  "items": {
+    "skill:skills/configure-throttled-queue/SKILL.md": {
+      "fingerprint": "b3c97ac2a28352dca79b09a0c2eac14ecd5436b550e7e2fb62f6ec4eeb2b93fc",
+      "snapshot": {
+        "README.md": "9c3fba400e7bd5d6f87ee08ee773e12969b472c610af8fe4f67397da2c72d1fa",
+        "skills/configure-throttled-queue/SKILL.md": "6c7c631e4b19c519e722b713227f7ddc54781fd96652cc0ca3b3f288ed963b15",
+        "skills/configure-throttled-queue/references/lifecycle.md": "50414cc38fc0bcea2fb8e12414f28b6878e66af373163e36848dd3896ed94620",
+        "skills/configure-throttled-queue/references/rate-strategies.md": "4db8039a6feaa17795252f5ca128bc011a0758c75180eb8143e357bb1a6229c0",
+        "skills/configure-throttled-queue/references/retries.md": "06cabadcb4baafd78c8cf43affdbe860643e0782acaeea473a9c98340cbc14a8",
+        "skills/configure-throttled-queue/references/state-and-idle.md": "d154f0607b58e3513887f175370eeeab58d21f21168cc2bdfcc4654f6f416303",
+        "src/__tests__/adaptive-rate.test.ts": "6be265dca5b534ed8a63a707b50b9a35bfc0f1013c79251d23712dd0e732787d",
+        "src/__tests__/cooldown.test.ts": "3af1ca78f71d8d66e002801f98ebdc94f158cc884037b104418c2790ea2d6cef",
+        "src/__tests__/dynamic-throttled-queue.test.ts": "c9d21eb470784495a22da6917cd2dbb0fd474f181f7edbe06c386698ecdfc627",
+        "src/__tests__/pending-work.test.ts": "a67e5612371f45b2e5743a8048d8d2ea67fb7fa9b13a81fb0df3d62591b0f6a5",
+        "src/__tests__/rate-strategies.test.ts": "a92e69707e2988d0826b9cb5b7389054bc1c05be218e92b3b39963349e011065",
+        "src/__tests__/retry-policy.test.ts": "e939ce820ebf47a3bfb3fc2f526216a6a070e35fbd7c047340f679ad10e1a3fc",
+        "src/__tests__/task-handles.test.ts": "f4e2bd4dbc492999e6442fe104eadb5c613ea9e91382393db38bccd55440624f",
+        "src/adaptive-rate.ts": "dba065b8c2bfdcc053a34c26fc15adaa8914b4abc24d50188289ed9481148464",
+        "src/dynamic-throttled-queue.ts": "e16f15b3b7d0d5875c98f3243d68235946783b454b62d592e70eb06d25c036eb",
+        "src/pending-work.ts": "08e88eea6008d870c4da47c39d50290c9adb5e594b18bbb98bbde6e909af582a",
+        "src/retry-policy.ts": "9776bab38d318c6fa84598dbde03ce4d3007158edaa3ec8b6721214d7f314861",
+        "src/scheduler.ts": "c32888bc0db54bf1d18d3667383cd9f38783c39ae3b17ad383a0b5570fa38abc",
+        "tests/skills/configure-throttled-queue/check.test.ts": "ac8a8c291b6b10e9f85831c4d65a23603a745ad213872ace2f5dbe28f2d434ec",
+        "tests/skills/configure-throttled-queue/solution.ts": "887c3c5c4a041e57ab9f3cd67fd3064f2813c7a0efddb49d119901cf7f6dba09",
+        "tests/skills/configure-throttled-queue/task.md": "5537a9c2c3bd4a0e3ccbb169f5e414a36716f3393d18a24a44a7f8ac39ad3299"
+      },
+      "head": "1d8b56f9ec79723193b0f686a5997445b10e3df0",
+      "outcome": "updated",
+      "reason": "Initial authoring of configure-throttled-queue and its four references against current source: configuration, concurrency, adaptive outcomes, strategies, retries, cooldowns, task handles, lifecycle, and state.",
+      "evidence": [
+        "Sources at 339074d (v2.2.0): src/*.ts, src/__tests__/*.test.ts, README.md. intent validate passed; 10/10 TS examples in SKILL.md and references type-check under --strict against the built package; tests/skills/configure-throttled-queue/check.test.ts accepts the reference solution and rejects the no-concurrency mistake; one fresh-consumer run (npm install --ignore-scripts of the packed tarball) discovered and loaded the skill, and its solution passed the same behavioral assertions."
+      ]
+    },
+    "planning:skills/_artifacts": {
+      "fingerprint": "a6111fc09dca6059603e28d30bdbe5933bc968d790b9c12afeaed6208a6eb3b9",
+      "snapshot": {
+        "README.md": "9c3fba400e7bd5d6f87ee08ee773e12969b472c610af8fe4f67397da2c72d1fa",
+        "skills/_artifacts/domain_map.yaml": "edc58f21dcfc489b63b23b54b9b91c0ec6e8c2bb28d0caaed0bbc78342c91ae8",
+        "skills/_artifacts/skill_spec.md": "19323b5f1ce92ac0afe5a4e7040a45ec4038adbead6a234e77805993561fb079",
+        "skills/_artifacts/skill_tree.yaml": "274d51cc842da5ebb10937e570dc8be9d86de8fc8e266aad2e231c0839d7606c",
+        "skills/configure-throttled-queue/SKILL.md": "6c7c631e4b19c519e722b713227f7ddc54781fd96652cc0ca3b3f288ed963b15",
+        "skills/configure-throttled-queue/references/lifecycle.md": "50414cc38fc0bcea2fb8e12414f28b6878e66af373163e36848dd3896ed94620",
+        "skills/configure-throttled-queue/references/rate-strategies.md": "4db8039a6feaa17795252f5ca128bc011a0758c75180eb8143e357bb1a6229c0",
+        "skills/configure-throttled-queue/references/retries.md": "06cabadcb4baafd78c8cf43affdbe860643e0782acaeea473a9c98340cbc14a8",
+        "skills/configure-throttled-queue/references/state-and-idle.md": "d154f0607b58e3513887f175370eeeab58d21f21168cc2bdfcc4654f6f416303",
+        "src/__tests__/adaptive-rate.test.ts": "6be265dca5b534ed8a63a707b50b9a35bfc0f1013c79251d23712dd0e732787d",
+        "src/__tests__/cooldown.test.ts": "3af1ca78f71d8d66e002801f98ebdc94f158cc884037b104418c2790ea2d6cef",
+        "src/__tests__/dynamic-throttled-queue.test.ts": "c9d21eb470784495a22da6917cd2dbb0fd474f181f7edbe06c386698ecdfc627",
+        "src/__tests__/pending-work.test.ts": "a67e5612371f45b2e5743a8048d8d2ea67fb7fa9b13a81fb0df3d62591b0f6a5",
+        "src/__tests__/rate-strategies.test.ts": "a92e69707e2988d0826b9cb5b7389054bc1c05be218e92b3b39963349e011065",
+        "src/__tests__/retry-policy.test.ts": "e939ce820ebf47a3bfb3fc2f526216a6a070e35fbd7c047340f679ad10e1a3fc",
+        "src/__tests__/task-handles.test.ts": "f4e2bd4dbc492999e6442fe104eadb5c613ea9e91382393db38bccd55440624f",
+        "src/adaptive-rate.ts": "dba065b8c2bfdcc053a34c26fc15adaa8914b4abc24d50188289ed9481148464",
+        "src/dynamic-throttled-queue.ts": "e16f15b3b7d0d5875c98f3243d68235946783b454b62d592e70eb06d25c036eb",
+        "src/pending-work.ts": "08e88eea6008d870c4da47c39d50290c9adb5e594b18bbb98bbde6e909af582a",
+        "src/retry-policy.ts": "9776bab38d318c6fa84598dbde03ce4d3007158edaa3ec8b6721214d7f314861",
+        "src/scheduler.ts": "c32888bc0db54bf1d18d3667383cd9f38783c39ae3b17ad383a0b5570fa38abc",
+        "tests/skills/configure-throttled-queue/check.test.ts": "ac8a8c291b6b10e9f85831c4d65a23603a745ad213872ace2f5dbe28f2d434ec",
+        "tests/skills/configure-throttled-queue/solution.ts": "887c3c5c4a041e57ab9f3cd67fd3064f2813c7a0efddb49d119901cf7f6dba09",
+        "tests/skills/configure-throttled-queue/task.md": "5537a9c2c3bd4a0e3ccbb169f5e414a36716f3393d18a24a44a7f8ac39ad3299"
+      },
+      "head": "1d8b56f9ec79723193b0f686a5997445b10e3df0",
+      "outcome": "updated",
+      "reason": "Created domain_map, skill_spec, and skill_tree for batch 1 with tasks, eight failure modes, decisions (one skill, package-only, review ignores), and open gaps.",
+      "evidence": [
+        "Sources at 339074d (v2.2.0): src/*.ts, src/__tests__/*.test.ts, README.md. intent validate passed; 10/10 TS examples in SKILL.md and references type-check under --strict against the built package; tests/skills/configure-throttled-queue/check.test.ts accepts the reference solution and rejects the no-concurrency mistake; one fresh-consumer run (npm install --ignore-scripts of the packed tarball) discovered and loaded the skill, and its solution passed the same behavioral assertions."
+      ]
+    }
+  }
+}

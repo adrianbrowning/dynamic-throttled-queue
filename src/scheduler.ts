@@ -44,6 +44,12 @@ export type QueueState = Readonly<{
   canceled: number;
   rateIncreases: number;
   rateDecreases: number;
+  /** Milliseconds, rounded up, until a server-directed cooldown ends; `0` when none is active. */
+  cooldownRemaining: number;
+  /** `cooldownFor()` calls that moved the cooldown deadline later. */
+  cooldowns: number;
+  /** Total milliseconds those calls added to the cooldown deadline. */
+  cooldownTotal: number;
 }>;
 
 export type ThrottleHandle = ThrottleFn & {
@@ -52,6 +58,8 @@ export type ThrottleHandle = ThrottleFn & {
   resume: () => void;
   stop: () => void;
   abort: () => void;
+  /** Starts nothing new for `delay` ms (capped at `maxCooldown`); never shortens an active cooldown. */
+  cooldownFor: (delay: number) => void;
   waitForIdle: () => Promise<void>;
   getState: () => QueueState;
   readonly pending: number;
@@ -88,16 +96,24 @@ const lifecycleTransitions: Readonly<Record<QueueLifecycleState, Partial<Readonl
 export type SchedulerOptions = PendingWorkOptions & {
   /** Most callbacks awaiting asynchronous settlement at once. */
   concurrency: number;
+  /** Longest cooldown, in ms, that `cooldownFor()` applies; longer requests are clamped to it. */
+  maxCooldown: number;
 };
 
 export function createScheduler(options: SchedulerOptions, adaptiveRateOptions: AdaptiveRateOptions, retryPolicy: RetryPolicy): ThrottleHandle {
-  const { concurrency, ...pendingWorkOptions } = options;
+  const { concurrency, maxCooldown, ...pendingWorkOptions } = options;
   let lifecycle: Lifecycle = { state: "running" };
   let cnt_started = 0;
   let cnt_succeeded = 0;
   let cnt_failed = 0;
   let cnt_retried = 0;
   let cnt_canceled = 0;
+  let cnt_cooldowns = 0;
+  let cooldownTotal = 0;
+  /** Monotonic (`performance.now()`) time before which nothing starts; `undefined` when no cooldown is active. */
+  let cooldownDeadline: number | undefined;
+  /** Fires at the deadline. Cleared while stopped, which keeps the deadline for the restart. */
+  let cooldownTimer: ReturnType<typeof setTimeout> | undefined;
   const abortController = new AbortController();
   /** Submitted items whose result has not settled. */
   const tasks = new Set<Task>();
@@ -106,7 +122,7 @@ export function createScheduler(options: SchedulerOptions, adaptiveRateOptions: 
     hasPendingWork: () => work.queued > 0,
     startsDue(limit) {
       const batch = Math.min(limit, work.queued);
-      for (let started = 0; started < batch && work.active < concurrency; started++) {
+      for (let started = 0; started < batch && work.active < concurrency && cooldownDeadline === undefined; started++) {
         const item = work.take();
         if (item === undefined) break;
         execute(item);
@@ -126,27 +142,59 @@ export function createScheduler(options: SchedulerOptions, adaptiveRateOptions: 
     switch (next) {
       case "running":
         work.thaw();
-        adaptiveRate.start();
+        if (cooldownDeadline === undefined) {
+          adaptiveRate.start();
+          return;
+        }
+        armCooldown(cooldownDeadline);
+        adaptiveRate.suspend();
         return;
       case "paused":
+        // A cooldown keeps elapsing while paused: its deadline is the server's, not the queue's.
         work.freeze();
         adaptiveRate.pause();
         return;
       case "stopped":
+        clearTimeout(cooldownTimer);
+        cooldownTimer = undefined;
         work.freeze();
         adaptiveRate.stop();
         return;
       case "aborted":
+        clearCooldown();
         adaptiveRate.stop();
         work.discard();
         abortController.abort();
         rejectTasks(abortController.signal.reason);
         return;
       case "failed":
+        clearCooldown();
         adaptiveRate.stop();
         work.fail(error);
         rejectTasks(error);
     }
+  }
+
+  function armCooldown(deadline: number) {
+    clearTimeout(cooldownTimer);
+    cooldownTimer = setTimeout(expireCooldown, Math.max(0, deadline - performance.now()));
+  }
+
+  function expireCooldown() {
+    // A timer can fire slightly before the monotonic deadline; wait out the remainder.
+    if (cooldownDeadline !== undefined && performance.now() < cooldownDeadline) {
+      armCooldown(cooldownDeadline);
+      return;
+    }
+    cooldownTimer = undefined;
+    cooldownDeadline = undefined;
+    start();
+  }
+
+  function clearCooldown() {
+    clearTimeout(cooldownTimer);
+    cooldownTimer = undefined;
+    cooldownDeadline = undefined;
   }
 
   /** Rejects every unsettled submitted item with `reason` and aborts its signal. */
@@ -229,7 +277,7 @@ export function createScheduler(options: SchedulerOptions, adaptiveRateOptions: 
   }
 
   function start() {
-    if (lifecycle.state === "running") adaptiveRate.start();
+    if (lifecycle.state === "running" && cooldownDeadline === undefined) adaptiveRate.start();
   }
 
   /** Admits `item` or throws: the queue is terminal or every capacity reservation is taken. */
@@ -273,6 +321,24 @@ export function createScheduler(options: SchedulerOptions, adaptiveRateOptions: 
   enqueue.resume = () => transition("resume");
   enqueue.stop = () => transition("stop");
   enqueue.abort = () => transition("abort");
+  enqueue.cooldownFor = (delay: number) => {
+    if (!Number.isFinite(delay) || delay < 0) throw new RangeError("cooldownFor delay must be a finite non-negative number");
+    if (lifecycle.state === "aborted" || lifecycle.state === "failed") return;
+    const now = performance.now();
+    const latest = Math.max(now, cooldownDeadline ?? now);
+    const deadline = now + Math.min(delay, maxCooldown);
+    // Hints are absolute ("not before now + delay"), so overlapping ones keep the later deadline, never add up.
+    if (deadline <= latest) return;
+    const beginning = cooldownDeadline === undefined;
+    cnt_cooldowns++;
+    cooldownTotal += deadline - latest;
+    cooldownDeadline = deadline;
+    // Stopped: the restart arms the timer for whatever remains.
+    if (lifecycle.state === "stopped") return;
+    armCooldown(deadline);
+    // Paused: adaptive rate is already stopped; `resume()` suspends it instead of starting it.
+    if (beginning && lifecycle.state === "running") adaptiveRate.suspend();
+  };
   enqueue.waitForIdle = async () => {
     if (lifecycle.state === "failed") throw lifecycle.error;
     return work.whenIdle();
@@ -289,6 +355,9 @@ export function createScheduler(options: SchedulerOptions, adaptiveRateOptions: 
     canceled: cnt_canceled,
     rateIncreases: adaptiveRate.rateIncreases,
     rateDecreases: adaptiveRate.rateDecreases,
+    cooldownRemaining: cooldownDeadline === undefined ? 0 : Math.max(0, Math.ceil(cooldownDeadline - performance.now())),
+    cooldowns: cnt_cooldowns,
+    cooldownTotal,
   });
   Object.defineProperty(enqueue, "pending", { get: () => work.pending });
   return enqueue as ThrottleHandle;

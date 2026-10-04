@@ -17,6 +17,9 @@ importers:
       '@gingacodemonkey/config':
         specifier: ^0.0.38
         version: 0.0.38(@commitlint/cli@21.2.3(@types/node@24.13.3)(conventional-commits-parser@7.1.2)(typescript@6.0.3))(@commitlint/config-conventional@20.0.0)(@typescript-eslint/eslint-plugin@8.71.0(@typescript-eslint/parser@8.71.0(eslint@9.39.5(jiti@2.7.0))(typescript@6.0.3))(eslint@9.39.5(jiti@2.7.0))(typescript@6.0.3))(eslint@9.39.5(jiti@2.7.0))(husky@9.1.7)(jscpd@4.3.0)(knip@5.70.1(@types/node@24.13.3)(typescript@6.0.3))(lint-staged@17.6.0)(typescript@6.0.3)(vitest@5.0.2(@types/node@24.13.3)(vite@7.3.6(@types/node@24.13.3)(jiti@2.7.0)(yaml@2.9.1)))
+      '@tanstack/intent':
+        specifier: 0.5.0
+        version: 0.5.0
       '@types/node':
         specifier: ^24.13.3
         version: 24.13.3
@@ -938,6 +941,11 @@ packages:
     engines: {node: ^18.18.0 || ^20.9.0 || >=21.1.0}
     peerDependencies:
       eslint: ^9.0.0 || ^10.0.0
+
+  '@tanstack/intent@0.5.0':
+    resolution: {integrity: sha512-27zOOpQLfBTM5cQjqkASf6JH3jggMwr29UhK8dlAI1WP9rjzywJ87/I6meiH/khyPIFNRluh9Q8wlIVrpN4Jpg==}
+    engines: {node: '>=20.12.0'}
+    hasBin: true
 
   '@total-typescript/ts-reset@0.6.1':
     resolution: {integrity: sha512-cka47fVSo6lfQDIATYqb/vO1nvFfbPw7uWLayIXIhGETj0wcOOlrlkobOMDNQOFr9QOafegUPq13V2+6vtD7yg==}
@@ -4028,6 +4036,8 @@ snapshots:
       espree: 10.4.0
       estraverse: 5.3.0
       picomatch: 4.0.7
+
+  '@tanstack/intent@0.5.0': {}
 
   '@total-typescript/ts-reset@0.6.1': {}
 

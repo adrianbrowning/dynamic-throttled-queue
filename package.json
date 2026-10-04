@@ -4,7 +4,8 @@
   "type": "module",
   "description": "Dynamically throttles arbitrary code to execute between a minimum and maximum number of times per interval. Best for making throttled API requests.",
   "files": [
-    "dist"
+    "dist",
+    "skills/configure-throttled-queue"
   ],
   "zshy": {
     "exports": {
@@ -27,7 +28,8 @@
     "lint:e18e": "pnpm dlx @e18e/cli analyze",
     "preinstall": "only-allow pnpm",
     "bump": "bumpy add",
-    "bump:status": "bumpy status"
+    "bump:status": "bumpy status",
+    "skills:check": "intent maintainer check"
   },
   "repository": {
     "type": "git",
@@ -39,7 +41,8 @@
     "queue",
     "throttle",
     "throttled",
-    "request"
+    "request",
+    "tanstack-intent"
   ],
   "author": "Adrian Elton-Browning <gingacodemonkey@gmail.com>",
   "license": "MIT",
@@ -50,6 +53,7 @@
     "@commitlint/cli": "21.2.3",
     "@commitlint/config-conventional": "20.0.0",
     "@gingacodemonkey/config": "^0.0.38",
+    "@tanstack/intent": "0.5.0",
     "@types/node": "^24.13.3",
     "@varlock/bumpy": "^1.18.1",
     "eslint": "^9.39.5",

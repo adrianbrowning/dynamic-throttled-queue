@@ -283,7 +283,7 @@ import { createThrottledQueue } from "dynamic-throttled-queue";
 
 const queue = createThrottledQueue({ min_rpi: 5, interval: 1000, concurrency: 2, retry: 2 });
 // Wrong: the queue sees a synchronous success; no retry, no concurrency slot
-queue(({ signal }) => { void fetch("https://api.example.com/data", { signal }); });
+queue(({ signal }) => { void fetch("https://api.example.com/data", { signal }).catch(() => {}); });
 // Right: return (or await) the work
 queue(({ signal }) => fetch("https://api.example.com/data", { signal }));
 ```

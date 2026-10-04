@@ -8,8 +8,11 @@ decisions land in the wrong interval.
 
 | Strategy | Threshold reached | Clean interval with pending work | Otherwise |
 | --- | --- | --- | --- |
-| `linear` (default) | `currentRate - 1`, back off | `currentRate + 1` | hold |
-| `aimd({ increaseBy = 1, decreaseFactor = 0.5 })` | `Math.floor(currentRate * decreaseFactor)`, back off | `currentRate + increaseBy` | hold |
+| `linear` (default) | `currentRate - 1`, request backoff | `currentRate + 1` | hold |
+| `aimd({ increaseBy = 1, decreaseFactor = 0.5 })` | `Math.floor(currentRate * decreaseFactor)`, request backoff | `currentRate + increaseBy` | hold |
+
+A backoff request (`shouldBackOff: true`) skips an interval only when the queue
+has `back_off: true`.
 
 "Clean" means zero counted errors and the previous window was not a backoff.
 Partial-error, empty, and immediately-post-backoff windows hold the rate. The

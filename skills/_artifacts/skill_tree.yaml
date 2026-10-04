@@ -11,6 +11,7 @@ review:
     - ".github/**"
     - ".husky/**"
     - ".idea/**"
+    - ".abide/**"
     - "docs/agents/**"
     - ".gitignore"
     - ".npmignore"

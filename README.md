@@ -44,7 +44,7 @@ throttle(async ({ signal }) => {
 
 Both forms retry, count toward the adaptive rate, and respect `concurrency` and `maxQueueSize` the same way. Use `submit()` when you need a value back or need to know that an item finally failed.
 
-Return the promise from async work. The queue only sees what the callback returns: a promise it never sees cannot fail, retry, hold a `concurrency` slot, or delay `waitForIdle()`.
+Return or await async work. The queue only sees what the callback returns: an `async` callback is tracked until it settles, but a promise the callback starts and neither awaits nor returns cannot fail, retry, hold a `concurrency` slot, or delay `waitForIdle()`.
 
 Each callback receives an `ExecutionContext` with an `AbortSignal` and the one-based `attempt` number (retries count up from 1). Zero-argument callbacks work too. Pass the signal to cancellable APIs such as `fetch` so that `abort()` and `cancel()` can stop in-flight work.
 
@@ -161,7 +161,7 @@ Without `retryBackoff`, retries rejoin the queue immediately.
 
 ### Choose which failures retry or slow the queue
 
-`retryClassifier` decides whether a failure is retried; `rateOutcomeClassifier` decides whether it reduces the adaptive rate. Each receives a `FailureOutcome`: `{ kind: "returned-false" }`, `{ kind: "thrown", error }` or `{ kind: "rejected", error }`. A failure can be retryable, rate-reducing, both, or neither.
+`retryClassifier` decides whether a failure is retried; `rateOutcomeClassifier` decides whether it reduces the adaptive rate. Each receives a `FailureOutcome`: `{ kind: "thrown", error }`, `{ kind: "rejected", error }`, or, for fire-and-forget callbacks only, `{ kind: "returned-false" }`. A failure can be retryable, rate-reducing, both, or neither.
 
 ```ts
 import { createThrottledQueue, type FailureOutcome } from "dynamic-throttled-queue";
@@ -431,7 +431,7 @@ Strategies must return a finite integer `nextRate` and a boolean `shouldBackOff`
 
 `rateOutcomeClassifier` receives only failed callback outcomes and returns whether each one should reduce the adaptive rate. It does not change retry eligibility. Omitting it preserves the default behavior: every failure reduces the adaptive rate. If the classifier throws, the original failure safely counts as rate-reducing and no separate classifier error is surfaced.
 
-`retryClassifier` receives the same `FailureOutcome` and a one-based attempt number, including the initial callback start. It must return literal `true` for the failure to be retried; any other value makes it permanent. The configured `retry` value remains the hard cap on additional attempts, so the classifier is not called after that budget is exhausted. If it throws, the queue retries subject to the remaining budget.
+`retryClassifier` receives the same `FailureOutcome` and a one-based attempt number, including the initial callback start. Submitted items never produce `returned-false`, because `false` is a normal `submit()` result. The classifier must return literal `true` for the failure to be retried; any other value makes it permanent. The configured `retry` value remains the hard cap on additional attempts, so the classifier is not called after that budget is exhausted. If it throws, the queue retries subject to the remaining budget.
 
 ### Server-directed cooldown
 

@@ -78,7 +78,7 @@ used mainly to call rate-limited HTTP APIs.
   ship in the npm tarball and version with the library; no repository or plugin
   exports.
 - **Decision: review ignores.** `CHANGELOG.md`, `.bumpy/**`, `.github/**`,
-  `.husky/**`, `.idea/**`, `docs/agents/**`, and tool configs carry no library
+  `.husky/**`, `.idea/**`, `.abide/**`, `docs/agents/**`, and tool configs carry no library
   guidance and are excluded from unmapped-change review so release and
   dependency PRs do not require skill reviews.
 - **Checks (at `6651dc1` plus this batch):** `intent validate` passes; all 11

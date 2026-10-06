@@ -66,7 +66,15 @@ jobs:
           git status --porcelain --untracked-files=all
           sha256sum .intent/review-state.json tests/skills/configure-throttled-queue/*
           git ls-files -s -- tests/skills
-          git ls-files --cached --others --exclude-standard -z -- ':(top,glob)tests/skills/configure-throttled-queue/*' ':(top,exclude,glob)**/node_modules/**' | tr '\0' '\n'
+          env | grep -E '^GIT' || true
+          git config --list --show-origin | grep -vE 'extraheader|includeif' || true
+          for spec in "tests/skills/configure-throttled-queue/*" ":(glob)tests/skills/configure-throttled-queue/*" ":(top,glob)tests/skills/configure-throttled-queue/*" ":(top,glob)src/*"; do
+            echo "== cached $spec: $(git ls-files --cached -- "$spec" | wc -l)"
+            echo "== cached+others $spec: $(git ls-files --cached --others --exclude-standard -- "$spec" | wc -l)"
+            echo "== +exclude $spec: $(git ls-files --cached --others --exclude-standard -- "$spec" ':(top,exclude,glob)**/node_modules/**' | wc -l)"
+          done
+          git ls-files --cached --others --exclude-standard -z -- ':(top,glob)tests/skills/configure-throttled-queue/*' ':(top,exclude,glob)**/node_modules/**'; echo "exit $?"
+          git check-ignore -v --no-index tests/skills/configure-throttled-queue/check.test.ts || echo "not ignored"
           ./node_modules/.bin/intent maintainer review --base "$BASE" --json > "$RUNNER_TEMP/review.json" || true
           node -e '
             const fs = require("fs");

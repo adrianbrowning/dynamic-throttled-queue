@@ -27,11 +27,11 @@
         "tests/skills/configure-throttled-queue/solution.ts": "9e6a8de1042134cd85563c8ea3fed89805000ddcd46da07c62da9b5e7fce44c5",
         "tests/skills/configure-throttled-queue/task.md": "5537a9c2c3bd4a0e3ccbb169f5e414a36716f3393d18a24a44a7f8ac39ad3299"
       },
-      "head": "54d8f41557f7042a19de1e7084d135afe833c404",
+      "head": "a6b3831d494e2760a754122106587bcbfb9e4656",
       "outcome": "updated",
-      "reason": "library_version 2.2.0 -> 3.0.0: the guidance documents submit(), cooldownFor(), maxCooldown, attempt and the failed state, which ship first in 3.0.0, and bumpy's version PR does not touch SKILL.md. The body is unchanged: the two idle-timer fixes contradict no claim on cancel(), cooldownFor(), stop() or waitForIdle().",
+      "reason": "Task fixtures still match the skill: the task, reference solution and check exercise concurrency, classifiers, cooldownFor and submit, and none depends on the idle-timer fixes. Guidance updated only in library_version (2.2.0 -> 3.0.0), since bumpy's version PR does not touch SKILL.md.",
       "evidence": [
-        "Source at fix/pre-release-audit (base 54d8f41): src/scheduler.ts, src/adaptive-rate.ts, package.json. pnpm test: 8 files, 250 tests passed, including tests/skills/configure-throttled-queue/check.test.ts. intent validate skills: 1 skill passed. Packed tarball installed with plain npm install in a clean project; skills/configure-throttled-queue present in node_modules. Fresh-consumer agent session not re-run: guidance body unchanged, only library_version metadata changed."
+        "Source at fix/pre-release-audit (base 54d8f41): src/scheduler.ts, src/adaptive-rate.ts, package.json. pnpm test: 8 files, 250 tests passed, including tests/skills/configure-throttled-queue/check.test.ts. intent validate skills: 1 skill passed. Packed tarball installed with plain npm install in a clean project; skills/configure-throttled-queue present in node_modules. Fresh-consumer agent session not re-run: guidance body unchanged, only library_version metadata changed. tests/skills/configure-throttled-queue/{check.test.ts,solution.ts,task.md} are byte-identical to 54d8f41 (git diff 54d8f41 HEAD -- tests/ is empty); they are reported only because the earlier recorded revision came from the pre-squash feat/intent-skills branch, which CI cannot see. check.test.ts passes in pnpm test (250/250)."
       ]
     },
     "planning:skills/_artifacts": {
@@ -62,11 +62,11 @@
         "tests/skills/configure-throttled-queue/solution.ts": "9e6a8de1042134cd85563c8ea3fed89805000ddcd46da07c62da9b5e7fce44c5",
         "tests/skills/configure-throttled-queue/task.md": "5537a9c2c3bd4a0e3ccbb169f5e414a36716f3393d18a24a44a7f8ac39ad3299"
       },
-      "head": "54d8f41557f7042a19de1e7084d135afe833c404",
+      "head": "a6b3831d494e2760a754122106587bcbfb9e4656",
       "outcome": "updated",
-      "reason": "domain_map.yaml and skill_tree.yaml versions set to 3.0.0. skill_spec.md replaces the decision to keep library_version at package.json until release with a 3.0.0 decision and its reason, and records this pre-release review: idle-timer fixes and the preinstall install fix. Tasks, sources and skill boundaries unchanged.",
+      "reason": "Planning records reconciled for 3.0.0: domain_map.yaml and skill_tree.yaml versions, and skill_spec.md's library_version decision plus a pre-release review entry. The task fixtures they reference are unchanged and still pass, so tasks and coverage stay the same.",
       "evidence": [
-        "Source at fix/pre-release-audit (base 54d8f41): src/scheduler.ts, src/adaptive-rate.ts, package.json. pnpm test: 8 files, 250 tests passed, including tests/skills/configure-throttled-queue/check.test.ts. intent validate skills: 1 skill passed. Packed tarball installed with plain npm install in a clean project; skills/configure-throttled-queue present in node_modules. Fresh-consumer agent session not re-run: guidance body unchanged, only library_version metadata changed."
+        "Source at fix/pre-release-audit (base 54d8f41): src/scheduler.ts, src/adaptive-rate.ts, package.json. pnpm test: 8 files, 250 tests passed, including tests/skills/configure-throttled-queue/check.test.ts. intent validate skills: 1 skill passed. Packed tarball installed with plain npm install in a clean project; skills/configure-throttled-queue present in node_modules. Fresh-consumer agent session not re-run: guidance body unchanged, only library_version metadata changed. tests/skills/configure-throttled-queue/{check.test.ts,solution.ts,task.md} are byte-identical to 54d8f41 (git diff 54d8f41 HEAD -- tests/ is empty); they are reported only because the earlier recorded revision came from the pre-squash feat/intent-skills branch, which CI cannot see. check.test.ts passes in pnpm test (250/250)."
       ]
     }
   }

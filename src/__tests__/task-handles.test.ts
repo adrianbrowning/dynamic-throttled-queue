@@ -123,6 +123,24 @@ describe("cancel()", () => {
     expect(vi.getTimerCount()).toBe(0);
   });
 
+  it("goes idle once the busy slot settles after the last queued item is canceled", async () => {
+    const queue = createThrottledQueue({ min_rpi: 10, interval: 1000, concurrency: 1 });
+    const slow = Promise.withResolvers<void>();
+
+    queue.submit(async () => slow.promise);
+    const waiting = queue.submit(() => {});
+    await vi.advanceTimersByTimeAsync(100);
+    expect(queue.getState()).toMatchObject({ active: 1, pending: 1 });
+
+    waiting.cancel();
+    await expect(waiting.result).rejects.toMatchObject({ name: "AbortError" });
+    slow.resolve();
+    await vi.advanceTimersByTimeAsync(0);
+
+    await expect(queue.waitForIdle()).resolves.toBeUndefined();
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
   it("does not settle a result that already fulfilled", async () => {
     const queue = createThrottledQueue({ min_rpi: 1, interval: 1000 });
 

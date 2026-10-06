@@ -437,7 +437,7 @@ Strategies must return a finite integer `nextRate` and a boolean `shouldBackOff`
 
 `cooldownFor(delay)` stops the queue from starting anything new for `delay` milliseconds. See [Honour `Retry-After` on HTTP 429](#honour-retry-after-on-http-429) for a full example.
 
-- **Scheduling.** Pending work, newly queued work, and retries are kept and do not start. Active callbacks keep running and settle normally. When the cooldown ends, starts resume without new work being queued; the first one is due one spacing later, as after any fresh start. Delayed retries keep counting down and join the queue when due.
+- **Scheduling.** Pending work, newly queued work, and retries are kept and do not start. Active callbacks keep running and settle normally. When the cooldown ends, starts resume without new work being queued; the first one is due one spacing later, as after any fresh start. Delayed retries keep counting down and join the queue when due. While nothing is queued, the cooldown holds no timer, so it does not keep a Node.js process alive after `waitForIdle()` resolves.
 - **Overlaps.** Each call asks for "nothing before now + `delay`". A later deadline replaces the current one; an earlier one is ignored. Two 60-second hints that arrive together give one 60-second cooldown, not two.
 - **Validation.** `NaN`, negative, and infinite delays throw a `RangeError` in every lifecycle state, including after `abort()` or a strategy failure. Delays above `maxCooldown` are clamped to it. `0` does nothing.
 - **Lifecycle.** `pause()` and cooldown are separate: a cooldown keeps elapsing while paused, its end does not resume a paused queue, and `resume()` does not end it. `stop()` clears the cooldown timer but keeps the deadline, so the work that restarts the queue still waits for it. `abort()` and a strategy failure clear the cooldown; later valid calls do nothing.
@@ -450,6 +450,12 @@ Strategies must return a finite integer `nextRate` and a boolean `shouldBackOff`
 
 - The `pending` property is removed. Read `getState().pending` instead.
 - The `RateFailureOutcome` type is renamed to `FailureOutcome`.
+- `QueueLifecycleState` gains `"failed"`. An exhaustive `switch` on `getState().state` needs a case for it.
+- When `rateStrategy` throws or returns a malformed decision, the queue now reports `state: "failed"`, discards pending work, rejects `waitForIdle()` with the strategy error, and throws that error from later enqueues. In v2 it kept reporting `"running"`, kept the pending work, and `waitForIdle()` never settled.
+- An unknown `retryBackoff.strategy` now throws `retryBackoff.strategy must be fixed, linear, or exponential` at creation. v2 silently used the fixed delay.
+- Settled timing now matches the documented contract: the window collected right after a backoff holds the rate steady, an empty collection interval makes no rate decision, and a backoff that ends with nothing queued no longer stops later callbacks from starting.
+- Exported types gained required members: `ExecutionContext.attempt`; `QueueState.canceled`, `cooldownRemaining`, `cooldowns` and `cooldownTotal`; `ThrottleHandle.submit` and `cooldownFor`. Code that reads them is unaffected. Hand-built contexts, state objects and handle test doubles need the new members.
+- `ThrottleCallback` now returns `unknown`, so any callback type-checks. Code that calls a `ThrottleCallback` itself gets `unknown` back instead of `boolean | void | Promise<boolean | void>`.
 
 ### From v1
 

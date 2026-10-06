@@ -95,6 +95,65 @@ describe("cooldownFor", () => {
       expect(ran).toBe(1);
       expect(throttle.getState()).toMatchObject({ pending: 2, cooldownRemaining: 5000 });
     });
+
+    it("holds no timer while nothing is queued, and work that arrives waits out only the remainder", () => {
+      const { throttle, starts, add } = queue();
+
+      throttle.cooldownFor(500);
+      expect(vi.getTimerCount()).toBe(0);
+      expect(throttle.getState().cooldownRemaining).toBe(500);
+
+      vi.advanceTimersByTime(200);
+      add(1);
+      vi.advanceTimersByTime(299);
+      expect(starts).toEqual([]);
+
+      // Expires at 500; the first start is due one spacing later.
+      vi.advanceTimersByTime(101);
+      expect(starts).toEqual([ 600 ]);
+    });
+
+    it("holds no timer once the last callback requests a cooldown and the queue goes idle", async () => {
+      const { throttle } = queue();
+
+      const task = throttle.submit(() => { throttle.cooldownFor(60_000); return "done"; });
+      await vi.advanceTimersByTimeAsync(100);
+
+      await expect(task.result).resolves.toBe("done");
+      await expect(throttle.waitForIdle()).resolves.toBeUndefined();
+      expect(throttle.getState().cooldownRemaining).toBe(60_000);
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it("releases its timer when the last queued item is canceled during the cooldown", async () => {
+      const { throttle } = queue({ concurrency: 1 });
+      const slow = deferred();
+
+      throttle.submit(async () => { throttle.cooldownFor(60_000); return slow.promise; });
+      const waiting = throttle.submit(() => {});
+      await vi.advanceTimersByTimeAsync(100);
+      expect(throttle.getState()).toMatchObject({ active: 1, pending: 1, cooldownRemaining: 60_000 });
+
+      waiting.cancel();
+      await expect(waiting.result).rejects.toMatchObject({ name: "AbortError" });
+      slow.resolve();
+      await vi.advanceTimersByTimeAsync(0);
+
+      await expect(throttle.waitForIdle()).resolves.toBeUndefined();
+      expect(vi.getTimerCount()).toBe(0);
+    });
+
+    it("starts work normally once a cooldown has expired while nothing was queued", () => {
+      const { throttle, starts, add } = queue();
+
+      throttle.cooldownFor(500);
+      vi.advanceTimersByTime(1000);
+      expect(throttle.getState().cooldownRemaining).toBe(0);
+
+      add(1);
+      vi.advanceTimersByTime(100);
+      expect(starts).toEqual([ 1100 ]);
+    });
   });
 
   describe("validation and bounds", () => {

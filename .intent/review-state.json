@@ -3,70 +3,70 @@
   "baseline": "6651dc14a0382b3ab007c59f1fcfd882da997d46",
   "items": {
     "skill:skills/configure-throttled-queue/SKILL.md": {
-      "fingerprint": "c2ac75735d64b88bf5aa624d7fe9cddcd228ec61a8f19081f37d1f4defceb33b",
+      "fingerprint": "d5a91664f98d19805c0de3d9fe6802bf45a064c07bb50dc3408481974af0f53e",
       "snapshot": {
-        "README.md": "55781e6181a3f702898ca2a3ae8eb25cd7aefd3daa61321cef15722ea60b0624",
-        "skills/configure-throttled-queue/SKILL.md": "6df0ddb9a22911a44089c66c53dbe6eb2b61bb381c334d69d4eba96759b675c8",
+        "README.md": "1565c56a120e46361f4ba1898a7fef570771d579b8870394ae12546b1e371d95",
+        "skills/configure-throttled-queue/SKILL.md": "f5dbdd740679bcbbacfe6c4f9b6a0703f7b62b93efd5ab22d2adc7c76d083ea4",
         "skills/configure-throttled-queue/references/lifecycle.md": "50414cc38fc0bcea2fb8e12414f28b6878e66af373163e36848dd3896ed94620",
         "skills/configure-throttled-queue/references/rate-strategies.md": "bd29e5b2b178e622ecad079fd21ff6e65bfcd49a296f61348477af9b918b3628",
         "skills/configure-throttled-queue/references/retries.md": "06cabadcb4baafd78c8cf43affdbe860643e0782acaeea473a9c98340cbc14a8",
         "skills/configure-throttled-queue/references/state-and-idle.md": "83232fc45f99d344860b079044bdca975156d6550edf5145bdb88cf4bd612f05",
         "src/__tests__/adaptive-rate.test.ts": "dcc069a495d9adffe816185524a81f6faec1d2b971d184671742752c18860c4d",
-        "src/__tests__/cooldown.test.ts": "3af1ca78f71d8d66e002801f98ebdc94f158cc884037b104418c2790ea2d6cef",
+        "src/__tests__/cooldown.test.ts": "1b89b6829f69d73576fc70e0b684e947b0d5ba379c1b72f0f41ce061b1ee3c2b",
         "src/__tests__/dynamic-throttled-queue.test.ts": "9c60da556b624b3cc432d5caa951d4e610dbf5fa39c530fa328789747a40718d",
         "src/__tests__/pending-work.test.ts": "a67e5612371f45b2e5743a8048d8d2ea67fb7fa9b13a81fb0df3d62591b0f6a5",
         "src/__tests__/rate-strategies.test.ts": "a92e69707e2988d0826b9cb5b7389054bc1c05be218e92b3b39963349e011065",
         "src/__tests__/retry-policy.test.ts": "077e51ce73ba02b32fe85d7dcf03d9469a933a18683589a7508a7569fc456dd2",
-        "src/__tests__/task-handles.test.ts": "f4e2bd4dbc492999e6442fe104eadb5c613ea9e91382393db38bccd55440624f",
-        "src/adaptive-rate.ts": "6469eaeefc0cd73957379622cb6fbf9f47cd73e469d1bc10e8e48a8d851ddea4",
+        "src/__tests__/task-handles.test.ts": "548cee97450743c38e43aca959b7b15bd5aa8bd68414220037f5d4e51aece32e",
+        "src/adaptive-rate.ts": "fa08fc8866314adb72886d36ee225c21e4938ad298ae5fe8f8fe7c6baba71209",
         "src/dynamic-throttled-queue.ts": "bc3f7beb927bf31c7ab429a65f6241e0c9525840f2e3fd1e7114fb611fc7c440",
         "src/pending-work.ts": "08e88eea6008d870c4da47c39d50290c9adb5e594b18bbb98bbde6e909af582a",
         "src/retry-policy.ts": "020076f3afea1130e38fb8eddc48c9be4be55df5f18a8d0b973e21f797a9596a",
-        "src/scheduler.ts": "1b4ddac003931b1c3b7c7cf5da38fee211e51e99a6000dea47759c035acd7418",
+        "src/scheduler.ts": "63918ecfb33d70df49161cce102e43e2b0e62d0d693d61a050e794c9eed5bab9",
         "tests/skills/configure-throttled-queue/check.test.ts": "ac8a8c291b6b10e9f85831c4d65a23603a745ad213872ace2f5dbe28f2d434ec",
         "tests/skills/configure-throttled-queue/solution.ts": "9e6a8de1042134cd85563c8ea3fed89805000ddcd46da07c62da9b5e7fce44c5",
         "tests/skills/configure-throttled-queue/task.md": "5537a9c2c3bd4a0e3ccbb169f5e414a36716f3393d18a24a44a7f8ac39ad3299"
       },
-      "head": "7b78186da16f9bdbf71015c5f6d83ab81aeb288f",
+      "head": "a6744fe02983c58139be458f85ea06b71cdc2c4e",
       "outcome": "updated",
-      "reason": "Initial authoring of configure-throttled-queue and four references against the current source, updated for #80 (FailureOutcome rename, pending property removed, fire-and-forget callbacks may return any value, unreturned promises are untracked).",
+      "reason": "Only the sources frontmatter changed: the fixture glob becomes tests/skills/configure-throttled-queue*/* (same three files) so git ls-files keeps them under Intent's node_modules exclude. Guidance body unchanged.",
       "evidence": [
-        "Sources at 6651dc1 (after #80; unreleased major): src/*.ts, src/__tests__/*.test.ts, README.md. intent validate passes in a clean clone without dist; 11/11 TS examples in SKILL.md and references type-check under --strict against a fresh build; tests/skills/configure-throttled-queue/check.test.ts accepts the reference solution and rejects the no-concurrency mistake; lint, knip and 245 tests pass. One fresh-consumer run before the #80 rebase discovered and loaded the skill (npm install --ignore-scripts); not repeated after #80."
+        "CI diagnostic job 112367826056 on git 2.55: the old glob with the node_modules exclude listed 0 fixtures (3 without it); the new glob lists all 3 locally with the exclude. Fixture contents unchanged since 54d8f41 (sha256 ac8a8c29, 9e6a8de1, 5537a9c2 match the recorded snapshot). pnpm test passes including tests/skills/configure-throttled-queue/check.test.ts; intent validate skills passes."
       ]
     },
     "planning:skills/_artifacts": {
-      "fingerprint": "e6ac6b28ba15f64fab3abadb72b971674b28ce13663226e21ceaa9d9cf8c9e13",
+      "fingerprint": "08dc2ec9c59348e4e11c50970b34b9db5f7427fab4d6352bb3c523705113500a",
       "snapshot": {
-        "README.md": "55781e6181a3f702898ca2a3ae8eb25cd7aefd3daa61321cef15722ea60b0624",
-        "skills/_artifacts/domain_map.yaml": "9ca90e8c6bb81c49252f0862617a7e34a39b77733f0c827f1f5fc815a0cd992d",
-        "skills/_artifacts/skill_spec.md": "bba17a5eb598c66336cec508b910f00892f2a4d36fb1128d4b7601b9a3211fc1",
-        "skills/_artifacts/skill_tree.yaml": "0929a3bb39e6de4a3645df8e2aa2ea0b88b4368cac11ac1c4299d23ee5a1820f",
-        "skills/configure-throttled-queue/SKILL.md": "6df0ddb9a22911a44089c66c53dbe6eb2b61bb381c334d69d4eba96759b675c8",
+        "README.md": "1565c56a120e46361f4ba1898a7fef570771d579b8870394ae12546b1e371d95",
+        "skills/_artifacts/domain_map.yaml": "f1bbcd3abb65d9e85076d0909d9bfb4847c99029b29ccb1295cff8196c2f36ce",
+        "skills/_artifacts/skill_spec.md": "8d9a7e4c673c46c1a10dd79ed600196af70972d8973acad9ea2584cb3037d2d0",
+        "skills/_artifacts/skill_tree.yaml": "504b705938c342a8d0edb327e298d1e6dd689c4b883f12c639e286b2b36731c2",
+        "skills/configure-throttled-queue/SKILL.md": "f5dbdd740679bcbbacfe6c4f9b6a0703f7b62b93efd5ab22d2adc7c76d083ea4",
         "skills/configure-throttled-queue/references/lifecycle.md": "50414cc38fc0bcea2fb8e12414f28b6878e66af373163e36848dd3896ed94620",
         "skills/configure-throttled-queue/references/rate-strategies.md": "bd29e5b2b178e622ecad079fd21ff6e65bfcd49a296f61348477af9b918b3628",
         "skills/configure-throttled-queue/references/retries.md": "06cabadcb4baafd78c8cf43affdbe860643e0782acaeea473a9c98340cbc14a8",
         "skills/configure-throttled-queue/references/state-and-idle.md": "83232fc45f99d344860b079044bdca975156d6550edf5145bdb88cf4bd612f05",
         "src/__tests__/adaptive-rate.test.ts": "dcc069a495d9adffe816185524a81f6faec1d2b971d184671742752c18860c4d",
-        "src/__tests__/cooldown.test.ts": "3af1ca78f71d8d66e002801f98ebdc94f158cc884037b104418c2790ea2d6cef",
+        "src/__tests__/cooldown.test.ts": "1b89b6829f69d73576fc70e0b684e947b0d5ba379c1b72f0f41ce061b1ee3c2b",
         "src/__tests__/dynamic-throttled-queue.test.ts": "9c60da556b624b3cc432d5caa951d4e610dbf5fa39c530fa328789747a40718d",
         "src/__tests__/pending-work.test.ts": "a67e5612371f45b2e5743a8048d8d2ea67fb7fa9b13a81fb0df3d62591b0f6a5",
         "src/__tests__/rate-strategies.test.ts": "a92e69707e2988d0826b9cb5b7389054bc1c05be218e92b3b39963349e011065",
         "src/__tests__/retry-policy.test.ts": "077e51ce73ba02b32fe85d7dcf03d9469a933a18683589a7508a7569fc456dd2",
-        "src/__tests__/task-handles.test.ts": "f4e2bd4dbc492999e6442fe104eadb5c613ea9e91382393db38bccd55440624f",
-        "src/adaptive-rate.ts": "6469eaeefc0cd73957379622cb6fbf9f47cd73e469d1bc10e8e48a8d851ddea4",
+        "src/__tests__/task-handles.test.ts": "548cee97450743c38e43aca959b7b15bd5aa8bd68414220037f5d4e51aece32e",
+        "src/adaptive-rate.ts": "fa08fc8866314adb72886d36ee225c21e4938ad298ae5fe8f8fe7c6baba71209",
         "src/dynamic-throttled-queue.ts": "bc3f7beb927bf31c7ab429a65f6241e0c9525840f2e3fd1e7114fb611fc7c440",
         "src/pending-work.ts": "08e88eea6008d870c4da47c39d50290c9adb5e594b18bbb98bbde6e909af582a",
         "src/retry-policy.ts": "020076f3afea1130e38fb8eddc48c9be4be55df5f18a8d0b973e21f797a9596a",
-        "src/scheduler.ts": "1b4ddac003931b1c3b7c7cf5da38fee211e51e99a6000dea47759c035acd7418",
+        "src/scheduler.ts": "63918ecfb33d70df49161cce102e43e2b0e62d0d693d61a050e794c9eed5bab9",
         "tests/skills/configure-throttled-queue/check.test.ts": "ac8a8c291b6b10e9f85831c4d65a23603a745ad213872ace2f5dbe28f2d434ec",
         "tests/skills/configure-throttled-queue/solution.ts": "9e6a8de1042134cd85563c8ea3fed89805000ddcd46da07c62da9b5e7fce44c5",
         "tests/skills/configure-throttled-queue/task.md": "5537a9c2c3bd4a0e3ccbb169f5e414a36716f3393d18a24a44a7f8ac39ad3299"
       },
-      "head": "7b78186da16f9bdbf71015c5f6d83ab81aeb288f",
+      "head": "a6744fe02983c58139be458f85ea06b71cdc2c4e",
       "outcome": "updated",
-      "reason": "Created domain_map, skill_spec, and skill_tree for batch 1: tasks, nine failure modes, decisions (one skill, package-only, review ignores), and open migration gaps.",
+      "reason": "skill_tree.yaml synced to the new fixture glob; skill_spec.md records the decision and its CI evidence. Tasks, coverage and skill boundaries unchanged.",
       "evidence": [
-        "Sources at 6651dc1 (after #80; unreleased major): src/*.ts, src/__tests__/*.test.ts, README.md. intent validate passes in a clean clone without dist; 11/11 TS examples in SKILL.md and references type-check under --strict against a fresh build; tests/skills/configure-throttled-queue/check.test.ts accepts the reference solution and rejects the no-concurrency mistake; lint, knip and 245 tests pass. One fresh-consumer run before the #80 rebase discovered and loaded the skill (npm install --ignore-scripts); not repeated after #80."
+        "CI diagnostic job 112367826056 on git 2.55: the old glob with the node_modules exclude listed 0 fixtures (3 without it); the new glob lists all 3 locally with the exclude. Fixture contents unchanged since 54d8f41 (sha256 ac8a8c29, 9e6a8de1, 5537a9c2 match the recorded snapshot). pnpm test passes including tests/skills/configure-throttled-queue/check.test.ts; intent validate skills passes."
       ]
     }
   }

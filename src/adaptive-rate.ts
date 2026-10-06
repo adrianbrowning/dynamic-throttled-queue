@@ -108,7 +108,8 @@ export type AdaptiveRate = {
   /**
    * Ends a pause, then begins observing if idle and work is pending. While starts are open and no start
    * is scheduled (concurrency was full), makes starts due now once a spacing has passed since the last
-   * start, or schedules them for when it has. During `startsDue`, the batch's own follow-up covers it.
+   * start, or schedules them for when it has; with nothing pending then, drains instead. During
+   * `startsDue`, the batch's own follow-up covers it.
    */
   start: () => void;
   /** Ends observation. Settled timing discards its in-progress window. */
@@ -438,9 +439,14 @@ export function createAdaptiveRate(options: AdaptiveRateOptions, host: AdaptiveR
     },
     start() {
       ignoringSettlements = false;
-      if (!host.hasPendingWork()) return;
+      const waitingForSlot = pacing === "open" && startTimer === undefined && !dispatching;
+      if (!host.hasPendingWork()) {
+        // Work removed while every slot was busy (a cancel) never reaches `startDue`, which drains.
+        if (waitingForSlot) timing.drained();
+        return;
+      }
       if (pacing === "idle") timing.start();
-      else if (pacing === "open" && startTimer === undefined && !dispatching) startDue();
+      else if (waitingForSlot) startDue();
     },
     stop() {
       ignoringSettlements = false;

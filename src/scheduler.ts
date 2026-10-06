@@ -111,7 +111,7 @@ export function createScheduler(options: SchedulerOptions, adaptiveRateOptions: 
   let cooldownTotal = 0;
   /** Monotonic (`performance.now()`) time before which nothing starts; `undefined` when no cooldown is active. */
   let cooldownDeadline: number | undefined;
-  /** Fires at the deadline. Cleared while stopped, which keeps the deadline for the restart. */
+  /** Fires at the deadline, armed only while queued work waits on it; `start()` arms it when work arrives. */
   let cooldownTimer: ReturnType<typeof setTimeout> | undefined;
   const abortController = new AbortController();
   /** Submitted items whose result has not settled. */
@@ -141,12 +141,12 @@ export function createScheduler(options: SchedulerOptions, adaptiveRateOptions: 
     switch (next) {
       case "running":
         work.thaw();
-        if (cooldownDeadline === undefined) {
-          adaptiveRate.start();
+        if (coolingDown()) {
+          armCooldown();
+          adaptiveRate.suspend();
           return;
         }
-        armCooldown(cooldownDeadline);
-        adaptiveRate.suspend();
+        adaptiveRate.start();
         return;
       case "paused":
         // A cooldown keeps elapsing while paused: its deadline is the server's, not the queue's.
@@ -174,20 +174,26 @@ export function createScheduler(options: SchedulerOptions, adaptiveRateOptions: 
     }
   }
 
-  function armCooldown(deadline: number) {
+  /** Re-arms the expiry timer for the current deadline, or leaves it unarmed while nothing is queued. */
+  function armCooldown() {
     clearTimeout(cooldownTimer);
-    cooldownTimer = setTimeout(expireCooldown, Math.max(0, deadline - performance.now()));
+    cooldownTimer = cooldownDeadline !== undefined && work.queued > 0
+      ? setTimeout(expireCooldown, Math.max(0, cooldownDeadline - performance.now()))
+      : undefined;
   }
 
   function expireCooldown() {
-    // A timer can fire slightly before the monotonic deadline; wait out the remainder.
-    if (cooldownDeadline !== undefined && performance.now() < cooldownDeadline) {
-      armCooldown(cooldownDeadline);
-      return;
-    }
     cooldownTimer = undefined;
-    cooldownDeadline = undefined;
+    // A timer can fire slightly before the monotonic deadline; `start()` then waits out the remainder.
     start();
+  }
+
+  /** Ends a cooldown whose deadline has passed; returns whether one still holds starts. */
+  function coolingDown() {
+    if (cooldownDeadline === undefined) return false;
+    if (performance.now() < cooldownDeadline) return true;
+    cooldownDeadline = undefined;
+    return false;
   }
 
   function clearCooldown() {
@@ -275,8 +281,11 @@ export function createScheduler(options: SchedulerOptions, adaptiveRateOptions: 
     handleSettlement(item, returnedOutcome(item, result), result, reportSettlement);
   }
 
+  /** Lets due work start; during a cooldown, keeps the expiry timer armed exactly while work is queued. */
   function start() {
-    if (lifecycle.state === "running" && cooldownDeadline === undefined) adaptiveRate.start();
+    if (lifecycle.state !== "running") return;
+    if (!coolingDown()) adaptiveRate.start();
+    else if (cooldownTimer === undefined || work.queued === 0) armCooldown();
   }
 
   /** Admits `item` or throws: the queue is terminal or every capacity reservation is taken. */
@@ -309,9 +318,12 @@ export function createScheduler(options: SchedulerOptions, adaptiveRateOptions: 
       cancel(reason?: unknown) {
         if (!tasks.delete(task)) return;
         cnt_canceled++;
-        if (!task.active) work.remove(item);
+        const queued = !task.active;
+        if (queued) work.remove(item);
         task.controller.abort(reason);
         task.reject(task.controller.signal.reason);
+        // The removed item may have been the last queued: pacing can drain and a cooldown timer unarm.
+        if (queued) start();
       },
     };
   };
@@ -324,17 +336,17 @@ export function createScheduler(options: SchedulerOptions, adaptiveRateOptions: 
     if (!Number.isFinite(delay) || delay < 0) throw new RangeError("cooldownFor delay must be a finite non-negative number");
     if (lifecycle.state === "aborted" || lifecycle.state === "failed") return;
     const now = performance.now();
+    const beginning = !coolingDown();
     const latest = Math.max(now, cooldownDeadline ?? now);
     const deadline = now + Math.min(delay, maxCooldown);
     // Hints are absolute ("not before now + delay"), so overlapping ones keep the later deadline, never add up.
     if (deadline <= latest) return;
-    const beginning = cooldownDeadline === undefined;
     cnt_cooldowns++;
     cooldownTotal += deadline - latest;
     cooldownDeadline = deadline;
     // Stopped: the restart arms the timer for whatever remains.
     if (lifecycle.state === "stopped") return;
-    armCooldown(deadline);
+    armCooldown();
     // Paused: adaptive rate is already stopped; `resume()` suspends it instead of starting it.
     if (beginning && lifecycle.state === "running") adaptiveRate.suspend();
   };

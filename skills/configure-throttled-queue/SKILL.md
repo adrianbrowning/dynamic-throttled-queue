@@ -15,7 +15,7 @@ metadata:
     pause/resume/stop/abort/failed lifecycle semantics.
   type: core
   library: dynamic-throttled-queue
-  library_version: 2.2.0
+  library_version: 3.0.0
 sources:
   - src/*.ts
   - src/__tests__/*.test.ts

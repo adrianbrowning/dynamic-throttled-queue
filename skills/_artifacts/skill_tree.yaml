@@ -1,6 +1,6 @@
 library:
   name: dynamic-throttled-queue
-  version: 2.2.0
+  version: 3.0.0
 generated_from:
   domain_map: skills/_artifacts/domain_map.yaml
   skill_spec: skills/_artifacts/skill_spec.md

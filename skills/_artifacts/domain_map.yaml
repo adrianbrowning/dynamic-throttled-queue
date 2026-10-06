@@ -1,12 +1,12 @@
 # domain_map.yaml
 # Library: dynamic-throttled-queue
-# Version: 2.2.0
+# Version: 3.0.0
 # Date: 2026-10-04
 # Status: reviewed
 
 library:
   name: dynamic-throttled-queue
-  version: 2.2.0
+  version: 3.0.0
   repository: https://github.com/adrianbrowning/dynamic-throttled-queue
   description: Throttles arbitrary callbacks between a minimum and maximum number of starts per interval, adapting to errors.
   primary_framework: framework-agnostic

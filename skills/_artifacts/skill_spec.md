@@ -69,8 +69,7 @@ used mainly to call rate-limited HTTP APIs.
   (includes #77 task handles, #78 server-directed cooldowns, and #80: the
   `pending` property removed, `RateFailureOutcome` renamed to `FailureOutcome`,
   fire-and-forget callbacks may return any value). The guidance targets the
-  next major release; `metadata.library_version` stays at the current
-  `package.json` version until bumpy releases it.
+  3.0.0 release.
 - **Decision: one skill with conditional references.** The maintainer chose one
   entry-point skill; dense detail (strategies, retry formulas, lifecycle table,
   state fields) lives in `references/` with reading conditions.
@@ -98,3 +97,18 @@ used mainly to call rate-limited HTTP APIs.
   fails for consumers unless `--ignore-scripts` is used. Pre-existing in 2.2.0;
   not fixed in this batch.
 - **Remaining work:** the open gaps above.
+
+### Pre-release review — 2026-10-06, 3.0.0 (PR #60)
+
+- **Decision: `library_version` is 3.0.0 before release.** Batch 1 kept it at
+  the `package.json` version until bumpy released, but bumpy's version PR
+  bumps only `package.json` and `CHANGELOG.md`. The tarball would have shipped
+  3.0.0 guidance labelled 2.2.0, so the skill and all three planning records
+  now say 3.0.0.
+- **Change reviewed:** two idle-timer fixes in `src/adaptive-rate.ts` and
+  `src/scheduler.ts`. Canceling the last queued item while every slot was busy
+  left the interval tick running, and `cooldownFor()` armed its timer with
+  nothing queued. The skill makes no claim about either timer, so its guidance
+  text is unchanged. The README gains a fuller "From v2" migration list.
+- **Packing:** the `preinstall` gap above is fixed in this review. Plain
+  `npm install` of the packed tarball now succeeds.

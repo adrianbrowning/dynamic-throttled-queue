@@ -37,7 +37,7 @@ skills:
     sources:
       - src/*.ts
       - src/__tests__/*.test.ts
-      - tests/skills/configure-throttled-queue/*
+      - tests/skills/configure-throttled-queue*/*
       - README.md
     requires: []
     purpose: >

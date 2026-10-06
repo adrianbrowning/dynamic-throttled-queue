@@ -112,3 +112,12 @@ used mainly to call rate-limited HTTP APIs.
   text is unchanged. The README gains a fuller "From v2" migration list.
 - **Packing:** the `preinstall` gap above is fixed in this review. Plain
   `npm install` of the packed tarball now succeeds.
+- **Decision: fixture source glob is `tests/skills/configure-throttled-queue*/*`.**
+  The `Validate intent skills` CI job failed on #60 and #83 with the three task
+  fixtures pending review. A diagnostic job showed why: on GitHub's git 2.55,
+  `git ls-files -- ':(top,glob)tests/skills/configure-throttled-queue/*'
+  ':(top,exclude,glob)**/node_modules/**'` lists nothing, so Intent hashed
+  the fixtures as missing. Local git 2.39 drops them the same way. In a scratch
+  repository the files vanish whenever the literal directory prefix is 16, 17
+  or 19+ characters long. The new glob's literal prefix is `tests/skills/`
+  (13 characters) and matches the same three files.

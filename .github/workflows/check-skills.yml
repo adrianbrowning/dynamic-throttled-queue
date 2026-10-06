@@ -40,55 +40,6 @@ jobs:
       # Match engines.node (>=24) and setup-base; the reusable workflow defaults to 22.
       node-version: '26'
 
-  # TEMPORARY: diagnose pending fixture reviews in validate. Remove before merge.
-  debug-review:
-    if: github.event_name == 'pull_request'
-    runs-on: ubuntu-latest
-    permissions:
-      contents: read
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          fetch-depth: 0
-          persist-credentials: false
-      - run: corepack enable
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7.0.0
-        with:
-          node-version: '26'
-          cache: pnpm
-      - env:
-          COREPACK_ENABLE_DOWNLOAD_PROMPT: '0'
-          BASE: ${{ github.event.pull_request.base.sha }}
-        run: |
-          pnpm install --frozen-lockfile --ignore-scripts
-          git --version; node --version
-          git rev-parse HEAD; git config --get remote.origin.url
-          git status --porcelain --untracked-files=all
-          sha256sum .intent/review-state.json tests/skills/configure-throttled-queue/*
-          git ls-files -s -- tests/skills
-          env | grep -E '^GIT' || true
-          git config --list --show-origin | grep -vE 'extraheader|includeif' || true
-          for spec in "tests/skills/configure-throttled-queue/*" ":(glob)tests/skills/configure-throttled-queue/*" ":(top,glob)tests/skills/configure-throttled-queue/*" ":(top,glob)src/*"; do
-            echo "== cached $spec: $(git ls-files --cached -- "$spec" | wc -l)"
-            echo "== cached+others $spec: $(git ls-files --cached --others --exclude-standard -- "$spec" | wc -l)"
-            echo "== +exclude $spec: $(git ls-files --cached --others --exclude-standard -- "$spec" ':(top,exclude,glob)**/node_modules/**' | wc -l)"
-          done
-          git ls-files --cached --others --exclude-standard -z -- ':(top,glob)tests/skills/configure-throttled-queue/*' ':(top,exclude,glob)**/node_modules/**'; echo "exit $?"
-          git check-ignore -v --no-index tests/skills/configure-throttled-queue/check.test.ts || echo "not ignored"
-          ./node_modules/.bin/intent maintainer review --base "$BASE" --json > "$RUNNER_TEMP/review.json" || true
-          node -e '
-            const fs = require("fs");
-            const r = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
-            const s = JSON.parse(fs.readFileSync(".intent/review-state.json", "utf8"));
-            console.log("base", r.base, "head", r.head);
-            for (const i of r.items) {
-              const rec = s.items[i.id];
-              console.log(i.id, "problems", JSON.stringify(i.problems));
-              for (const f of i.changedFiles) console.log("  ", f, "now", i.snapshot[f], "recorded", rec && rec.snapshot[f]);
-            }
-          ' "$RUNNER_TEMP/review.json"
-          ./node_modules/.bin/intent maintainer check --base "$BASE" --artifacts skills/_artifacts || true
-
   review:
     if: github.event_name != 'pull_request'
     permissions:

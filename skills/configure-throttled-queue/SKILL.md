@@ -19,7 +19,10 @@ metadata:
 sources:
   - src/*.ts
   - src/__tests__/*.test.ts
-  - tests/skills/configure-throttled-queue/*
+  # Keep the literal directory prefix at 15 characters or fewer. With Intent's
+  # ":(exclude)**/node_modules/**" pathspec, git ls-files (seen on 2.39 and
+  # 2.55) lists nothing under most longer prefixes, so review loses the fixtures.
+  - tests/skills/configure-throttled-queue*/*
   - README.md
 ---
 

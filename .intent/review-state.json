@@ -3,10 +3,10 @@
   "baseline": "6651dc14a0382b3ab007c59f1fcfd882da997d46",
   "items": {
     "skill:skills/configure-throttled-queue/SKILL.md": {
-      "fingerprint": "ebfdd0c58793ab588ae1027bd6cd4724bf8dd3754bbd0f45c7a81296e401a451",
+      "fingerprint": "d5a91664f98d19805c0de3d9fe6802bf45a064c07bb50dc3408481974af0f53e",
       "snapshot": {
         "README.md": "1565c56a120e46361f4ba1898a7fef570771d579b8870394ae12546b1e371d95",
-        "skills/configure-throttled-queue/SKILL.md": "874b1379a2d8517c79c8951544fd4b4782b86f0bd29c495a9f0d2552ecc615fa",
+        "skills/configure-throttled-queue/SKILL.md": "f5dbdd740679bcbbacfe6c4f9b6a0703f7b62b93efd5ab22d2adc7c76d083ea4",
         "skills/configure-throttled-queue/references/lifecycle.md": "50414cc38fc0bcea2fb8e12414f28b6878e66af373163e36848dd3896ed94620",
         "skills/configure-throttled-queue/references/rate-strategies.md": "bd29e5b2b178e622ecad079fd21ff6e65bfcd49a296f61348477af9b918b3628",
         "skills/configure-throttled-queue/references/retries.md": "06cabadcb4baafd78c8cf43affdbe860643e0782acaeea473a9c98340cbc14a8",
@@ -27,21 +27,21 @@
         "tests/skills/configure-throttled-queue/solution.ts": "9e6a8de1042134cd85563c8ea3fed89805000ddcd46da07c62da9b5e7fce44c5",
         "tests/skills/configure-throttled-queue/task.md": "5537a9c2c3bd4a0e3ccbb169f5e414a36716f3393d18a24a44a7f8ac39ad3299"
       },
-      "head": "a6b3831d494e2760a754122106587bcbfb9e4656",
+      "head": "a6744fe02983c58139be458f85ea06b71cdc2c4e",
       "outcome": "updated",
-      "reason": "Task fixtures still match the skill: the task, reference solution and check exercise concurrency, classifiers, cooldownFor and submit, and none depends on the idle-timer fixes. Guidance updated only in library_version (2.2.0 -> 3.0.0), since bumpy's version PR does not touch SKILL.md.",
+      "reason": "Only the sources frontmatter changed: the fixture glob becomes tests/skills/configure-throttled-queue*/* (same three files) so git ls-files keeps them under Intent's node_modules exclude. Guidance body unchanged.",
       "evidence": [
-        "Source at fix/pre-release-audit (base 54d8f41): src/scheduler.ts, src/adaptive-rate.ts, package.json. pnpm test: 8 files, 250 tests passed, including tests/skills/configure-throttled-queue/check.test.ts. intent validate skills: 1 skill passed. Packed tarball installed with plain npm install in a clean project; skills/configure-throttled-queue present in node_modules. Fresh-consumer agent session not re-run: guidance body unchanged, only library_version metadata changed. tests/skills/configure-throttled-queue/{check.test.ts,solution.ts,task.md} are byte-identical to 54d8f41 (git diff 54d8f41 HEAD -- tests/ is empty); they are reported only because the earlier recorded revision came from the pre-squash feat/intent-skills branch, which CI cannot see. check.test.ts passes in pnpm test (250/250)."
+        "CI diagnostic job 112367826056 on git 2.55: the old glob with the node_modules exclude listed 0 fixtures (3 without it); the new glob lists all 3 locally with the exclude. Fixture contents unchanged since 54d8f41 (sha256 ac8a8c29, 9e6a8de1, 5537a9c2 match the recorded snapshot). pnpm test passes including tests/skills/configure-throttled-queue/check.test.ts; intent validate skills passes."
       ]
     },
     "planning:skills/_artifacts": {
-      "fingerprint": "f320a0b50643402e0adb9260506e71827fc2000b4b70e6413dc4cd2889ceddab",
+      "fingerprint": "08dc2ec9c59348e4e11c50970b34b9db5f7427fab4d6352bb3c523705113500a",
       "snapshot": {
         "README.md": "1565c56a120e46361f4ba1898a7fef570771d579b8870394ae12546b1e371d95",
         "skills/_artifacts/domain_map.yaml": "f1bbcd3abb65d9e85076d0909d9bfb4847c99029b29ccb1295cff8196c2f36ce",
-        "skills/_artifacts/skill_spec.md": "a27758f57824673301f09070b0fc01231ec869326e471d42aa0aafd9f6b0ed1d",
-        "skills/_artifacts/skill_tree.yaml": "3b928b1204bb4e34ba9677e183a1c563905937600902fc0a78cec2d3d55d3683",
-        "skills/configure-throttled-queue/SKILL.md": "874b1379a2d8517c79c8951544fd4b4782b86f0bd29c495a9f0d2552ecc615fa",
+        "skills/_artifacts/skill_spec.md": "8d9a7e4c673c46c1a10dd79ed600196af70972d8973acad9ea2584cb3037d2d0",
+        "skills/_artifacts/skill_tree.yaml": "504b705938c342a8d0edb327e298d1e6dd689c4b883f12c639e286b2b36731c2",
+        "skills/configure-throttled-queue/SKILL.md": "f5dbdd740679bcbbacfe6c4f9b6a0703f7b62b93efd5ab22d2adc7c76d083ea4",
         "skills/configure-throttled-queue/references/lifecycle.md": "50414cc38fc0bcea2fb8e12414f28b6878e66af373163e36848dd3896ed94620",
         "skills/configure-throttled-queue/references/rate-strategies.md": "bd29e5b2b178e622ecad079fd21ff6e65bfcd49a296f61348477af9b918b3628",
         "skills/configure-throttled-queue/references/retries.md": "06cabadcb4baafd78c8cf43affdbe860643e0782acaeea473a9c98340cbc14a8",
@@ -62,11 +62,11 @@
         "tests/skills/configure-throttled-queue/solution.ts": "9e6a8de1042134cd85563c8ea3fed89805000ddcd46da07c62da9b5e7fce44c5",
         "tests/skills/configure-throttled-queue/task.md": "5537a9c2c3bd4a0e3ccbb169f5e414a36716f3393d18a24a44a7f8ac39ad3299"
       },
-      "head": "a6b3831d494e2760a754122106587bcbfb9e4656",
+      "head": "a6744fe02983c58139be458f85ea06b71cdc2c4e",
       "outcome": "updated",
-      "reason": "Planning records reconciled for 3.0.0: domain_map.yaml and skill_tree.yaml versions, and skill_spec.md's library_version decision plus a pre-release review entry. The task fixtures they reference are unchanged and still pass, so tasks and coverage stay the same.",
+      "reason": "skill_tree.yaml synced to the new fixture glob; skill_spec.md records the decision and its CI evidence. Tasks, coverage and skill boundaries unchanged.",
       "evidence": [
-        "Source at fix/pre-release-audit (base 54d8f41): src/scheduler.ts, src/adaptive-rate.ts, package.json. pnpm test: 8 files, 250 tests passed, including tests/skills/configure-throttled-queue/check.test.ts. intent validate skills: 1 skill passed. Packed tarball installed with plain npm install in a clean project; skills/configure-throttled-queue present in node_modules. Fresh-consumer agent session not re-run: guidance body unchanged, only library_version metadata changed. tests/skills/configure-throttled-queue/{check.test.ts,solution.ts,task.md} are byte-identical to 54d8f41 (git diff 54d8f41 HEAD -- tests/ is empty); they are reported only because the earlier recorded revision came from the pre-squash feat/intent-skills branch, which CI cannot see. check.test.ts passes in pnpm test (250/250)."
+        "CI diagnostic job 112367826056 on git 2.55: the old glob with the node_modules exclude listed 0 fixtures (3 without it); the new glob lists all 3 locally with the exclude. Fixture contents unchanged since 54d8f41 (sha256 ac8a8c29, 9e6a8de1, 5537a9c2 match the recorded snapshot). pnpm test passes including tests/skills/configure-throttled-queue/check.test.ts; intent validate skills passes."
       ]
     }
   }

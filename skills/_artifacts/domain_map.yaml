@@ -1,0 +1,153 @@
+# domain_map.yaml
+# Library: dynamic-throttled-queue
+# Version: 2.2.0
+# Date: 2026-10-04
+# Status: reviewed
+
+library:
+  name: dynamic-throttled-queue
+  version: 2.2.0
+  repository: https://github.com/adrianbrowning/dynamic-throttled-queue
+  description: Throttles arbitrary callbacks between a minimum and maximum number of starts per interval, adapting to errors.
+  primary_framework: framework-agnostic
+
+domains:
+  - name: Throttled queue configuration and control
+    slug: throttled-queue
+    description: Pacing callback starts, bounding in-flight work, adapting the rate to failures, retrying, and controlling the queue lifecycle.
+
+skills:
+  - name: configure-throttled-queue
+    slug: configure-throttled-queue
+    domain: throttled-queue
+    description: Creating, configuring, or debugging a queue that paces calls to a rate-limited API.
+    type: core
+    covers:
+      - createThrottledQueue and ThrottleOptions
+      - min_rpi, max_rpi, interval, evenly_spaced
+      - concurrency, maxQueueSize
+      - errors_per_interval, back_off, rateOutcomeClassifier, onRateChange
+      - rateStrategy (linear, aimd, custom), adjustmentTiming
+      - retry, retryClassifier, retryBackoff
+      - cooldownFor, maxCooldown
+      - submit, TaskHandle (result, cancel), ExecutionContext (signal, attempt)
+      - pause, resume, stop, abort, failed state
+      - waitForIdle, getState, pending
+    tasks:
+      - "Choose min_rpi, max_rpi, interval, and evenly_spaced for an API rate limit"
+      - Bound in-flight async work with concurrency separately from the start rate
+      - Classify failures for adaptive rate reduction versus retry
+      - Configure bounded retries with retry backoff
+      - Honor a server Retry-After hint with cooldownFor
+      - Submit work and cancel it with task handles
+      - "Pause, resume, stop, or abort a queue safely"
+      - Wait for the queue to drain and inspect its state
+    reference_candidates:
+      - topic: rate strategies and adjustment timing
+        reason: linear/aimd formulas, custom strategy contract, interval vs settled windows
+      - topic: retry eligibility and backoff
+        reason: classifier contract, backoff formulas, validation, scheduling
+      - topic: lifecycle states
+        reason: five states with distinct pending/active/enqueue rules and cooldown interactions
+      - topic: state and idle
+        reason: thirteen getState fields and waitForIdle edge cases
+    failure_modes:
+      - mistake: Ignoring the abort signal in callbacks
+        mechanism: Cancellation is cooperative, so abort() and cancel() cannot stop I/O that ignores signal.
+        wrong_pattern: |
+          queue(async () => { await fetch(url); });
+        correct_pattern: |
+          queue(async ({ signal }) => { await fetch(url, { signal }); });
+        source: README.md Lifecycle; src/scheduler.ts
+        priority: CRITICAL
+        status: active
+      - mistake: Using the start rate as an in-flight limit
+        mechanism: min_rpi limits starts per interval; slow callbacks accumulate without concurrency.
+        wrong_pattern: |
+          createThrottledQueue({ min_rpi: 3, interval: 1000 });
+        correct_pattern: |
+          createThrottledQueue({ min_rpi: 3, interval: 1000, concurrency: 3 });
+        source: src/dynamic-throttled-queue.ts ThrottleOptions.concurrency
+        priority: HIGH
+        status: active
+      - mistake: Returning false from submit() to signal failure
+        mechanism: In submit() every returned value including false is a success; only throw or rejection fails.
+        wrong_pattern: |
+          queue.submit(async () => { if (!res.ok) return false; });
+        correct_pattern: |
+          queue.submit(async () => { if (!res.ok) throw new Error("HTTP"); });
+        source: src/scheduler.ts TaskCallback; src/__tests__/task-handles.test.ts
+        priority: HIGH
+        status: active
+      - mistake: Expecting retry classification or cooldowns to change the rate
+        mechanism: retryClassifier, rateOutcomeClassifier, and cooldownFor are independent decisions.
+        wrong_pattern: |
+          createThrottledQueue({ min_rpi: 1, max_rpi: 10, interval: 1000, retry: 2, retryClassifier: is429 });
+        correct_pattern: |
+          createThrottledQueue({ min_rpi: 1, max_rpi: 10, interval: 1000, retry: 2, retryClassifier: is429, rateOutcomeClassifier: is429 });
+        source: README.md Failure classification, Server-directed cooldown
+        priority: HIGH
+        status: active
+      - mistake: Leaving cancelled task results unhandled
+        mechanism: cancel() and abort() reject task.result, producing unhandled rejections when not awaited.
+        wrong_pattern: |
+          const task = queue.submit(work); task.cancel();
+        correct_pattern: |
+          const task = queue.submit(work); task.result.catch(() => {}); task.cancel();
+        source: README.md Task handles
+        priority: HIGH
+        status: active
+      - mistake: Treating stop() as shutdown
+        mechanism: stop() retains pending work and the next enqueue restarts processing.
+        wrong_pattern: |
+          queue.stop();
+        correct_pattern: |
+          queue.abort();
+        source: README.md Lifecycle
+        priority: MEDIUM
+        status: active
+      - mistake: Expecting maxQueueSize overflow to return a value
+        mechanism: A full queue throws synchronously from the queue function and submit().
+        wrong_pattern: |
+          if (!queue(work)) retryLater();
+        correct_pattern: |
+          try { queue(work); } catch { retryLater(); }
+        source: src/pending-work.ts accept; README.md Usage
+        priority: MEDIUM
+        status: active
+      - mistake: Returning malformed decisions from a custom rateStrategy
+        mechanism: A throw or non-integer nextRate fails the queue permanently.
+        wrong_pattern: |
+          rateStrategy: ({ currentRate }) => ({ nextRate: currentRate * 0.5, shouldBackOff: true })
+        correct_pattern: |
+          rateStrategy: ({ currentRate }) => ({ nextRate: Math.floor(currentRate * 0.5), shouldBackOff: true })
+        source: src/adaptive-rate.ts validated decision; README.md Lifecycle
+        priority: MEDIUM
+        status: active
+      - mistake: Starting a promise without returning or awaiting it
+        mechanism: The queue only tracks the returned value, so an unreturned promise cannot fail, retry, hold a concurrency slot, or delay waitForIdle().
+        wrong_pattern: |
+          queue(({ signal }) => { void fetch(url, { signal }); });
+        correct_pattern: |
+          queue(({ signal }) => fetch(url, { signal }));
+        source: README.md Queuing work
+        priority: CRITICAL
+        status: active
+
+tensions:
+  - name: Faster recovery versus provider limits
+    skills: [configure-throttled-queue]
+    description: The default strategy raises the rate after every clean interval with pending work.
+    implication: Setting max_rpi above the provider ceiling causes repeated 429s before the rate settles.
+
+cross_references: []
+
+gaps:
+  - skill: configure-throttled-queue
+    question: Should a separate skill cover migrating from v1 (errors_per_second, debug)?
+    context: v1 migration is two bullet points in the README; not assessed as an independent task in this batch.
+    status: open
+  - skill: configure-throttled-queue
+    question: Should the v2 to v3 migration (pending property removed, RateFailureOutcome renamed to FailureOutcome) get its own skill?
+    context: The README "Migration" section has two bullets each for v1 and v2; not assessed as an independent task.
+    status: open

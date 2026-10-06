@@ -1,0 +1,49 @@
+library:
+  name: dynamic-throttled-queue
+  version: 2.2.0
+generated_from:
+  domain_map: skills/_artifacts/domain_map.yaml
+  skill_spec: skills/_artifacts/skill_spec.md
+review:
+  ignore:
+    - CHANGELOG.md
+    - ".bumpy/**"
+    - ".github/**"
+    - ".husky/**"
+    - ".idea/**"
+    - ".abide/**"
+    - "docs/agents/**"
+    - ".gitignore"
+    - ".npmignore"
+    - ".lintstagedrc"
+    - ".jscpd.json"
+    - commitlint.config.js
+    - "eslint.config*.ts"
+    - knip.json
+    - tsconfig.json
+    - pnpm-workspace.yaml
+skills:
+  - name: configure-throttled-queue
+    slug: configure-throttled-queue
+    domain: throttled-queue
+    path: skills/configure-throttled-queue/SKILL.md
+    description: >
+      Use when creating, configuring, or debugging a dynamic-throttled-queue
+      (createThrottledQueue): pacing calls to a rate-limited API, choosing
+      min_rpi/max_rpi/interval/concurrency, adapting the rate to errors or HTTP
+      429s, retrying failed work, honoring Retry-After, getting results back
+      with submit() and cancelling them, or pausing, stopping, aborting, and
+      draining the queue.
+    sources:
+      - src/*.ts
+      - src/__tests__/*.test.ts
+      - tests/skills/configure-throttled-queue/*
+      - README.md
+    requires: []
+    purpose: >
+      Teach agents to configure dynamic-throttled-queue correctly: start-rate
+      pacing versus async concurrency, adaptive-rate outcome classification
+      versus retry eligibility, server-directed cooldowns, task handles, and the
+      pause/resume/stop/abort/failed lifecycle semantics.
+distribution:
+  mode: none

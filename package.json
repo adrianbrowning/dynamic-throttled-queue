@@ -50,7 +50,7 @@
   },
   "devDependencies": {
     "@commitlint/cli": "21.2.3",
-    "@commitlint/config-conventional": "21.2.0",
+    "@commitlint/config-conventional": "21.2.3",
     "@gingacodemonkey/config": "^0.1.0",
     "@tanstack/intent": "0.5.0",
     "@types/node": "^24.13.3",

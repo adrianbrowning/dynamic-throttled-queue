@@ -34,8 +34,10 @@ jobs:
           set +e
           set -o pipefail
           pnpm run lint:s 2>&1 | tee lint-output.txt
-          LINT_EXIT_CODE=$?
-          echo "exit_code=$LINT_EXIT_CODE" >> $GITHUB_OUTPUT
+          STYLE_EXIT_CODE=$?
+          pnpm run lint:esl 2>&1 | tee -a lint-output.txt
+          CORRECTNESS_EXIT_CODE=$?
+          echo "exit_code=$(( STYLE_EXIT_CODE || CORRECTNESS_EXIT_CODE ))" >> $GITHUB_OUTPUT
 
           if [ ! -s lint-output.txt ]; then
             echo "has_issues=false" >> $GITHUB_OUTPUT
@@ -49,7 +51,8 @@ jobs:
             echo "has_issues=false" >> $GITHUB_OUTPUT
           fi
 
-          if grep -E "^\s+[0-9]+:[0-9]+\s+error\s" lint-output.txt; then
+          # lint:esl fails on any finding (--max-warnings=0), so its exit code also counts as an error
+          if [ $CORRECTNESS_EXIT_CODE -ne 0 ] || grep -E "^\s+[0-9]+:[0-9]+\s+error\s" lint-output.txt; then
             echo "has_errors=true" >> $GITHUB_OUTPUT
           else
             echo "has_errors=false" >> $GITHUB_OUTPUT

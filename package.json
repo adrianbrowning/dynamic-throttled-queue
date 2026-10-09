@@ -24,7 +24,7 @@
     "lint:fix": "pnpm lint:s --fix",
     "lint:knip": "knip",
     "lint:jscpd": "jscpd .",
-    "lint": "pnpm lint:ts && pnpm lint:esl && pnpm lint:fix",
+    "lint": "pnpm lint:ts && pnpm lint:esl",
     "lint:e18e": "pnpm dlx @e18e/cli analyze",
     "bump": "bumpy add",
     "bump:status": "bumpy status",

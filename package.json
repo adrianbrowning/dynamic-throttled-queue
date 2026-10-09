@@ -52,7 +52,7 @@
     "@commitlint/cli": "21.2.3",
     "@commitlint/config-conventional": "20.0.0",
     "@gingacodemonkey/config": "^0.0.38",
-    "@tanstack/intent": "0.5.0",
+    "@tanstack/intent": "0.5.4",
     "@types/node": "^24.13.3",
     "@varlock/bumpy": "^1.18.1",
     "eslint": "^9.39.5",

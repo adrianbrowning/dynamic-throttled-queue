@@ -1,26 +1,21 @@
-name: CI
+name: CI Tests
 
 on:
   pull_request:
-    branches: [master]
-  push:
-    branches: [master]
-  workflow_dispatch:
-
-permissions:
-  contents: read
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
-  cancel-in-progress: true
+    branches:
+      - master
+    types: [ opened, synchronize, reopened ]
 
 jobs:
-  test:
+  test-runner:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
-
+    timeout-minutes: 15
+    permissions:
+      contents: read
     steps:
       - uses: actions/checkout@v7
-      - uses: ./.github/actions/setup-base
 
-      - run: pnpm test
+      - uses: ./.github/actions/setup
+
+      - name: Test
+        run: pnpm run test

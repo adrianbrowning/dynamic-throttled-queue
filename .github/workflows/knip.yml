@@ -2,35 +2,43 @@ name: Knip
 
 on:
   pull_request:
-    branches: [master]
-    types: [opened, synchronize, reopened]
+    branches:
+      - master
+    types: [ opened, synchronize, reopened ]
   workflow_dispatch:
 
-permissions:
-  contents: read
-  pull-requests: write
-
 concurrency:
-  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
 jobs:
   knip:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
 
     steps:
       - uses: actions/checkout@v7
-      - uses: ./.github/actions/setup-base
 
-      - name: Run Knip
+      - uses: ./.github/actions/setup
+        with:
+          checkout-ref: ${{ github.head_ref || github.ref_name }}
+
+      - name: Run knip
         id: knip-check
         continue-on-error: true
         run: |
           set +e
           set -o pipefail
           pnpm knip 2>&1 | tee knip-output.txt
-          echo "exit_code=$?" >> $GITHUB_OUTPUT
+          KNIP_EXIT_CODE=$?
+          echo "exit_code=$KNIP_EXIT_CODE" >> $GITHUB_OUTPUT
+          if [ $KNIP_EXIT_CODE -ne 0 ]; then
+            echo "Knip checks failed. KNIP_EXIT_CODE=$KNIP_EXIT_CODE"
+            exit 1
+          fi
 
       - name: Comment knip results on PR
         if: github.event_name == 'pull_request' && steps.knip-check.outputs.exit_code != '0'
@@ -43,6 +51,7 @@ jobs:
             const raw = fs.readFileSync('knip-output.txt', 'utf8');
             const output = raw.replace(/[`<>&]/g, c => ({'`':"'", '<':'&lt;', '>':'&gt;', '&':'&amp;'}[c])).slice(0, 60000);
             const comment = `## 🔍 Knip Check Failed\n\n<details>\n<summary>Click to see knip errors</summary>\n\n\`\`\`\n${output}\n\`\`\`\n\n</details>\n\n[View workflow run](${process.env.RUN_URL})`;
+
             github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -52,4 +61,7 @@ jobs:
 
       - name: Fail if knip failed
         if: steps.knip-check.outputs.exit_code != '0'
-        run: exit 1
+        # Repeat the findings here: this is the step `gh run view --log-failed` shows
+        run: |
+          cat knip-output.txt
+          exit 1

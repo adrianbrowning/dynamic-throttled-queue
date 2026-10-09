@@ -1,8 +1,9 @@
-pnpm:
-  strictDepBuilds: true
-  minimumReleaseAgeExclude:
-    - '@gingacodemonkey/config'
-  trustPolicyIgnoreAfter: 43200
-  trustPolicy: no-downgrade
-  blockExoticSubdeps: true
-  minimumReleaseAge: 4320
+minimumReleaseAge: 4320
+blockExoticSubdeps: true
+trustPolicy: no-downgrade
+trustPolicyIgnoreAfter: 43200
+minimumReleaseAgeExclude:
+  - '@gingacodemonkey/config'
+strictDepBuilds: true
+allowBuilds:
+  'unrs-resolver': true

@@ -17,10 +17,10 @@
     "build": "zshy",
     "test": "vitest run",
     "test:watch": "vitest",
-    "lint:ts": "tsc --noEmit -p tsconfig.json",
-    "lint:esl": "eslint --config eslint.config.ts \"src/**/*.{j,t}s{,x}\" --cache --max-warnings=0",
+    "lint:ts": "tsc --noEmit && tsc -p tsconfig.config.json",
+    "lint:esl": "eslint --config eslint.config.ts \"src/**/*.{j,t}s{,x}\" \"eslint.config*.ts\" --cache --max-warnings=0",
     "lint:esl:fix": "pnpm lint:esl --fix",
-    "lint:s": "eslint --config eslint.config.style.ts \"src/**/*.{j,t}s{,x}\" --cache --max-warnings=0",
+    "lint:s": "eslint --config eslint.config.style.ts \"src/**/*.{j,t}s{,x}\" \"eslint.config*.ts\" --cache --max-warnings=0",
     "lint:fix": "pnpm lint:s --fix",
     "lint:knip": "knip",
     "lint:jscpd": "jscpd .",
@@ -50,15 +50,16 @@
   },
   "devDependencies": {
     "@commitlint/cli": "21.2.3",
-    "@commitlint/config-conventional": "20.0.0",
-    "@gingacodemonkey/config": "^0.0.38",
+    "@commitlint/config-conventional": "21.2.0",
+    "@gingacodemonkey/config": "^0.1.0",
     "@tanstack/intent": "0.5.0",
     "@types/node": "^24.13.3",
     "@varlock/bumpy": "^1.18.1",
     "eslint": "^9.39.5",
     "husky": "9.1.7",
+    "jiti": "^2.7.0",
     "jscpd": "^4.2.5",
-    "knip": "5.70.1",
+    "knip": "6.26.0",
     "lint-staged": "17.6.0",
     "typescript": "^6.0.3",
     "vitest": "^5.0.2",
@@ -76,5 +77,12 @@
       "default": "./dist/dynamic-throttled-queue.js"
     }
   },
-  "packageManager": "pnpm@10.34.5"
+  "packageManager": "pnpm@10.34.5",
+  "imports": {
+    "#src/*.ts": {
+      "types": "./dist/*.d.ts",
+      "gingacodemonkey:source": "./src/*.ts",
+      "default": "./dist/*.js"
+    }
+  }
 }

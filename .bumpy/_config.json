@@ -1,5 +1,12 @@
 {
   "$schema": "../node_modules/@varlock/bumpy/config-schema.json",
   "baseBranch": "master",
-  "changelog": "default"
+  "changelog": "default",
+  "include": [
+    "dynamic-throttled-queue"
+  ],
+  "access": "public",
+  "publish": {
+    "provenance": true
+  }
 }

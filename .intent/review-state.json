@@ -3,7 +3,7 @@
   "baseline": "6651dc14a0382b3ab007c59f1fcfd882da997d46",
   "items": {
     "skill:skills/configure-throttled-queue/SKILL.md": {
-      "fingerprint": "d5a91664f98d19805c0de3d9fe6802bf45a064c07bb50dc3408481974af0f53e",
+      "fingerprint": "6d4c739ed59f7d3b747d65f568ef34acd43e8a4825acbf0861e7295cbbac8a56",
       "snapshot": {
         "README.md": "1565c56a120e46361f4ba1898a7fef570771d579b8870394ae12546b1e371d95",
         "skills/configure-throttled-queue/SKILL.md": "f5dbdd740679bcbbacfe6c4f9b6a0703f7b62b93efd5ab22d2adc7c76d083ea4",
@@ -13,29 +13,29 @@
         "skills/configure-throttled-queue/references/state-and-idle.md": "83232fc45f99d344860b079044bdca975156d6550edf5145bdb88cf4bd612f05",
         "src/__tests__/adaptive-rate.test.ts": "dcc069a495d9adffe816185524a81f6faec1d2b971d184671742752c18860c4d",
         "src/__tests__/cooldown.test.ts": "1b89b6829f69d73576fc70e0b684e947b0d5ba379c1b72f0f41ce061b1ee3c2b",
-        "src/__tests__/dynamic-throttled-queue.test.ts": "9c60da556b624b3cc432d5caa951d4e610dbf5fa39c530fa328789747a40718d",
-        "src/__tests__/pending-work.test.ts": "a67e5612371f45b2e5743a8048d8d2ea67fb7fa9b13a81fb0df3d62591b0f6a5",
+        "src/__tests__/dynamic-throttled-queue.test.ts": "257824be5ab73bac1e022f9e2432112d9f5af34cdbdec4f2e394f34aa1835a8e",
+        "src/__tests__/pending-work.test.ts": "c9094b640e11c1b216b57b38d2cabb2a591dfcb9a943cab1c4c3627a01c7d1c7",
         "src/__tests__/rate-strategies.test.ts": "a92e69707e2988d0826b9cb5b7389054bc1c05be218e92b3b39963349e011065",
         "src/__tests__/retry-policy.test.ts": "077e51ce73ba02b32fe85d7dcf03d9469a933a18683589a7508a7569fc456dd2",
-        "src/__tests__/task-handles.test.ts": "548cee97450743c38e43aca959b7b15bd5aa8bd68414220037f5d4e51aece32e",
-        "src/adaptive-rate.ts": "fa08fc8866314adb72886d36ee225c21e4938ad298ae5fe8f8fe7c6baba71209",
+        "src/__tests__/task-handles.test.ts": "7500e5ab4b15b0a4f68ae238cb0cac2682c065ec2c6aedf3ccd96f72a27855f1",
+        "src/adaptive-rate.ts": "6f44cca43a1e00b2657e2637c9bfe913435526ed2d97406f540ded2e055aa943",
         "src/dynamic-throttled-queue.ts": "bc3f7beb927bf31c7ab429a65f6241e0c9525840f2e3fd1e7114fb611fc7c440",
         "src/pending-work.ts": "08e88eea6008d870c4da47c39d50290c9adb5e594b18bbb98bbde6e909af582a",
-        "src/retry-policy.ts": "020076f3afea1130e38fb8eddc48c9be4be55df5f18a8d0b973e21f797a9596a",
-        "src/scheduler.ts": "63918ecfb33d70df49161cce102e43e2b0e62d0d693d61a050e794c9eed5bab9",
+        "src/retry-policy.ts": "f78315d09829dee1440ad0bcb2272add5d08cb88d78c57981ad145c9f8de381e",
+        "src/scheduler.ts": "d117f6cc8e9124f2a954e233ccea3d4660bd466a2d2d465a2854445d1eeb002d",
         "tests/skills/configure-throttled-queue/check.test.ts": "ac8a8c291b6b10e9f85831c4d65a23603a745ad213872ace2f5dbe28f2d434ec",
         "tests/skills/configure-throttled-queue/solution.ts": "9e6a8de1042134cd85563c8ea3fed89805000ddcd46da07c62da9b5e7fce44c5",
         "tests/skills/configure-throttled-queue/task.md": "5537a9c2c3bd4a0e3ccbb169f5e414a36716f3393d18a24a44a7f8ac39ad3299"
       },
-      "head": "a6744fe02983c58139be458f85ea06b71cdc2c4e",
-      "outcome": "updated",
-      "reason": "Only the sources frontmatter changed: the fixture glob becomes tests/skills/configure-throttled-queue*/* (same three files) so git ls-files keeps them under Intent's node_modules exclude. Guidance body unchanged.",
+      "head": "174d92cef4f5f56e4ef2fbd7a48ffc4cb392338d",
+      "outcome": "no-change",
+      "reason": "Lint autofix only: sorted union members and named imports; sort-object-types disabled. No API or behaviour change.",
       "evidence": [
-        "CI diagnostic job 112367826056 on git 2.55: the old glob with the node_modules exclude listed 0 fixtures (3 without it); the new glob lists all 3 locally with the exclude. Fixture contents unchanged since 54d8f41 (sha256 ac8a8c29, 9e6a8de1, 5537a9c2 match the recorded snapshot). pnpm test passes including tests/skills/configure-throttled-queue/check.test.ts; intent validate skills passes."
+        "Changed: src/__tests__/adaptive-rate.test.ts, src/__tests__/pending-work.test.ts, src/adaptive-rate.ts, src/dynamic-throttled-queue.ts, src/pending-work.ts, src/retry-policy.ts, src/scheduler.ts at 174d92cef4f5f56e4ef2fbd7a48ffc4cb392338d"
       ]
     },
     "planning:skills/_artifacts": {
-      "fingerprint": "08dc2ec9c59348e4e11c50970b34b9db5f7427fab4d6352bb3c523705113500a",
+      "fingerprint": "d80484f13cbf97fc13baeab495920270d2a044b98de29319c41cf5526b2dd984",
       "snapshot": {
         "README.md": "1565c56a120e46361f4ba1898a7fef570771d579b8870394ae12546b1e371d95",
         "skills/_artifacts/domain_map.yaml": "f1bbcd3abb65d9e85076d0909d9bfb4847c99029b29ccb1295cff8196c2f36ce",
@@ -48,25 +48,37 @@
         "skills/configure-throttled-queue/references/state-and-idle.md": "83232fc45f99d344860b079044bdca975156d6550edf5145bdb88cf4bd612f05",
         "src/__tests__/adaptive-rate.test.ts": "dcc069a495d9adffe816185524a81f6faec1d2b971d184671742752c18860c4d",
         "src/__tests__/cooldown.test.ts": "1b89b6829f69d73576fc70e0b684e947b0d5ba379c1b72f0f41ce061b1ee3c2b",
-        "src/__tests__/dynamic-throttled-queue.test.ts": "9c60da556b624b3cc432d5caa951d4e610dbf5fa39c530fa328789747a40718d",
-        "src/__tests__/pending-work.test.ts": "a67e5612371f45b2e5743a8048d8d2ea67fb7fa9b13a81fb0df3d62591b0f6a5",
+        "src/__tests__/dynamic-throttled-queue.test.ts": "257824be5ab73bac1e022f9e2432112d9f5af34cdbdec4f2e394f34aa1835a8e",
+        "src/__tests__/pending-work.test.ts": "c9094b640e11c1b216b57b38d2cabb2a591dfcb9a943cab1c4c3627a01c7d1c7",
         "src/__tests__/rate-strategies.test.ts": "a92e69707e2988d0826b9cb5b7389054bc1c05be218e92b3b39963349e011065",
         "src/__tests__/retry-policy.test.ts": "077e51ce73ba02b32fe85d7dcf03d9469a933a18683589a7508a7569fc456dd2",
-        "src/__tests__/task-handles.test.ts": "548cee97450743c38e43aca959b7b15bd5aa8bd68414220037f5d4e51aece32e",
-        "src/adaptive-rate.ts": "fa08fc8866314adb72886d36ee225c21e4938ad298ae5fe8f8fe7c6baba71209",
+        "src/__tests__/task-handles.test.ts": "7500e5ab4b15b0a4f68ae238cb0cac2682c065ec2c6aedf3ccd96f72a27855f1",
+        "src/adaptive-rate.ts": "6f44cca43a1e00b2657e2637c9bfe913435526ed2d97406f540ded2e055aa943",
         "src/dynamic-throttled-queue.ts": "bc3f7beb927bf31c7ab429a65f6241e0c9525840f2e3fd1e7114fb611fc7c440",
         "src/pending-work.ts": "08e88eea6008d870c4da47c39d50290c9adb5e594b18bbb98bbde6e909af582a",
-        "src/retry-policy.ts": "020076f3afea1130e38fb8eddc48c9be4be55df5f18a8d0b973e21f797a9596a",
-        "src/scheduler.ts": "63918ecfb33d70df49161cce102e43e2b0e62d0d693d61a050e794c9eed5bab9",
+        "src/retry-policy.ts": "f78315d09829dee1440ad0bcb2272add5d08cb88d78c57981ad145c9f8de381e",
+        "src/scheduler.ts": "d117f6cc8e9124f2a954e233ccea3d4660bd466a2d2d465a2854445d1eeb002d",
         "tests/skills/configure-throttled-queue/check.test.ts": "ac8a8c291b6b10e9f85831c4d65a23603a745ad213872ace2f5dbe28f2d434ec",
         "tests/skills/configure-throttled-queue/solution.ts": "9e6a8de1042134cd85563c8ea3fed89805000ddcd46da07c62da9b5e7fce44c5",
         "tests/skills/configure-throttled-queue/task.md": "5537a9c2c3bd4a0e3ccbb169f5e414a36716f3393d18a24a44a7f8ac39ad3299"
       },
-      "head": "a6744fe02983c58139be458f85ea06b71cdc2c4e",
-      "outcome": "updated",
-      "reason": "skill_tree.yaml synced to the new fixture glob; skill_spec.md records the decision and its CI evidence. Tasks, coverage and skill boundaries unchanged.",
+      "head": "174d92cef4f5f56e4ef2fbd7a48ffc4cb392338d",
+      "outcome": "no-change",
+      "reason": "Lint autofix only: sorted union members and named imports; sort-object-types disabled. No API or behaviour change.",
       "evidence": [
-        "CI diagnostic job 112367826056 on git 2.55: the old glob with the node_modules exclude listed 0 fixtures (3 without it); the new glob lists all 3 locally with the exclude. Fixture contents unchanged since 54d8f41 (sha256 ac8a8c29, 9e6a8de1, 5537a9c2 match the recorded snapshot). pnpm test passes including tests/skills/configure-throttled-queue/check.test.ts; intent validate skills passes."
+        "Changed: src/__tests__/adaptive-rate.test.ts, src/__tests__/pending-work.test.ts, src/adaptive-rate.ts, src/dynamic-throttled-queue.ts, src/pending-work.ts, src/retry-policy.ts, src/scheduler.ts at 174d92cef4f5f56e4ef2fbd7a48ffc4cb392338d"
+      ]
+    },
+    "source:tsconfig.config.json": {
+      "fingerprint": "f7f05c98bce006b9f82864e589c15a3ed7b8ada3c97e6ae558be23fb64479ef9",
+      "snapshot": {
+        "tsconfig.config.json": "cc1def7d1b89307d38228eb0239d6d7bc77b65cc89922fe8843201f750dc71f0"
+      },
+      "head": "d96c0e159b80b72a560e5d01396518a1346a8a04",
+      "outcome": "no-change",
+      "reason": "config 0.1.0 lint autofix: sorted type members and imports only; no API or behaviour change. tsconfig.config.json only type-checks eslint configs.",
+      "evidence": [
+        "Changed: tsconfig.config.json at d96c0e159b80b72a560e5d01396518a1346a8a04"
       ]
     }
   }

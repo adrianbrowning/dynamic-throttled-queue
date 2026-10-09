@@ -21,9 +21,9 @@ export type AimdOptions = {
 };
 
 export type FailureOutcome =
+  | Readonly<{ kind: "rejected"; error: unknown; }>
   | Readonly<{ kind: "returned-false"; }>
-  | Readonly<{ kind: "thrown"; error: unknown; }>
-  | Readonly<{ kind: "rejected"; error: unknown; }>;
+  | Readonly<{ kind: "thrown"; error: unknown; }>;
 
 export type RateOutcomeClassifier = (outcome: FailureOutcome) => boolean;
 
@@ -69,7 +69,7 @@ export function aimd({ increaseBy = 1, decreaseFactor = 0.5 }: AimdOptions = {})
  * Whether starts may become due. `open` makes paced starts due, `held` makes none due until the module
  * reopens them, and `idle` means the module is not observing and waits for `start()`.
  */
-type Pacing = "idle" | "open" | "held";
+type Pacing = "held" | "idle" | "open";
 
 /** Reports how one started callback settled: `undefined` for success, otherwise the failure. */
 export type SettlementReporter = (outcome: FailureOutcome | undefined) => void;

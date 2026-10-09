@@ -58,7 +58,7 @@
     "eslint": "^9.39.5",
     "husky": "9.1.7",
     "jiti": "^2.7.0",
-    "jscpd": "^4.2.5",
+    "jscpd": "^5.4.0",
     "knip": "6.26.0",
     "lint-staged": "17.6.0",
     "typescript": "^6.0.3",

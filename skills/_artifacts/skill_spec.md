@@ -14,11 +14,11 @@ used mainly to call rate-limited HTTP APIs.
 
 | Skill | Type | Domain | What it covers | Failure modes |
 | --- | --- | --- | --- | --- |
-| configure-throttled-queue | core | throttled-queue | Options, concurrency, adaptive outcomes, rate strategies, retries, cooldowns, task handles, lifecycle, state | 9 |
+| configure-throttled-queue | core | throttled-queue | Options, concurrency, adaptive outcomes, rate strategies, retries, cooldowns, task handles, lifecycle, state, faxios plugin | 10 |
 
 ## Failure Mode Inventory
 
-### configure-throttled-queue (9 failure modes)
+### configure-throttled-queue (10 failure modes)
 
 | # | Mistake | Priority | Source | Cross-skill? |
 | --- | --- | --- | --- | --- |
@@ -31,6 +31,7 @@ used mainly to call rate-limited HTTP APIs.
 | 7 | Expecting maxQueueSize overflow to return a value | MEDIUM | src/pending-work.ts | — |
 | 8 | Returning malformed decisions from a custom rateStrategy | MEDIUM | src/adaptive-rate.ts | — |
 | 9 | Starting a promise without returning or awaiting it | CRITICAL | README Queuing work | — |
+| 10 | Installing the faxios plugin before `retry`, or giving its queue retries | HIGH | src/faxios.ts; README faxios plugin | — |
 
 ## Tensions
 
@@ -42,7 +43,7 @@ used mainly to call rate-limited HTTP APIs.
 
 | Skill | Subsystems | Reference candidates |
 | --- | --- | --- |
-| configure-throttled-queue | — | rate-strategies.md, retries.md, lifecycle.md, state-and-idle.md |
+| configure-throttled-queue | faxios plugin (`dynamic-throttled-queue/faxios`) | rate-strategies.md, retries.md, lifecycle.md, state-and-idle.md, faxios.md |
 
 ## Remaining Gaps
 
@@ -57,7 +58,7 @@ used mainly to call rate-limited HTTP APIs.
 - **Framework skills:** none (framework-agnostic library)
 - **Lifecycle skills:** none yet; v1 and v2 migration are open gaps
 - **Composition skills:** none
-- **Reference files:** configure-throttled-queue/references/{rate-strategies,retries,lifecycle,state-and-idle}.md
+- **Reference files:** configure-throttled-queue/references/{rate-strategies,retries,lifecycle,state-and-idle,faxios}.md
 
 ## Coverage and batch history
 
@@ -121,3 +122,23 @@ used mainly to call rate-limited HTTP APIs.
   repository the files vanish whenever the literal directory prefix is 16, 17
   or 19+ characters long. The new glob's literal prefix is `tests/skills/`
   (13 characters) and matches the same three files.
+
+### faxios plugin — 2026-10-09, unreleased (issue #82)
+
+- **Change reviewed:** new subpath `dynamic-throttled-queue/faxios`
+  (`src/faxios.ts`, `src/__tests__/faxios.test.ts`, README "faxios plugin").
+- **Decision: extend `configure-throttled-queue`, no new skill.** Throttling a
+  faxios client is the same task (pace a rate-limited API) with a different
+  entry point. The skill gains `references/faxios.md` and a pointer in Setup
+  that says when to read it. The description names the task once. Purpose is
+  unchanged.
+- **Coverage:** install order after `retry({ respectRetryAfter: false })`, the
+  `{ queue }` form (`retry: 0`, `rateOutcomeClassifier: isRateLimited`),
+  stream slot hold, timeout start at dispatch, `Retry-After` parsing,
+  `retryAfterOn503`, `cooldownFrom`, `ERR_CANCELED`, `ERR_THROTTLE_REJECTED`.
+  `sources` (`src/*.ts`) already covers `src/faxios.ts`.
+- **Task check:** `tests/skills/configure-throttled-queue-faxios/` (matched by
+  the existing fixture glob). The reference solution passes. A throttle
+  installed before `retry` and a shared queue with `retry: 2` both fail the
+  grader.
+- **Not verified:** fresh consumer session and discovery prompts.

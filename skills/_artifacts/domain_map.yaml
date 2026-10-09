@@ -1,7 +1,7 @@
 # domain_map.yaml
 # Library: dynamic-throttled-queue
 # Version: 3.0.0
-# Date: 2026-10-04
+# Date: 2026-10-09
 # Status: reviewed
 
 library:
@@ -33,6 +33,7 @@ skills:
       - submit, TaskHandle (result, cancel), ExecutionContext (signal, attempt)
       - pause, resume, stop, abort, failed state
       - waitForIdle, getState, pending
+      - "dynamic-throttled-queue/faxios: dynamicThrottle, isRateLimited, parseRetryAfter, ERR_THROTTLE_REJECTED"
     tasks:
       - "Choose min_rpi, max_rpi, interval, and evenly_spaced for an API rate limit"
       - Bound in-flight async work with concurrency separately from the start rate
@@ -42,6 +43,7 @@ skills:
       - Submit work and cancel it with task handles
       - "Pause, resume, stop, or abort a queue safely"
       - Wait for the queue to drain and inspect its state
+      - Throttle a faxios client with the dynamic-throttled-queue/faxios plugin
     reference_candidates:
       - topic: rate strategies and adjustment timing
         reason: linear/aimd formulas, custom strategy contract, interval vs settled windows
@@ -51,7 +53,18 @@ skills:
         reason: five states with distinct pending/active/enqueue rules and cooldown interactions
       - topic: state and idle
         reason: thirteen getState fields and waitForIdle edge cases
+      - topic: faxios plugin
+        reason: install order after retry, shared-queue settings, stream slots, timeout, Retry-After options, error codes
     failure_modes:
+      - mistake: Installing the faxios plugin before retry, or giving its queue retries
+        mechanism: Before retry, the retry backoff holds a queue slot; a queue with retry > 0 retries each faxios attempt again.
+        wrong_pattern: |
+          faxios.create().use(dynamicThrottle({ queue })).use(retry());
+        correct_pattern: |
+          faxios.create().use(retry({ respectRetryAfter: false })).use(dynamicThrottle({ queue })); // queue: retry 0, isRateLimited
+        source: src/faxios.ts; README.md faxios plugin
+        priority: HIGH
+        status: active
       - mistake: Ignoring the abort signal in callbacks
         mechanism: Cancellation is cooperative, so abort() and cancel() cannot stop I/O that ignores signal.
         wrong_pattern: |

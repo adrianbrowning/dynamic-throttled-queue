@@ -14,6 +14,9 @@ importers:
       '@commitlint/config-conventional':
         specifier: 20.0.0
         version: 20.0.0
+      '@gcmdev/faxios':
+        specifier: link:../../faxios/main/packages/lib
+        version: link:../../faxios/main/packages/lib
       '@gingacodemonkey/config':
         specifier: ^0.0.38
         version: 0.0.38(@commitlint/cli@21.2.3(@types/node@24.13.3)(conventional-commits-parser@7.1.2)(typescript@6.0.3))(@commitlint/config-conventional@20.0.0)(@typescript-eslint/eslint-plugin@8.71.0(@typescript-eslint/parser@8.71.0(eslint@9.39.5(jiti@2.7.0))(typescript@6.0.3))(eslint@9.39.5(jiti@2.7.0))(typescript@6.0.3))(eslint@9.39.5(jiti@2.7.0))(husky@9.1.7)(jscpd@4.3.0)(knip@5.70.1(@types/node@24.13.3)(typescript@6.0.3))(lint-staged@17.6.0)(typescript@6.0.3)(vitest@5.0.2(@types/node@24.13.3)(vite@7.3.6(@types/node@24.13.3)(jiti@2.7.0)(yaml@2.9.1)))

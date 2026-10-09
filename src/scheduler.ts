@@ -16,7 +16,7 @@ export type ThrottleCallback = (context: ExecutionContext) => unknown;
 export type ThrottleFn = (callback: ThrottleCallback) => void;
 
 /** Submitted work. Every returned value, including `false`, is a result; only a throw or rejection fails. */
-export type TaskCallback<T> = (context: ExecutionContext) => T | Promise<T>;
+export type TaskCallback<T> = (context: ExecutionContext) => Promise<T> | T;
 
 /** One accepted logical item across all of its attempts. */
 export type TaskHandle<T> = Readonly<{
@@ -29,7 +29,7 @@ export type TaskHandle<T> = Readonly<{
   cancel: (reason?: unknown) => void;
 }>;
 
-export type QueueLifecycleState = "running" | "paused" | "stopped" | "aborted" | "failed";
+export type QueueLifecycleState = "aborted" | "failed" | "paused" | "running" | "stopped";
 
 export type QueueState = Readonly<{
   rate: number;
@@ -79,9 +79,9 @@ type QueueItem = { fn: (context: ExecutionContext) => unknown; attempt: number; 
 const returnedFalse: FailureOutcome = Object.freeze({ kind: "returned-false" });
 
 type Lifecycle =
-  | Readonly<{ state: Exclude<QueueLifecycleState, "failed">; }>
-  | Readonly<{ state: "failed"; error: unknown; }>;
-type LifecycleEvent = "pause" | "resume" | "stop" | "restart" | "abort" | "fail";
+  | Readonly<{ state: "failed"; error: unknown; }>
+  | Readonly<{ state: Exclude<QueueLifecycleState, "failed">; }>;
+type LifecycleEvent = "abort" | "fail" | "pause" | "restart" | "resume" | "stop";
 
 /** The state each event leads to. An event missing from the current state's row is a no-op. */
 const lifecycleTransitions: Readonly<Record<QueueLifecycleState, Partial<Readonly<Record<LifecycleEvent, QueueLifecycleState>>>>> = {

@@ -27,7 +27,7 @@ function takeAll(work: PendingWork<string>) {
 
 /** Records whether an idle wait has resolved, rejected, or is still pending after microtasks flush. */
 function watchIdle(work: PendingWork<string>) {
-  const result: { status: "pending" | "resolved" | "rejected"; error?: unknown; } = { status: "pending" };
+  const result: { status: "pending" | "rejected" | "resolved"; error?: unknown; } = { status: "pending" };
   void (async () => {
     try {
       await work.whenIdle();
@@ -112,7 +112,7 @@ describe("pending work", () => {
       const { work } = track({ capacity: 1 });
       work.accept("a");
       work.take();
-      let seen: { active: number; admitted: boolean; } | undefined;
+      let seen: undefined | { active: number; admitted: boolean; };
 
       work.settle(() => {
         let admitted = true;

@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createThrottledQueue } from "../dynamic-throttled-queue.ts";
 import type { RateStrategy } from "../dynamic-throttled-queue.ts";
 

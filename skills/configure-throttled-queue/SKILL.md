@@ -5,8 +5,9 @@ description: >
   (createThrottledQueue): pacing calls to a rate-limited API, choosing
   min_rpi/max_rpi/interval/concurrency, adapting the rate to errors or HTTP
   429s, retrying failed work, honoring Retry-After, getting results back with
-  submit() and cancelling them, or pausing, stopping, aborting, and draining
-  the queue.
+  submit() and cancelling them, pausing, stopping, aborting, and draining
+  the queue, or throttling a faxios HTTP client with the
+  dynamic-throttled-queue/faxios plugin.
 metadata:
   purpose: >
     Teach agents to configure dynamic-throttled-queue correctly: start-rate
@@ -46,6 +47,11 @@ queue(async ({ signal }) => {
 ```
 
 The package is ESM-only and requires Node.js 24 or later.
+
+If the developer throttles a faxios client (`@gcmdev/faxios`), read
+[the faxios plugin](references/faxios.md) first. The plugin creates the queue
+and calls `cooldownFor()` for you. It requires a specific install order after
+`retry({ respectRetryAfter: false })`, and the queue must not retry.
 
 ## 1. Pick the start rate
 
@@ -312,6 +318,13 @@ in `src/scheduler.ts`.
 Retry eligibility, rate counting (`rateOutcomeClassifier`), and `cooldownFor`
 are three independent decisions. Configure each one you need. Source: README
 "Failure classification" and "Server-directed cooldown".
+
+### HIGH: Installing the faxios plugin before `retry`, or giving its queue retries
+
+Install `dynamicThrottle` after `retry({ respectRetryAfter: false })`. Before
+`retry`, the retry backoff holds a queue slot. A shared queue must set
+`retry: 0` and `rateOutcomeClassifier: isRateLimited`. Read
+[the faxios plugin](references/faxios.md). Source: `src/faxios.ts`.
 
 ### HIGH: Unhandled rejections from cancelled or aborted tasks
 

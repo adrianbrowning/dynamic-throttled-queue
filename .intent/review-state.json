@@ -3,10 +3,11 @@
   "baseline": "6651dc14a0382b3ab007c59f1fcfd882da997d46",
   "items": {
     "skill:skills/configure-throttled-queue/SKILL.md": {
-      "fingerprint": "d5a91664f98d19805c0de3d9fe6802bf45a064c07bb50dc3408481974af0f53e",
+      "fingerprint": "9e236c6f3cc2f034f9c14d9807ad5efbf3e25158c0f9059cce127f4e2ccb493d",
       "snapshot": {
-        "README.md": "1565c56a120e46361f4ba1898a7fef570771d579b8870394ae12546b1e371d95",
-        "skills/configure-throttled-queue/SKILL.md": "f5dbdd740679bcbbacfe6c4f9b6a0703f7b62b93efd5ab22d2adc7c76d083ea4",
+        "README.md": "f8548b9f8d19cb0aee6cd014b14b3fa9ffde1cb556fda3d1980164e8b464a55a",
+        "skills/configure-throttled-queue/SKILL.md": "3575e26a53dae07851a5f001c76fec9fc1485a9ba0bbd239312b580b10b521f0",
+        "skills/configure-throttled-queue/references/faxios.md": "c9c86785ea78d22d6084d53e793e4c555233994f88b6fcfc9bbb8094e165baab",
         "skills/configure-throttled-queue/references/lifecycle.md": "50414cc38fc0bcea2fb8e12414f28b6878e66af373163e36848dd3896ed94620",
         "skills/configure-throttled-queue/references/rate-strategies.md": "bd29e5b2b178e622ecad079fd21ff6e65bfcd49a296f61348477af9b918b3628",
         "skills/configure-throttled-queue/references/retries.md": "06cabadcb4baafd78c8cf43affdbe860643e0782acaeea473a9c98340cbc14a8",
@@ -14,34 +15,40 @@
         "src/__tests__/adaptive-rate.test.ts": "dcc069a495d9adffe816185524a81f6faec1d2b971d184671742752c18860c4d",
         "src/__tests__/cooldown.test.ts": "1b89b6829f69d73576fc70e0b684e947b0d5ba379c1b72f0f41ce061b1ee3c2b",
         "src/__tests__/dynamic-throttled-queue.test.ts": "9c60da556b624b3cc432d5caa951d4e610dbf5fa39c530fa328789747a40718d",
+        "src/__tests__/faxios.test.ts": "d0c9fba1ea397e39b110569a05f75ae9eeef515ef40f319c616d10bd0d320b1f",
         "src/__tests__/pending-work.test.ts": "a67e5612371f45b2e5743a8048d8d2ea67fb7fa9b13a81fb0df3d62591b0f6a5",
         "src/__tests__/rate-strategies.test.ts": "a92e69707e2988d0826b9cb5b7389054bc1c05be218e92b3b39963349e011065",
         "src/__tests__/retry-policy.test.ts": "077e51ce73ba02b32fe85d7dcf03d9469a933a18683589a7508a7569fc456dd2",
         "src/__tests__/task-handles.test.ts": "548cee97450743c38e43aca959b7b15bd5aa8bd68414220037f5d4e51aece32e",
         "src/adaptive-rate.ts": "fa08fc8866314adb72886d36ee225c21e4938ad298ae5fe8f8fe7c6baba71209",
         "src/dynamic-throttled-queue.ts": "bc3f7beb927bf31c7ab429a65f6241e0c9525840f2e3fd1e7114fb611fc7c440",
+        "src/faxios.ts": "9d23a81064fb0d157c4d4c577932d263f7fc7e48aac84c3b9e65bfa5b253860a",
         "src/pending-work.ts": "08e88eea6008d870c4da47c39d50290c9adb5e594b18bbb98bbde6e909af582a",
         "src/retry-policy.ts": "020076f3afea1130e38fb8eddc48c9be4be55df5f18a8d0b973e21f797a9596a",
         "src/scheduler.ts": "63918ecfb33d70df49161cce102e43e2b0e62d0d693d61a050e794c9eed5bab9",
+        "tests/skills/configure-throttled-queue-faxios/check.test.ts": "f31a421c5b8785991a1a7934d9e096dbbc71796c0b1a0d99a9a09189c4e4ec1a",
+        "tests/skills/configure-throttled-queue-faxios/solution.ts": "d4560611b15ada5a082aa6ed044261b9d743444f8ad932cd36b675c6f3e1271e",
+        "tests/skills/configure-throttled-queue-faxios/task.md": "abad2d5c4360053095bec52d82f4875e8f7d2c2932a4e96c062569380a23a0cd",
         "tests/skills/configure-throttled-queue/check.test.ts": "ac8a8c291b6b10e9f85831c4d65a23603a745ad213872ace2f5dbe28f2d434ec",
         "tests/skills/configure-throttled-queue/solution.ts": "9e6a8de1042134cd85563c8ea3fed89805000ddcd46da07c62da9b5e7fce44c5",
         "tests/skills/configure-throttled-queue/task.md": "5537a9c2c3bd4a0e3ccbb169f5e414a36716f3393d18a24a44a7f8ac39ad3299"
       },
-      "head": "a6744fe02983c58139be458f85ea06b71cdc2c4e",
+      "head": "d96c0e159b80b72a560e5d01396518a1346a8a04",
       "outcome": "updated",
-      "reason": "Only the sources frontmatter changed: the fixture glob becomes tests/skills/configure-throttled-queue*/* (same three files) so git ls-files keeps them under Intent's node_modules exclude. Guidance body unchanged.",
+      "reason": "New subpath dynamic-throttled-queue/faxios. Added references/faxios.md (install order after retry({ respectRetryAfter: false }), { queue } form with retry: 0 and isRateLimited, stream slot hold, timeout, Retry-After, retryAfterOn503, cooldownFrom, ERR_CANCELED, ERR_THROTTLE_REJECTED), a Setup pointer, a HIGH mistake, and the faxios task in the description. Existing guidance for the core queue is unchanged; src/*.ts sources already cover src/faxios.ts.",
       "evidence": [
-        "CI diagnostic job 112367826056 on git 2.55: the old glob with the node_modules exclude listed 0 fixtures (3 without it); the new glob lists all 3 locally with the exclude. Fixture contents unchanged since 54d8f41 (sha256 ac8a8c29, 9e6a8de1, 5537a9c2 match the recorded snapshot). pnpm test passes including tests/skills/configure-throttled-queue/check.test.ts; intent validate skills passes."
+        "Source: src/faxios.ts and README 'faxios plugin' at HEAD d96c0e1 plus uncommitted #82 changes. intent validate skills: 1 skill passed. Task check tests/skills/configure-throttled-queue-faxios: vitest 3/3 pass (reference passes; throttle-before-retry and queue retry:2 mistakes fail the grader); tests/skills total 5/5. Fresh consumer session and discovery prompts: not run (unverified)."
       ]
     },
     "planning:skills/_artifacts": {
-      "fingerprint": "08dc2ec9c59348e4e11c50970b34b9db5f7427fab4d6352bb3c523705113500a",
+      "fingerprint": "e46decc0d0a963293ddb2af26a4c48ec4a4c0ab006740106302c0b3b99844e4a",
       "snapshot": {
-        "README.md": "1565c56a120e46361f4ba1898a7fef570771d579b8870394ae12546b1e371d95",
-        "skills/_artifacts/domain_map.yaml": "f1bbcd3abb65d9e85076d0909d9bfb4847c99029b29ccb1295cff8196c2f36ce",
-        "skills/_artifacts/skill_spec.md": "8d9a7e4c673c46c1a10dd79ed600196af70972d8973acad9ea2584cb3037d2d0",
-        "skills/_artifacts/skill_tree.yaml": "504b705938c342a8d0edb327e298d1e6dd689c4b883f12c639e286b2b36731c2",
-        "skills/configure-throttled-queue/SKILL.md": "f5dbdd740679bcbbacfe6c4f9b6a0703f7b62b93efd5ab22d2adc7c76d083ea4",
+        "README.md": "f8548b9f8d19cb0aee6cd014b14b3fa9ffde1cb556fda3d1980164e8b464a55a",
+        "skills/_artifacts/domain_map.yaml": "1b2577bab63a40ed6bb28f1b11f05387cb49f1559697a3c11fe9f16e7408395d",
+        "skills/_artifacts/skill_spec.md": "d15696bbaa3d504dc3aab652d3bb4493214ebb19ad047c88a4cda855d430324c",
+        "skills/_artifacts/skill_tree.yaml": "60dafec76830763a54a3f77e2805ba974d2f442e2f9beab89e6e70fc84e82153",
+        "skills/configure-throttled-queue/SKILL.md": "3575e26a53dae07851a5f001c76fec9fc1485a9ba0bbd239312b580b10b521f0",
+        "skills/configure-throttled-queue/references/faxios.md": "c9c86785ea78d22d6084d53e793e4c555233994f88b6fcfc9bbb8094e165baab",
         "skills/configure-throttled-queue/references/lifecycle.md": "50414cc38fc0bcea2fb8e12414f28b6878e66af373163e36848dd3896ed94620",
         "skills/configure-throttled-queue/references/rate-strategies.md": "bd29e5b2b178e622ecad079fd21ff6e65bfcd49a296f61348477af9b918b3628",
         "skills/configure-throttled-queue/references/retries.md": "06cabadcb4baafd78c8cf43affdbe860643e0782acaeea473a9c98340cbc14a8",
@@ -49,24 +56,29 @@
         "src/__tests__/adaptive-rate.test.ts": "dcc069a495d9adffe816185524a81f6faec1d2b971d184671742752c18860c4d",
         "src/__tests__/cooldown.test.ts": "1b89b6829f69d73576fc70e0b684e947b0d5ba379c1b72f0f41ce061b1ee3c2b",
         "src/__tests__/dynamic-throttled-queue.test.ts": "9c60da556b624b3cc432d5caa951d4e610dbf5fa39c530fa328789747a40718d",
+        "src/__tests__/faxios.test.ts": "d0c9fba1ea397e39b110569a05f75ae9eeef515ef40f319c616d10bd0d320b1f",
         "src/__tests__/pending-work.test.ts": "a67e5612371f45b2e5743a8048d8d2ea67fb7fa9b13a81fb0df3d62591b0f6a5",
         "src/__tests__/rate-strategies.test.ts": "a92e69707e2988d0826b9cb5b7389054bc1c05be218e92b3b39963349e011065",
         "src/__tests__/retry-policy.test.ts": "077e51ce73ba02b32fe85d7dcf03d9469a933a18683589a7508a7569fc456dd2",
         "src/__tests__/task-handles.test.ts": "548cee97450743c38e43aca959b7b15bd5aa8bd68414220037f5d4e51aece32e",
         "src/adaptive-rate.ts": "fa08fc8866314adb72886d36ee225c21e4938ad298ae5fe8f8fe7c6baba71209",
         "src/dynamic-throttled-queue.ts": "bc3f7beb927bf31c7ab429a65f6241e0c9525840f2e3fd1e7114fb611fc7c440",
+        "src/faxios.ts": "9d23a81064fb0d157c4d4c577932d263f7fc7e48aac84c3b9e65bfa5b253860a",
         "src/pending-work.ts": "08e88eea6008d870c4da47c39d50290c9adb5e594b18bbb98bbde6e909af582a",
         "src/retry-policy.ts": "020076f3afea1130e38fb8eddc48c9be4be55df5f18a8d0b973e21f797a9596a",
         "src/scheduler.ts": "63918ecfb33d70df49161cce102e43e2b0e62d0d693d61a050e794c9eed5bab9",
+        "tests/skills/configure-throttled-queue-faxios/check.test.ts": "f31a421c5b8785991a1a7934d9e096dbbc71796c0b1a0d99a9a09189c4e4ec1a",
+        "tests/skills/configure-throttled-queue-faxios/solution.ts": "d4560611b15ada5a082aa6ed044261b9d743444f8ad932cd36b675c6f3e1271e",
+        "tests/skills/configure-throttled-queue-faxios/task.md": "abad2d5c4360053095bec52d82f4875e8f7d2c2932a4e96c062569380a23a0cd",
         "tests/skills/configure-throttled-queue/check.test.ts": "ac8a8c291b6b10e9f85831c4d65a23603a745ad213872ace2f5dbe28f2d434ec",
         "tests/skills/configure-throttled-queue/solution.ts": "9e6a8de1042134cd85563c8ea3fed89805000ddcd46da07c62da9b5e7fce44c5",
         "tests/skills/configure-throttled-queue/task.md": "5537a9c2c3bd4a0e3ccbb169f5e414a36716f3393d18a24a44a7f8ac39ad3299"
       },
-      "head": "a6744fe02983c58139be458f85ea06b71cdc2c4e",
+      "head": "d96c0e159b80b72a560e5d01396518a1346a8a04",
       "outcome": "updated",
-      "reason": "skill_tree.yaml synced to the new fixture glob; skill_spec.md records the decision and its CI evidence. Tasks, coverage and skill boundaries unchanged.",
+      "reason": "domain_map.yaml, skill_spec.md and skill_tree.yaml updated for the faxios plugin: new covers/task/reference candidate/failure mode, description synced, batch-history entry with the decision to extend configure-throttled-queue instead of a new skill. Prior decisions and open gaps preserved.",
       "evidence": [
-        "CI diagnostic job 112367826056 on git 2.55: the old glob with the node_modules exclude listed 0 fixtures (3 without it); the new glob lists all 3 locally with the exclude. Fixture contents unchanged since 54d8f41 (sha256 ac8a8c29, 9e6a8de1, 5537a9c2 match the recorded snapshot). pnpm test passes including tests/skills/configure-throttled-queue/check.test.ts; intent validate skills passes."
+        "Source: src/faxios.ts and README 'faxios plugin' at HEAD d96c0e1 plus uncommitted #82 changes. intent validate skills: 1 skill passed. Task check tests/skills/configure-throttled-queue-faxios: vitest 3/3 pass (reference passes; throttle-before-retry and queue retry:2 mistakes fail the grader); tests/skills total 5/5. Fresh consumer session and discovery prompts: not run (unverified)."
       ]
     }
   }

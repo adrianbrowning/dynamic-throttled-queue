@@ -50,7 +50,8 @@ The package is ESM-only and requires Node.js 24 or later.
 
 If the developer throttles a faxios client (`@gcmdev/faxios`), read
 [the faxios plugin](references/faxios.md) first. The plugin creates the queue
-and calls `cooldownFor()` for you. It requires a specific install order after
+(unless you pass `{ queue }`) and calls `cooldownFor()` for you. With faxios's
+`retry` plugin, it requires a specific install order after
 `retry({ respectRetryAfter: false })`, and the queue must not retry.
 
 ## 1. Pick the start rate

@@ -6,6 +6,9 @@ import { createApi, createApiThrottleBeforeRetry, createApiWithoutClassifier, cr
 type Factory = typeof createApi;
 type Call = { path: string; at: number; respond: (response: Response) => void; };
 
+// The task check is a self-contained fixture, so it keeps its own fake fetch rather than sharing
+// the plugin tests' helpers: a grader must not change when those tests are refactored.
+
 /** A fake fetch that answers each path from a script of statuses; `hold` paths wait for the test. */
 function fakeFetch(script: Record<string, Array<number | [number, Record<string, string>]>>, hold: Array<string> = []) {
   const calls: Array<Call> = [];
@@ -129,7 +132,8 @@ async function assertTaskBehavior(factory: Factory) {
   await assertPacing(factory);
 }
 
-describe("configure-throttled-queue faxios task check", () => {
+// Each grading run takes about 3 s of real time (Retry-After waits 1 s), so allow more than the default 5 s.
+describe("configure-throttled-queue faxios task check", { timeout: 15_000 }, () => {
   it("accepts the reference solution", async () => {
     await assertTaskBehavior(createApi);
   });

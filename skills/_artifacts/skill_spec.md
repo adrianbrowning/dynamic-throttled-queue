@@ -209,3 +209,30 @@ used mainly to call rate-limited HTTP APIs.
 - **Guidance updated:** `references/faxios.md` (version support, a timeout
   section for each faxios line, `attemptTimeout` includes queue wait). Task
   check unchanged; it passes on 0.3.0.
+
+### PR #89 review observations — 2026-10-16, unreleased (issue #82)
+
+- **Change reviewed:** the 15 Observations of the PR #89 review.
+  - `src/faxios.ts`: `linkSignals` is removed, so `next()` gets the queue item's
+    signal; the caller's abort (including faxios 0.3's deadline) cancels the item.
+  - The plugin is named `dynamicThrottle`, as faxios names its plugins.
+  - An explicit `undefined` no longer turns off the default classifier or
+    `maxCooldown`.
+  - The stream wrapper reads only when the consumer reads (`highWaterMark: 0`).
+- **Decision: `parseRetryAfter` is internal** (`src/retry-after.ts`, not a
+  package export), so the unreleased plugin does not make the parser a semver
+  contract. The reference no longer mentions it, and its source names faxios's
+  own parser.
+- **Guidance updated:** `references/faxios.md` and SKILL.md say `retry` is
+  optional, and SKILL.md says the plugin creates the queue unless you pass
+  `{ queue }`. The reference adds the 503 `Retry-After` caveat, the
+  rejected-stream caveat and the delivered-stream `AbortError` row, and drops
+  the version list that would go stale. `task.md` names faxios `retry`'s
+  default statuses.
+- **Task check:** a 15 s timeout (each grading run takes about 3 s), and a note
+  that the fixture keeps its own helpers on purpose.
+- **CI:** a `faxios 0.2.0` / `faxios 0.2.4` matrix job runs the type check, the
+  plugin tests and the task check, so the 0.2-only tests also run in CI.
+  Dependabot ignores faxios minor and major updates.
+- **Remaining work:** #93 asks whether a fresh queue should wait one spacing
+  before its first start; on faxios 0.3 that wait counts against `timeout`.

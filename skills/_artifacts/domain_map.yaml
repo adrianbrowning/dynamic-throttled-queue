@@ -33,7 +33,7 @@ skills:
       - submit, TaskHandle (result, cancel), ExecutionContext (signal, attempt)
       - pause, resume, stop, abort, failed state
       - waitForIdle, getState, pending
-      - "dynamic-throttled-queue/faxios: dynamicThrottle, isRateLimited, parseRetryAfter, ERR_THROTTLE_REJECTED"
+      - "dynamic-throttled-queue/faxios: dynamicThrottle, isRateLimited, ERR_THROTTLE_REJECTED"
     tasks:
       - "Choose min_rpi, max_rpi, interval, and evenly_spaced for an API rate limit"
       - Bound in-flight async work with concurrency separately from the start rate

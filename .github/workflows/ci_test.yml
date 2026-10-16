@@ -27,3 +27,29 @@ jobs:
 
       - name: Test
         run: pnpm run test
+
+  # The dev dependency is faxios 0.3; the peer range also covers 0.2, whose version-specific tests
+  # are skipped above. Run the plugin and its skill check against both ends of the 0.2 line.
+  faxios-0-2:
+    name: faxios ${{ matrix.faxios }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    permissions:
+      contents: read
+    strategy:
+      fail-fast: false
+      matrix:
+        faxios: [ 0.2.0, 0.2.4 ]
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: ./.github/actions/setup
+
+      - name: Install faxios ${{ matrix.faxios }}
+        run: pnpm add -D @gcmdev/faxios@${{ matrix.faxios }}
+
+      - name: Type check
+        run: pnpm exec tsc --noEmit
+
+      - name: Test the faxios plugin and its skill check
+        run: pnpm exec vitest run src/__tests__/faxios.test.ts tests/skills/configure-throttled-queue-faxios

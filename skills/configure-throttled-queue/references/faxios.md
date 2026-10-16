@@ -2,14 +2,14 @@
 
 Read this when you throttle a [faxios](https://github.com/adrianbrowning/faxios)
 client. The plugin is `dynamic-throttled-queue/faxios`. It needs
-`@gcmdev/faxios` 0.2.x or 0.3.x (peer range `^0.2.0 || ^0.3.0`, checked with
-0.2.0, 0.2.4 and 0.3.0). That package is an optional peer dependency, so
+`@gcmdev/faxios` 0.2.x or 0.3.x (peer range `^0.2.0 || ^0.3.0`). That package
+is an optional peer dependency, so
 install it in the application. With npm, a `@gcmdev/faxios` outside those
 versions anywhere in the tree fails the install with `ERESOLVE`, even if
 nothing imports `dynamic-throttled-queue/faxios`.
 Source: `src/faxios.ts`, README "faxios plugin".
 
-## 1. Install the plugin after `retry`
+## 1. If you use `retry`, install the plugin after it
 
 ```ts
 import faxios from "@gcmdev/faxios";
@@ -24,12 +24,14 @@ const api = faxios
 const { data } = await api.get("/items");
 ```
 
-Obey these two rules. No other `retry` setup is supported:
+If you use faxios's `retry` plugin, obey these two rules. No other `retry`
+setup is supported:
 
 - Install `dynamicThrottle` **after** `retry`. Then each attempt takes its own
   queue slot, and the retry backoff waits outside the queue.
 - Use `retry({ respectRetryAfter: false })`. Then only the queue honours
-  `Retry-After`.
+  `Retry-After`. A 503's `Retry-After` is then ignored unless you set
+  `retryAfterOn503: true` (section 4).
 
 Do not give the queue its own retries. Retries belong to the faxios `retry`
 plugin. The queue options type (`DynamicThrottleQueueOptions`) removes
@@ -137,8 +139,6 @@ const api = faxios
   }));
 ```
 
-`parseRetryAfter(value, now?)` is also exported if you need the same parsing.
-
 ## 5. Read or cancel every stream
 
 A request holds its concurrency slot until faxios has read the body. For
@@ -155,6 +155,9 @@ for await (const chunk of response.data) {
 ```
 
 If you don't read a stream at all, cancel it: `await response.data.cancel()`.
+
+A stream request that rejects (for example with a 4xx or 5xx status) frees its
+slot at once. If `error.response.data` is a stream, read or cancel it too.
 
 Check: every stream response is read to the end or cancelled.
 
@@ -180,6 +183,7 @@ Check: the `timeout` value allows for queue wait on faxios 0.3.
 | Cause | Rejection | `error.code` |
 | --- | --- | --- |
 | The caller's `signal` aborts, or `queue.abort()` runs while the request is queued or in flight | `CanceledError` | `ERR_CANCELED` |
+| `queue.abort()` runs after a stream response is delivered | the stream errors with the abort's `AbortError` | none (a `DOMException`) |
 | The queue refuses to admit the request: it was aborted or has failed, or `maxQueueSize` is reached | `FaxiosError` | `ERR_THROTTLE_REJECTED` |
 | The queue fails (its `rateStrategy` throws) while the request is queued or in flight | `FaxiosError`, `cause` is the strategy error | `ERR_THROTTLE_REJECTED` |
 

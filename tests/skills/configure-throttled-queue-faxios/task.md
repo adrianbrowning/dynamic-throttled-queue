@@ -8,10 +8,11 @@ Write `src/api.ts` exporting `createApi(fetch)`. `fetch` has the type of
 `dynamic-throttled-queue`, such that:
 
 - At most 10 requests start per second, and at most 1 is in flight at once.
-- Responses with status 429 or 5xx are retried up to 2 more times.
+- Responses with status 408, 429, 500, 502, 503 or 504 (faxios `retry`'s
+  defaults) are retried up to 2 more times.
 - A request that waits to retry does not block other requests.
 - A 429 `Retry-After` header is honoured.
 - Only 429 responses lower the adaptive rate (range 1–10 per second).
-- Other non-2xx statuses reject without a retry.
+- Other non-2xx statuses, such as 401, reject without a retry.
 - `shutdown()` stops all work: queued requests are never sent, and in-flight
   requests are aborted.

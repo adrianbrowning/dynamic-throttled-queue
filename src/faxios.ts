@@ -3,6 +3,7 @@ import type { FaxiosPlugin, FaxiosRequestConfig, FaxiosResponse, InternalFaxiosR
 import { definePlugin } from "@gcmdev/faxios/plugins";
 import { createThrottledQueue } from "./dynamic-throttled-queue.ts";
 import type { FailureOutcome, ThrottleHandle, ThrottleOptions } from "./dynamic-throttled-queue.ts";
+import { parseRetryAfter } from "./retry-after.ts";
 
 /**
  * The `FaxiosError` code of a request the queue refused to admit: the queue was aborted or has
@@ -40,32 +41,6 @@ export type DynamicThrottleOptions = (
 /** The default `rateOutcomeClassifier`: only a 429 response reduces capacity. */
 export function isRateLimited(outcome: FailureOutcome): boolean {
   return "error" in outcome && isFaxiosError(outcome.error) && outcome.error.response?.status === 429;
-}
-
-const delaySeconds = /^\d+$/;
-// The three HTTP-date forms RFC 9110 §5.6.7 says recipients must accept: IMF-fixdate
-// (`Wed, 21 Oct 2015 07:28:00 GMT`), RFC 850 (`Wednesday, 21-Oct-15 07:28:00 GMT`) and asctime
-// (`Wed Oct 21 07:28:00 2015`). Date.parse alone takes far more, such as `1.5` or `10/21/2015`.
-const day = "(?:Mon|Tue|Wed|Thu|Fri|Sat|Sun)";
-const longDay = "(?:Monday|Tuesday|Wednesday|Thursday|Friday|Saturday|Sunday)";
-const month = "(?:Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)";
-const time = String.raw`\d{2}:\d{2}:\d{2}`;
-const httpDate = new RegExp(
-  String.raw`^(?:${day}, \d{2} ${month} \d{4} ${time} GMT`
-  + String.raw`|${longDay}, \d{2}-${month}-\d{2} ${time} GMT`
-  + String.raw`|${day} ${month} [ \d]\d ${time} \d{4})$`
-);
-
-/** Milliseconds to wait from a `Retry-After` value, or `undefined` when it is missing or malformed. A past date is 0. */
-export function parseRetryAfter(value: unknown, now = Date.now()): number | undefined {
-  if (typeof value !== "string") return undefined;
-  const trimmed = value.trim();
-  // Huge values stay finite here; the queue clamps them to its maxCooldown.
-  if (delaySeconds.test(trimmed)) return Math.min(Number(trimmed) * 1000, Number.MAX_SAFE_INTEGER);
-  if (!httpDate.test(trimmed)) return undefined;
-  // asctime has no zone; RFC 9110 says it is UTC, but Date.parse would read it as local time.
-  const date = Date.parse(trimmed.endsWith(" GMT") ? trimmed : `${trimmed} GMT`);
-  return Number.isNaN(date) ? undefined : Math.max(0, date - now);
 }
 
 type Unlink = () => void;
@@ -107,29 +82,6 @@ function throttleRejected(cause: unknown, config: InternalFaxiosRequestConfig): 
   return error;
 }
 
-/** A signal that aborts when either input does; `unlink` removes any listeners the fallback added. */
-function linkSignals(caller: CallerSignal | undefined, item: AbortSignal): { signal: AbortSignal; unlink: Unlink; } {
-  if (!caller) return { signal: item, unlink: () => {} };
-  // AbortSignal.any only takes real AbortSignals.
-  if (typeof AbortSignal.any === "function" && caller instanceof AbortSignal) {
-    return { signal: AbortSignal.any([ caller, item ]), unlink: () => {} };
-  }
-  const controller = new AbortController();
-  const fromCaller = () => controller.abort("reason" in caller ? caller.reason : undefined);
-  const fromItem = () => controller.abort(item.reason);
-  if (caller.aborted) fromCaller();
-  else if (item.aborted) fromItem();
-  const unlinkCaller = onAbortOf(caller, fromCaller);
-  item.addEventListener("abort", fromItem, { once: true });
-  return {
-    signal: controller.signal,
-    unlink: () => {
-      unlinkCaller();
-      item.removeEventListener("abort", fromItem);
-    },
-  };
-}
-
 /** Wraps `stream` so `release` runs exactly once: on end, read error, consumer cancel or `signal` abort. */
 function holdUntilDone(stream: ReadableStream, signal: AbortSignal, release: () => void): ReadableStream {
   const reader = stream.getReader();
@@ -147,6 +99,7 @@ function holdUntilDone(stream: ReadableStream, signal: AbortSignal, release: () 
     controller.error(signal.reason);
     reader.cancel(signal.reason).catch(() => {});
   }
+  // highWaterMark 0: read the source only when the consumer reads, so no chunk is buffered ahead.
   const wrapped = new ReadableStream({
     start(c) {
       controller = c;
@@ -170,7 +123,7 @@ function holdUntilDone(stream: ReadableStream, signal: AbortSignal, release: () 
       finish();
       return reader.cancel(reason);
     },
-  });
+  }, { highWaterMark: 0 });
   // The signal can abort between next() resolving and this wrapper existing.
   if (signal.aborted) onAbort();
   else signal.addEventListener("abort", onAbort, { once: true });
@@ -187,7 +140,12 @@ function holdUntilDone(stream: ReadableStream, signal: AbortSignal, release: () 
 export function dynamicThrottle(options: DynamicThrottleOptions): FaxiosPlugin {
   const { retryAfterOn503 = false, cooldownFrom } = options;
   const queue = options.queue === undefined
-    ? createThrottledQueue({ rateOutcomeClassifier: isRateLimited, maxCooldown: defaultMaxCooldown, ...options, retry: 0 })
+    ? createThrottledQueue({
+      ...options,
+      rateOutcomeClassifier: options.rateOutcomeClassifier ?? isRateLimited,
+      maxCooldown: options.maxCooldown ?? defaultMaxCooldown,
+      retry: 0,
+    })
     : options.queue;
 
   function customCooldown(response: FaxiosResponse): number | undefined {
@@ -213,7 +171,7 @@ export function dynamicThrottle(options: DynamicThrottleOptions): FaxiosPlugin {
   }
 
   return definePlugin({
-    name: "dynamic-throttle",
+    name: "dynamicThrottle",
     middleware: async (ctx, next) => {
       const caller = ctx.config.signal;
       // Async middleware before this one can call next() after the caller aborted; queue nothing then.
@@ -222,27 +180,24 @@ export function dynamicThrottle(options: DynamicThrottleOptions): FaxiosPlugin {
 
       let handle;
       try {
-        handle = queue.submit(async ({ signal: itemSignal }) => {
-          const link = linkSignals(caller, itemSignal);
+        handle = queue.submit(async ({ signal }) => {
           try {
+            // The queue item's signal: the caller's abort cancels the item (below), and so does queue.abort().
             // A fresh context: retry reuses ctx for its next attempt and must not see this signal.
-            const response = await next({ ...ctx, config: { ...ctx.config, signal: link.signal } });
+            const response = await next({ ...ctx, config: { ...ctx.config, signal } });
             applyCooldown(response);
-            if (typeof ReadableStream === "undefined" || !(response.data instanceof ReadableStream)) {
+            if (!(response.data instanceof ReadableStream)) {
               delivered.resolve(response);
               return;
             }
             const released = Promise.withResolvers<void>();
-            response.data = holdUntilDone(response.data, link.signal, released.resolve);
+            response.data = holdUntilDone(response.data, signal, released.resolve);
             delivered.resolve(response);
             await released.promise;
           }
           catch (error) {
             if (isFaxiosError(error) && error.response) applyCooldown(error.response);
             throw error;
-          }
-          finally {
-            link.unlink();
           }
         });
       }

@@ -35,12 +35,12 @@
         "tests/skills/configure-throttled-queue/solution.ts": "9e6a8de1042134cd85563c8ea3fed89805000ddcd46da07c62da9b5e7fce44c5",
         "tests/skills/configure-throttled-queue/task.md": "5537a9c2c3bd4a0e3ccbb169f5e414a36716f3393d18a24a44a7f8ac39ad3299"
       },
-      "head": "f72103120d61807731470edc3cbdeebc333d0368",
+      "head": "bd1b54c9ff22c0e6f09811fb5a3fa08f28151714",
       "outcome": "updated",
       "reason": "references/faxios.md: retry is optional (rules apply if you use it), 503 Retry-After caveat, rejected stream caveat, AbortError row for a delivered stream after queue.abort(), parseRetryAfter no longer advertised (now internal), stale checked-versions list dropped. SKILL.md: retry optional and { queue } exception. task.md lists faxios retry's default statuses. Description unchanged.",
       "evidence": [
-        "Source: src/faxios.ts (linkSignals removed; plugin named dynamicThrottle; ?? defaults for rateOutcomeClassifier and maxCooldown; stream wrapper highWaterMark 0; dead ReadableStream guard removed), src/retry-after.ts (internal parser, provenance comment), tests and skill fixture as listed. A later lint:fix only reordered a union type and bracket spacing in src/__tests__/faxios.test.ts.",
-        "Checks: pnpm lint and pnpm vitest run pass on faxios 0.2.0 and 0.2.4 (321 passed, 2 skipped) and 0.3.0 (320 passed, 3 skipped; pnpm test after the style fix: 11 files, 320 passed, 3 skipped). Mutants for the wrapper's already-aborted guard, the classifier and maxCooldown defaults, and forced retry: 0 are each killed. New in-flight timeout test: ETIMEDOUT and native fetch aborted on all three versions. intent validate skills: 1 skill passed. Task check 5/5.",
+        "Source: src/faxios.ts (linkSignals removed; plugin named dynamicThrottle; ?? defaults for rateOutcomeClassifier and maxCooldown; stream wrapper highWaterMark 0; dead ReadableStream guard removed), src/retry-after.ts (internal parser, provenance comment), plugin tests, the parser test file and the skill fixture. A lint:fix pass only reordered a union type and bracket spacing in src/__tests__/faxios.test.ts.",
+        "Checks: pnpm lint and pnpm vitest run pass on faxios 0.2.0 and 0.2.4 (321 passed, 2 skipped) and 0.3.0 (320 passed, 3 skipped); pnpm test after the style fix: 11 files, 320 passed, 3 skipped. Mutants for the wrapper's already-aborted guard, the classifier and maxCooldown defaults, and forced retry: 0 are each killed. New in-flight timeout test: ETIMEDOUT and native fetch aborted on all three versions. intent validate skills: 1 skill passed. Task check 5/5.",
         "Fresh consumer session and discovery prompts: not run (unverified); the description is unchanged."
       ]
     },
@@ -80,12 +80,12 @@
         "tests/skills/configure-throttled-queue/solution.ts": "9e6a8de1042134cd85563c8ea3fed89805000ddcd46da07c62da9b5e7fce44c5",
         "tests/skills/configure-throttled-queue/task.md": "5537a9c2c3bd4a0e3ccbb169f5e414a36716f3393d18a24a44a7f8ac39ad3299"
       },
-      "head": "f72103120d61807731470edc3cbdeebc333d0368",
+      "head": "bd1b54c9ff22c0e6f09811fb5a3fa08f28151714",
       "outcome": "updated",
       "reason": "skill_spec.md: new 'PR #89 review observations' history entry (code changes, parseRetryAfter-internal decision, guidance changes, task-check timeout, CI matrix and Dependabot, issue #93 as remaining work). domain_map.yaml: faxios export list drops parseRetryAfter. skill_tree.yaml unchanged: src/*.ts already covers src/retry-after.ts.",
       "evidence": [
-        "Source: src/faxios.ts (linkSignals removed; plugin named dynamicThrottle; ?? defaults for rateOutcomeClassifier and maxCooldown; stream wrapper highWaterMark 0; dead ReadableStream guard removed), src/retry-after.ts (internal parser, provenance comment), tests and skill fixture as listed. A later lint:fix only reordered a union type and bracket spacing in src/__tests__/faxios.test.ts.",
-        "Checks: pnpm lint and pnpm vitest run pass on faxios 0.2.0 and 0.2.4 (321 passed, 2 skipped) and 0.3.0 (320 passed, 3 skipped; pnpm test after the style fix: 11 files, 320 passed, 3 skipped). Mutants for the wrapper's already-aborted guard, the classifier and maxCooldown defaults, and forced retry: 0 are each killed. New in-flight timeout test: ETIMEDOUT and native fetch aborted on all three versions. intent validate skills: 1 skill passed. Task check 5/5.",
+        "Source: src/faxios.ts (linkSignals removed; plugin named dynamicThrottle; ?? defaults for rateOutcomeClassifier and maxCooldown; stream wrapper highWaterMark 0; dead ReadableStream guard removed), src/retry-after.ts (internal parser, provenance comment), plugin tests, the parser test file and the skill fixture. A lint:fix pass only reordered a union type and bracket spacing in src/__tests__/faxios.test.ts.",
+        "Checks: pnpm lint and pnpm vitest run pass on faxios 0.2.0 and 0.2.4 (321 passed, 2 skipped) and 0.3.0 (320 passed, 3 skipped); pnpm test after the style fix: 11 files, 320 passed, 3 skipped. Mutants for the wrapper's already-aborted guard, the classifier and maxCooldown defaults, and forced retry: 0 are each killed. New in-flight timeout test: ETIMEDOUT and native fetch aborted on all three versions. intent validate skills: 1 skill passed. Task check 5/5.",
         "Fresh consumer session and discovery prompts: not run (unverified); the description is unchanged."
       ]
     },

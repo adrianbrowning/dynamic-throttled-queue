@@ -12,7 +12,7 @@ type Call = { url: string; at: number; signal: AbortSignal; respond: (response: 
 function fakeFetch(auto?: () => Response) {
   const calls: Array<Call> = [];
   const begin = performance.now();
-  const fetch = vi.fn(async (input: string | URL | Request, init?: RequestInit) => {
+  const fetch = vi.fn(async (input: Request | string | URL, init?: RequestInit) => {
     const request = input instanceof Request ? input : new Request(input, init);
     const signal = init?.signal ?? request.signal;
     const { promise, resolve, reject } = Promise.withResolvers<Response>();
@@ -182,7 +182,7 @@ describe("dynamicThrottle", () => {
   ])("status %i reduces capacity: %s", async (code, reduces) => {
     // /a answers with `code`; the rest never answer, so /d stays queued and the queue keeps deciding each interval.
     const { fetch } = fakeFetch();
-    fetch.mockImplementation(async (input: string | URL | Request) => {
+    fetch.mockImplementation(async (input: Request | string | URL) => {
       const url = input instanceof Request ? input.url : String(input);
       if (url.endsWith("/a")) return status(code);
       return Promise.withResolvers<Response>().promise;

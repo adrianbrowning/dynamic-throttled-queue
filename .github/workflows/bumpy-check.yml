@@ -6,14 +6,15 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
+  pull-requests: read
 
 jobs:
   check:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
-      - uses: ./.github/actions/setup-base
+
+      - uses: ./.github/actions/setup
         with:
           checkout-fetch-depth: '0'
 

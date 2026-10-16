@@ -1,38 +1,42 @@
-name: Bumpy Release
+name: Release
+
+# GitHub releases + npm publishing (trusted publishing / provenance).
+# Adding the `release-rc` label to the Bumpy version PR publishes an npm
+# snapshot of master's pending release to the `@next` dist-tag.
 
 on:
   push:
-    branches: [master, bumpy/version-packages]
+    branches: [master]
+  pull_request:
+    branches: [master]
+    types: [labeled]
+  workflow_dispatch:
 
 concurrency:
-  group: bumpy-release-${{ github.ref }}
+  group: release
   cancel-in-progress: false
 
 jobs:
   plan:
+    if: github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     permissions:
       contents: read
     outputs:
       mode: ${{ steps.plan.outputs.mode }}
-      bumpy_version: ${{ steps.bumpy-version.outputs.version }}
     steps:
       - uses: actions/checkout@v7
-      - uses: ./.github/actions/setup-base
+
+      - uses: ./.github/actions/setup
         with:
           checkout-fetch-depth: '0'
-
-      - id: bumpy-version
-        run: |
-          VERSION=$(node -e "const p=require('./package.json'); console.log((p.dependencies?.['@varlock/bumpy'] || p.devDependencies?.['@varlock/bumpy']).replace(/[\^~]/,''))")
-          echo "version=$VERSION" >> $GITHUB_OUTPUT
 
       - id: plan
         run: pnpm exec bumpy ci plan
         env:
           GH_TOKEN: ${{ github.token }}
 
-  version-pr:
+  version:
     needs: plan
     if: needs.plan.outputs.mode == 'version-pr'
     runs-on: ubuntu-latest
@@ -41,46 +45,19 @@ jobs:
       pull-requests: write
     steps:
       - uses: actions/checkout@v7
-      - uses: ./.github/actions/setup-base
+
+      - uses: ./.github/actions/setup
         with:
           checkout-fetch-depth: '0'
-          checkout-token: ${{ secrets.BUMPY_GH_TOKEN || github.token }}
 
       - run: pnpm exec bumpy ci release --expect-mode version-pr
         env:
           GH_TOKEN: ${{ github.token }}
           BUMPY_GH_TOKEN: ${{ secrets.BUMPY_GH_TOKEN }}
 
-  publish-next:
-    if: github.ref == 'refs/heads/bumpy/version-packages'
-    runs-on: ubuntu-latest
-    environment: publish
-    permissions:
-      contents: read
-      id-token: write
-    steps:
-      - uses: actions/checkout@v7
-      - uses: ./.github/actions/setup-base
-        with:
-          registry-url: 'https://registry.npmjs.org'
-
-      - run: pnpm build
-
-      - name: Set rc version
-        run: |
-          SHA=$(git rev-parse --short HEAD)
-          node --input-type=module <<EOF
-          import { readFileSync, writeFileSync } from 'fs';
-          const p = JSON.parse(readFileSync('package.json', 'utf8'));
-          p.version = p.version.replace(/-.*/, '') + '-rc.' + '$SHA';
-          writeFileSync('package.json', JSON.stringify(p, null, 2) + '\n');
-          EOF
-
-      - run: pnpm publish --tag next --access public --no-git-checks --provenance
-
   publish:
     needs: plan
-    if: needs.plan.outputs.mode == 'publish' && github.ref == 'refs/heads/master'
+    if: needs.plan.outputs.mode == 'publish'
     runs-on: ubuntu-latest
     environment: publish
     permissions:
@@ -89,11 +66,11 @@ jobs:
       id-token: write
     steps:
       - uses: actions/checkout@v7
-      - uses: ./.github/actions/setup-base
+
+      - uses: ./.github/actions/setup
         with:
           checkout-fetch-depth: '0'
-          checkout-token: ${{ secrets.BUMPY_GH_TOKEN || github.token }}
-          registry-url: 'https://registry.npmjs.org'
+          registry-url: https://registry.npmjs.org
 
       - run: pnpm build
 
@@ -103,5 +80,37 @@ jobs:
           BUMPY_GH_TOKEN: ${{ secrets.BUMPY_GH_TOKEN }}
 
       - run: gh release upload "$(git describe --tags --abbrev=0)" dist/*
+        env:
+          GH_TOKEN: ${{ github.token }}
+
+  # The version PR has already consumed the bump files, so the snapshot is
+  # built from master (the PR's base), where they are still pending. Snapshots
+  # never create git tags, GitHub releases or commits.
+  rc:
+    if: >-
+      github.event_name == 'pull_request' &&
+      github.event.label.name == 'release-rc' &&
+      github.event.pull_request.head.ref == 'bumpy/version-packages' &&
+      github.event.pull_request.head.repo.full_name == github.repository
+    runs-on: ubuntu-latest
+    environment: publish
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+
+      - uses: ./.github/actions/setup
+        with:
+          checkout-ref: ${{ github.event.pull_request.base.sha }}
+          checkout-fetch-depth: '0'
+          registry-url: https://registry.npmjs.org
+
+      - run: pnpm build
+
+      - run: pnpm exec bumpy ci release --snapshot rc --tag next
         env:
           GH_TOKEN: ${{ github.token }}

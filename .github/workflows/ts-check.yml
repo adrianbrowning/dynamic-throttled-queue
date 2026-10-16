@@ -2,13 +2,10 @@ name: TS Check
 
 on:
   pull_request:
-    branches: [master]
-    types: [opened, synchronize, reopened]
+    branches:
+      - master
+    types: [ opened, synchronize, reopened ]
   workflow_dispatch:
-
-permissions:
-  contents: read
-  pull-requests: write
 
 concurrency:
   group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
@@ -17,11 +14,17 @@ concurrency:
 jobs:
   tscheck:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 15
+    permissions:
+      contents: read
+      pull-requests: write
 
     steps:
       - uses: actions/checkout@v7
-      - uses: ./.github/actions/setup-base
+
+      - uses: ./.github/actions/setup
+        with:
+          checkout-ref: ${{ github.head_ref || github.ref_name }}
 
       - name: Run TypeScript Check
         id: ts-check
@@ -30,7 +33,12 @@ jobs:
           set +e
           set -o pipefail
           pnpm run lint:ts 2>&1 | tee ts-check-output.txt
-          echo "exit_code=$?" >> $GITHUB_OUTPUT
+          TS_EXIT_CODE=$?
+          echo "exit_code=$TS_EXIT_CODE" >> $GITHUB_OUTPUT
+          if [ $TS_EXIT_CODE -ne 0 ]; then
+            echo "TypeScript checks failed. TS_EXIT_CODE=$TS_EXIT_CODE"
+            exit 1
+          fi
 
       - name: Comment TS check results on PR
         if: github.event_name == 'pull_request' && steps.ts-check.outputs.exit_code != '0'
@@ -43,6 +51,7 @@ jobs:
             const raw = fs.readFileSync('ts-check-output.txt', 'utf8');
             const output = raw.replace(/[`<>&]/g, c => ({'`':"'", '<':'&lt;', '>':'&gt;', '&':'&amp;'}[c])).slice(0, 60000);
             const comment = `## ❌ TypeScript Check Failed\n\n<details>\n<summary>Click to see type errors</summary>\n\n\`\`\`\n${output}\n\`\`\`\n\n</details>\n\n[View workflow run](${process.env.RUN_URL})`;
+
             github.rest.issues.createComment({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -52,4 +61,7 @@ jobs:
 
       - name: Fail if TS check failed
         if: steps.ts-check.outputs.exit_code != '0'
-        run: exit 1
+        # Repeat the errors here: this is the step `gh run view --log-failed` shows
+        run: |
+          cat ts-check-output.txt
+          exit 1

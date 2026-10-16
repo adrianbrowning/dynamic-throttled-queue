@@ -1,19 +1,16 @@
-name: Setup Base
+name: Setup
 description: Checkout, install pnpm + Node.js, cache pnpm store, install dependencies
 
 inputs:
   node-version:
     description: Node.js version
-    default: '26'
+    default: '24'
   checkout-ref:
     description: Git ref to checkout (e.g. github.head_ref for PRs)
     default: ''
   checkout-fetch-depth:
     description: Fetch depth for checkout
     default: '1'
-  checkout-token:
-    description: Token for checkout (use secrets.BUMPY_GH_TOKEN for write access)
-    default: ${{ github.token }}
   registry-url:
     description: npm registry URL for setup-node (e.g. https://registry.npmjs.org)
     default: ''
@@ -21,10 +18,15 @@ inputs:
 runs:
   using: composite
   steps:
+    - name: Check if commit is made by bot
+      if: github.actor == 'github-actions[bot]'
+      shell: bash
+      run: echo "Commit made by bot. Exiting workflow." && exit 0
+
     - name: Checkout repository
       uses: actions/checkout@v7
       with:
-        token: ${{ inputs.checkout-token }}
+        token: ${{ github.token }}
         fetch-depth: ${{ inputs.checkout-fetch-depth }}
         ref: ${{ inputs.checkout-ref }}
 

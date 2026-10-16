@@ -6,7 +6,5 @@
     "**/*.{js,ts}"
   ],
   "ignoreBinaries": [],
-  "ignoreDependencies": [
-    "@gcmdev/faxios"
-  ]
+  "ignoreDependencies": []
 }

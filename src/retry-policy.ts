@@ -1,7 +1,7 @@
 import type { FailureOutcome } from "./adaptive-rate.ts";
 
 export type RetryBackoff = {
-  strategy: "fixed" | "linear" | "exponential";
+  strategy: "exponential" | "fixed" | "linear";
   baseDelay: number;
   maxDelay?: number;
   jitter?: number;

@@ -3,7 +3,7 @@
   "baseline": "6651dc14a0382b3ab007c59f1fcfd882da997d46",
   "items": {
     "skill:skills/configure-throttled-queue/SKILL.md": {
-      "fingerprint": "31f43a1265d19017bd3b01e0dc6adc9f60c39f40b0fbf587e66a4109fc68a5f8",
+      "fingerprint": "9cd4404617b1167dd639756e002d194025fc754e2103f360aa5a1961f2d50e31",
       "snapshot": {
         "README.md": "ba95e458a3ae1a6c184d67d279d828f749f5cdf1e7a7f750f19eacfb6cd6fcc1",
         "skills/configure-throttled-queue/SKILL.md": "3575e26a53dae07851a5f001c76fec9fc1485a9ba0bbd239312b580b10b521f0",
@@ -14,18 +14,18 @@
         "skills/configure-throttled-queue/references/state-and-idle.md": "83232fc45f99d344860b079044bdca975156d6550edf5145bdb88cf4bd612f05",
         "src/__tests__/adaptive-rate.test.ts": "dcc069a495d9adffe816185524a81f6faec1d2b971d184671742752c18860c4d",
         "src/__tests__/cooldown.test.ts": "1b89b6829f69d73576fc70e0b684e947b0d5ba379c1b72f0f41ce061b1ee3c2b",
-        "src/__tests__/dynamic-throttled-queue.test.ts": "9c60da556b624b3cc432d5caa951d4e610dbf5fa39c530fa328789747a40718d",
-        "src/__tests__/faxios.test.ts": "e83aa1d8eb210c5360724d748f3aa6db6fb0b977b574cb21b9bf0d48ee0ab7ae",
-        "src/__tests__/pending-work.test.ts": "a67e5612371f45b2e5743a8048d8d2ea67fb7fa9b13a81fb0df3d62591b0f6a5",
+        "src/__tests__/dynamic-throttled-queue.test.ts": "257824be5ab73bac1e022f9e2432112d9f5af34cdbdec4f2e394f34aa1835a8e",
+        "src/__tests__/faxios.test.ts": "06878e27cd0a184a58792236ee0ad7cf0fb955a83b4b840c9a742d04d8f2e9cf",
+        "src/__tests__/pending-work.test.ts": "c9094b640e11c1b216b57b38d2cabb2a591dfcb9a943cab1c4c3627a01c7d1c7",
         "src/__tests__/rate-strategies.test.ts": "a92e69707e2988d0826b9cb5b7389054bc1c05be218e92b3b39963349e011065",
         "src/__tests__/retry-policy.test.ts": "077e51ce73ba02b32fe85d7dcf03d9469a933a18683589a7508a7569fc456dd2",
-        "src/__tests__/task-handles.test.ts": "548cee97450743c38e43aca959b7b15bd5aa8bd68414220037f5d4e51aece32e",
-        "src/adaptive-rate.ts": "fa08fc8866314adb72886d36ee225c21e4938ad298ae5fe8f8fe7c6baba71209",
+        "src/__tests__/task-handles.test.ts": "7500e5ab4b15b0a4f68ae238cb0cac2682c065ec2c6aedf3ccd96f72a27855f1",
+        "src/adaptive-rate.ts": "6f44cca43a1e00b2657e2637c9bfe913435526ed2d97406f540ded2e055aa943",
         "src/dynamic-throttled-queue.ts": "bc3f7beb927bf31c7ab429a65f6241e0c9525840f2e3fd1e7114fb611fc7c440",
         "src/faxios.ts": "4b6d80f89b359060445a354d1027f10a4c18302ab052c97442eb190a2598e63c",
         "src/pending-work.ts": "08e88eea6008d870c4da47c39d50290c9adb5e594b18bbb98bbde6e909af582a",
-        "src/retry-policy.ts": "020076f3afea1130e38fb8eddc48c9be4be55df5f18a8d0b973e21f797a9596a",
-        "src/scheduler.ts": "63918ecfb33d70df49161cce102e43e2b0e62d0d693d61a050e794c9eed5bab9",
+        "src/retry-policy.ts": "f78315d09829dee1440ad0bcb2272add5d08cb88d78c57981ad145c9f8de381e",
+        "src/scheduler.ts": "d117f6cc8e9124f2a954e233ccea3d4660bd466a2d2d465a2854445d1eeb002d",
         "tests/skills/configure-throttled-queue-faxios/check.test.ts": "f31a421c5b8785991a1a7934d9e096dbbc71796c0b1a0d99a9a09189c4e4ec1a",
         "tests/skills/configure-throttled-queue-faxios/solution.ts": "d4560611b15ada5a082aa6ed044261b9d743444f8ad932cd36b675c6f3e1271e",
         "tests/skills/configure-throttled-queue-faxios/task.md": "abad2d5c4360053095bec52d82f4875e8f7d2c2932a4e96c062569380a23a0cd",
@@ -33,17 +33,17 @@
         "tests/skills/configure-throttled-queue/solution.ts": "9e6a8de1042134cd85563c8ea3fed89805000ddcd46da07c62da9b5e7fce44c5",
         "tests/skills/configure-throttled-queue/task.md": "5537a9c2c3bd4a0e3ccbb169f5e414a36716f3393d18a24a44a7f8ac39ad3299"
       },
-      "head": "4e05295954c8e08c00d117f0128b84943418ed71",
+      "head": "c6db84ab7709ce4f3fa68216f3269c6b59ee0056",
       "outcome": "updated",
-      "reason": "references/faxios.md: Retry-After bullet now lists the three RFC 9110 HTTP-date forms the plugin accepts (was IMF-fixdate only), and the install note names the 0.2.x peer range. SKILL.md body and description unchanged.",
+      "reason": "faxios plugin batch (issue #82): references/faxios.md added (install order after retry({ respectRetryAfter: false }), { queue } form, stream slots, timeout, Retry-After in all three RFC 9110 date forms, retryAfterOn503, cooldownFrom, error codes, 0.2.x peer range), a Setup pointer and the faxios task in the description, with task check tests/skills/configure-throttled-queue-faxios. Core queue guidance unchanged.",
       "evidence": [
-        "Source: src/faxios.ts parseRetryAfter now accepts IMF-fixdate, RFC 850 and asctime (matches @gcmdev/faxios 0.2.4 src/lib/plugins/retry.ts HTTP_DATE). package.json peer range ^0.2.0; dev dep @gcmdev/faxios 0.2.4 from npm.",
-        "Checks: tsc pass; vitest 297/297 pass on faxios 0.2.4 (parseRetryAfter cases pass in UTC and TZ=America/New_York); faxios + skill task checks 44/44 pass on faxios 0.2.0; eslint and style lint pass; knip pass; intent validate skills: 1 skill passed. Task check tests/skills/configure-throttled-queue-faxios 3/3 pass (unchanged; uses delay-seconds).",
-        "Fresh consumer session and discovery prompts: not run (unverified); the description is unchanged."
+        "Source: src/faxios.ts and README 'faxios plugin' on the branch merged with origin/master 2d682e9; dev dep @gcmdev/faxios 0.2.4 from npm, peer ^0.2.0. parseRetryAfter accepts IMF-fixdate, RFC 850 and asctime, matching @gcmdev/faxios 0.2.4 src/lib/plugins/retry.ts HTTP_DATE.",
+        "Checks on the merged tree: pnpm lint (tsc + eslint) pass; pnpm test 297/297 pass, including tests/skills/configure-throttled-queue-faxios 3/3 and tests/skills/configure-throttled-queue 2/2; lint:s pass; knip pass; build pass; intent validate skills: 1 skill passed. Before the merge: faxios + skill task checks 44/44 pass on faxios 0.2.0; parseRetryAfter cases pass in UTC and TZ=America/New_York.",
+        "Fresh consumer session and discovery prompts: not run (unverified)."
       ]
     },
     "planning:skills/_artifacts": {
-      "fingerprint": "eadd238d5469906ec7852da3ea7fde938d2cf465e1742cff642626caea7bcc87",
+      "fingerprint": "cd1018df95c02406496b7e9729c7849665d46042ab2c0acf2a411fc8cf3fdc40",
       "snapshot": {
         "README.md": "ba95e458a3ae1a6c184d67d279d828f749f5cdf1e7a7f750f19eacfb6cd6fcc1",
         "skills/_artifacts/domain_map.yaml": "b5222b09ec76230f3dd66bdb0f881eca3857857bf89598bea5320db73a6b5617",
@@ -57,18 +57,18 @@
         "skills/configure-throttled-queue/references/state-and-idle.md": "83232fc45f99d344860b079044bdca975156d6550edf5145bdb88cf4bd612f05",
         "src/__tests__/adaptive-rate.test.ts": "dcc069a495d9adffe816185524a81f6faec1d2b971d184671742752c18860c4d",
         "src/__tests__/cooldown.test.ts": "1b89b6829f69d73576fc70e0b684e947b0d5ba379c1b72f0f41ce061b1ee3c2b",
-        "src/__tests__/dynamic-throttled-queue.test.ts": "9c60da556b624b3cc432d5caa951d4e610dbf5fa39c530fa328789747a40718d",
-        "src/__tests__/faxios.test.ts": "e83aa1d8eb210c5360724d748f3aa6db6fb0b977b574cb21b9bf0d48ee0ab7ae",
-        "src/__tests__/pending-work.test.ts": "a67e5612371f45b2e5743a8048d8d2ea67fb7fa9b13a81fb0df3d62591b0f6a5",
+        "src/__tests__/dynamic-throttled-queue.test.ts": "257824be5ab73bac1e022f9e2432112d9f5af34cdbdec4f2e394f34aa1835a8e",
+        "src/__tests__/faxios.test.ts": "06878e27cd0a184a58792236ee0ad7cf0fb955a83b4b840c9a742d04d8f2e9cf",
+        "src/__tests__/pending-work.test.ts": "c9094b640e11c1b216b57b38d2cabb2a591dfcb9a943cab1c4c3627a01c7d1c7",
         "src/__tests__/rate-strategies.test.ts": "a92e69707e2988d0826b9cb5b7389054bc1c05be218e92b3b39963349e011065",
         "src/__tests__/retry-policy.test.ts": "077e51ce73ba02b32fe85d7dcf03d9469a933a18683589a7508a7569fc456dd2",
-        "src/__tests__/task-handles.test.ts": "548cee97450743c38e43aca959b7b15bd5aa8bd68414220037f5d4e51aece32e",
-        "src/adaptive-rate.ts": "fa08fc8866314adb72886d36ee225c21e4938ad298ae5fe8f8fe7c6baba71209",
+        "src/__tests__/task-handles.test.ts": "7500e5ab4b15b0a4f68ae238cb0cac2682c065ec2c6aedf3ccd96f72a27855f1",
+        "src/adaptive-rate.ts": "6f44cca43a1e00b2657e2637c9bfe913435526ed2d97406f540ded2e055aa943",
         "src/dynamic-throttled-queue.ts": "bc3f7beb927bf31c7ab429a65f6241e0c9525840f2e3fd1e7114fb611fc7c440",
         "src/faxios.ts": "4b6d80f89b359060445a354d1027f10a4c18302ab052c97442eb190a2598e63c",
         "src/pending-work.ts": "08e88eea6008d870c4da47c39d50290c9adb5e594b18bbb98bbde6e909af582a",
-        "src/retry-policy.ts": "020076f3afea1130e38fb8eddc48c9be4be55df5f18a8d0b973e21f797a9596a",
-        "src/scheduler.ts": "63918ecfb33d70df49161cce102e43e2b0e62d0d693d61a050e794c9eed5bab9",
+        "src/retry-policy.ts": "f78315d09829dee1440ad0bcb2272add5d08cb88d78c57981ad145c9f8de381e",
+        "src/scheduler.ts": "d117f6cc8e9124f2a954e233ccea3d4660bd466a2d2d465a2854445d1eeb002d",
         "tests/skills/configure-throttled-queue-faxios/check.test.ts": "f31a421c5b8785991a1a7934d9e096dbbc71796c0b1a0d99a9a09189c4e4ec1a",
         "tests/skills/configure-throttled-queue-faxios/solution.ts": "d4560611b15ada5a082aa6ed044261b9d743444f8ad932cd36b675c6f3e1271e",
         "tests/skills/configure-throttled-queue-faxios/task.md": "abad2d5c4360053095bec52d82f4875e8f7d2c2932a4e96c062569380a23a0cd",
@@ -76,13 +76,25 @@
         "tests/skills/configure-throttled-queue/solution.ts": "9e6a8de1042134cd85563c8ea3fed89805000ddcd46da07c62da9b5e7fce44c5",
         "tests/skills/configure-throttled-queue/task.md": "5537a9c2c3bd4a0e3ccbb169f5e414a36716f3393d18a24a44a7f8ac39ad3299"
       },
-      "head": "4e05295954c8e08c00d117f0128b84943418ed71",
+      "head": "c6db84ab7709ce4f3fa68216f3269c6b59ee0056",
       "outcome": "updated",
-      "reason": "skill_spec.md gains a 'faxios 0.2.4 check' history entry (peer range decision, Retry-After change, remaining 0.3.0 re-check). domain_map.yaml gains an open gap for faxios 0.3.0. skill_tree.yaml stays accurate: description, purpose, sources and path are unchanged.",
+      "reason": "domain_map.yaml adds the faxios task, reference candidate, HIGH failure mode and an open gap for faxios 0.3.0; skill_spec.md records the faxios plugin batch and the faxios 0.2.4 check (peer range ^0.2.0, Retry-After date forms); skill_tree.yaml description synced with SKILL.md.",
       "evidence": [
-        "Source: src/faxios.ts parseRetryAfter now accepts IMF-fixdate, RFC 850 and asctime (matches @gcmdev/faxios 0.2.4 src/lib/plugins/retry.ts HTTP_DATE). package.json peer range ^0.2.0; dev dep @gcmdev/faxios 0.2.4 from npm.",
-        "Checks: tsc pass; vitest 297/297 pass on faxios 0.2.4 (parseRetryAfter cases pass in UTC and TZ=America/New_York); faxios + skill task checks 44/44 pass on faxios 0.2.0; eslint and style lint pass; knip pass; intent validate skills: 1 skill passed. Task check tests/skills/configure-throttled-queue-faxios 3/3 pass (unchanged; uses delay-seconds).",
-        "Fresh consumer session and discovery prompts: not run (unverified); the description is unchanged."
+        "Source: src/faxios.ts and README 'faxios plugin' on the branch merged with origin/master 2d682e9; dev dep @gcmdev/faxios 0.2.4 from npm, peer ^0.2.0. parseRetryAfter accepts IMF-fixdate, RFC 850 and asctime, matching @gcmdev/faxios 0.2.4 src/lib/plugins/retry.ts HTTP_DATE.",
+        "Checks on the merged tree: pnpm lint (tsc + eslint) pass; pnpm test 297/297 pass, including tests/skills/configure-throttled-queue-faxios 3/3 and tests/skills/configure-throttled-queue 2/2; lint:s pass; knip pass; build pass; intent validate skills: 1 skill passed. Before the merge: faxios + skill task checks 44/44 pass on faxios 0.2.0; parseRetryAfter cases pass in UTC and TZ=America/New_York.",
+        "Fresh consumer session and discovery prompts: not run (unverified)."
+      ]
+    },
+    "source:tsconfig.config.json": {
+      "fingerprint": "f7f05c98bce006b9f82864e589c15a3ed7b8ada3c97e6ae558be23fb64479ef9",
+      "snapshot": {
+        "tsconfig.config.json": "cc1def7d1b89307d38228eb0239d6d7bc77b65cc89922fe8843201f750dc71f0"
+      },
+      "head": "d96c0e159b80b72a560e5d01396518a1346a8a04",
+      "outcome": "no-change",
+      "reason": "config 0.1.0 lint autofix: sorted type members and imports only; no API or behaviour change. tsconfig.config.json only type-checks eslint configs.",
+      "evidence": [
+        "Changed: tsconfig.config.json at d96c0e159b80b72a560e5d01396518a1346a8a04"
       ]
     }
   }

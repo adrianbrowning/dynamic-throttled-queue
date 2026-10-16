@@ -1,8 +1,9 @@
 import faxios, { isCancel } from "@gcmdev/faxios";
 import type { FaxiosError } from "@gcmdev/faxios";
 import { retry } from "@gcmdev/faxios/plugins/retry";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
 import { createThrottledQueue, linear } from "../dynamic-throttled-queue.ts";
+import type { ThrottleHandle } from "../dynamic-throttled-queue.ts";
 import { dynamicThrottle, ERR_THROTTLE_REJECTED, isRateLimited, parseRetryAfter } from "../faxios.ts";
 import type { DynamicThrottleOptions } from "../faxios.ts";
 
@@ -58,6 +59,9 @@ async function until(check: () => boolean) {
 
 describe("parseRetryAfter", () => {
   const now = Date.parse("Wed, 21 Oct 2015 07:28:00 GMT");
+  // asctime has no zone and must read as UTC; outside UTC a local-time parse would be off by hours.
+  beforeAll(() => vi.stubEnv("TZ", "America/New_York"));
+  afterAll(() => vi.unstubAllEnvs());
   it.each([
     [ "120", 120_000 ],
     [ " 2 ", 2000 ],
@@ -115,12 +119,13 @@ describe("dynamicThrottle", () => {
       const reader = data.getReader();
       while (!(await reader.read()).done);
     };
-    it.each<[string, (s: Setup) => void]>([
+    it.each<[string, (s: Setup) => Promise<void> | void]>([
       [ "end", ({ data, source }) => { void drain(data); source.close(); } ],
       [ "read error", ({ data, source }) => { void drain(data).catch(() => {}); source.error(new Error("boom")); } ],
-      [ "consumer cancel", ({ data }) => { void data.cancel(); } ],
+      // A buffered chunk means no read is waiting, so only the wrapper's cancel() can release the slot.
+      [ "consumer cancel", async ({ data, source }) => { source.enqueue(new Uint8Array([ 1 ])); await tick(10); void data.cancel(); } ],
       [ "caller abort", ({ controller }) => controller.abort() ],
-    ])("released on %s, once", async (_name, finish) => {
+    ])("released on %s", async (_name, finish) => {
       const { fetch, calls } = fakeFetch();
       const queue = createThrottledQueue({ min_rpi: 100, interval: 1000, concurrency: 1, retry: 0 });
       const api = client(fetch, { queue });
@@ -133,8 +138,8 @@ describe("dynamicThrottle", () => {
       void api.get("/b").catch(() => {});
       await tick(20);
       expect(calls).toHaveLength(1);
-      finish({ data, source, controller, queue });
-      // B gets the freed slot; a second release would let a third request start alongside it.
+      await finish({ data, source, controller, queue });
+      // B gets the freed slot, and C still waits behind it.
       await until(() => calls.length === 2);
       void api.get("/c").catch(() => {});
       await tick(20);
@@ -213,7 +218,7 @@ describe("dynamicThrottle", () => {
   });
 
   describe("cooldowns", () => {
-    async function cooldownAfter(response: () => Response, options: Partial<DynamicThrottleOptions> = {}, config = {}) {
+    async function cooldownAfter(response: () => Response, options: Pick<DynamicThrottleOptions, "cooldownFrom" | "retryAfterOn503"> = {}, config = {}) {
       const { fetch } = fakeFetch(response);
       const queue = createThrottledQueue({ min_rpi: 100, interval: 1000, retry: 0 });
       const api = client(fetch, { queue, ...options });
@@ -253,24 +258,107 @@ describe("dynamicThrottle", () => {
       expect(await cooldownAfter(() => status(200, { "x-ratelimit-reset": "3" }), { cooldownFrom })).toBeGreaterThan(2900);
     });
 
+    it.each<[string, () => Response, () => number | undefined, number]>([
+      [ "a number wins over Retry-After", () => status(429, { "retry-after": "1" }), () => 3000, 2900 ],
+      [ "undefined falls back to Retry-After", () => status(429, { "retry-after": "2" }), () => undefined, 1900 ],
+      [ "NaN falls back to Retry-After", () => status(429, { "retry-after": "2" }), () => NaN, 1900 ],
+      [ "a negative number falls back to Retry-After", () => status(429, { "retry-after": "2" }), () => -1, 1900 ],
+      [ "Infinity falls back to Retry-After", () => status(429, { "retry-after": "2" }), () => Infinity, 1900 ],
+      [ "a throw falls back to Retry-After", () => status(429, { "retry-after": "2" }), () => { throw new Error("bad header"); }, 1900 ],
+      [ "it also reads a rejected non-429 response", () => status(500), () => 3000, 2900 ],
+    ])("cooldownFrom: %s", async (_name, response, cooldownFrom, atLeast) => {
+      expect(await cooldownAfter(response, { cooldownFrom })).toBeGreaterThan(atLeast);
+    });
+
+    it("keeps a successful response and the original error when cooldownFrom is invalid or throws", async () => {
+      const { fetch } = fakeFetch(() => status(200));
+      for (const cooldownFrom of [ () => NaN, () => { throw new Error("bad header"); } ]) {
+        await expect(client(fetch, { min_rpi: 100, interval: 1000, cooldownFrom }).get("/a")).resolves.toMatchObject({ status: 200 });
+      }
+      const limited = fakeFetch(() => status(429));
+      const throwing = () => { throw new Error("bad header"); };
+      await expect(client(limited.fetch, { min_rpi: 100, interval: 1000, cooldownFrom: throwing }).get("/a"))
+        .rejects.toMatchObject({ isFaxiosError: true, response: { status: 429 } });
+    });
+
     it("applies a cooldown to a resolved 429 when validateStatus is widened", async () => {
       expect(await cooldownAfter(() => status(429, { "retry-after": "2" }), {}, { validateStatus: () => true })).toBeGreaterThan(1900);
     });
   });
 
   describe("cancellation and errors", () => {
-    it("caller abort while queued: ERR_CANCELED, native fetch never runs", async () => {
+    it("caller abort while queued: ERR_CANCELED, the item leaves the queue and never starts", async () => {
       const { fetch, calls } = fakeFetch();
-      const api = client(fetch, { min_rpi: 100, interval: 1000, concurrency: 1 });
+      const queue = createThrottledQueue({ min_rpi: 100, interval: 1000, concurrency: 1, retry: 0 });
+      const api = client(fetch, { queue });
       void api.get("/a").catch(() => {});
       const controller = new AbortController();
       const b = api.get("/b", { signal: controller.signal });
       await until(() => calls.length === 1);
       controller.abort();
       await expect(b).rejects.toMatchObject({ code: "ERR_CANCELED" });
+      expect(queue.getState().pending).toBe(0);
       calls[0]!.respond(ok());
       await tick(30);
       expect(calls).toHaveLength(1);
+      expect(queue.getState().started).toBe(1);
+    });
+
+    it("queues nothing when the caller aborted during earlier async middleware", async () => {
+      const { fetch, calls } = fakeFetch(ok);
+      const queue = createThrottledQueue({ min_rpi: 100, interval: 1000, retry: 0, maxQueueSize: 1 });
+      const api = faxios.create({ baseURL: "https://api.test", env: { fetch } })
+        .use(async (ctx, next) => {
+          await tick(20);
+          return next(ctx);
+        })
+        .use(dynamicThrottle({ queue }));
+      const controller = new AbortController();
+      const a = api.get("/a", { signal: controller.signal });
+      controller.abort();
+      await expect(a).rejects.toMatchObject({ code: "ERR_CANCELED" });
+      await tick(30);
+      expect(queue.getState()).toMatchObject({ pending: 0, started: 0 });
+      await expect(api.get("/b")).resolves.toMatchObject({ status: 200 });
+      expect(calls).toHaveLength(1);
+    });
+
+    describe("a signal-like caller signal", () => {
+      const unhandled = vi.fn();
+      beforeEach(() => {
+        unhandled.mockClear();
+        process.on("unhandledRejection", unhandled);
+      });
+      afterEach(() => {
+        process.off("unhandledRejection", unhandled);
+      });
+
+      it("without listener methods: the request still runs, with no unhandled rejection", async () => {
+        const { fetch } = fakeFetch(ok);
+        const api = client(fetch, { min_rpi: 100, interval: 1000 });
+        await expect(api.get("/a", { signal: { aborted: false, onabort: null } })).resolves.toMatchObject({ status: 200 });
+        await tick(10);
+        expect(unhandled).not.toHaveBeenCalled();
+      });
+
+      it("with listener methods: an abort cancels the request and aborts native fetch", async () => {
+        const { fetch, calls } = fakeFetch();
+        const listeners = new Set<unknown>();
+        const signal = {
+          aborted: false,
+          addEventListener: (_type: unknown, listener: unknown) => { listeners.add(listener); },
+          removeEventListener: (_type: unknown, listener: unknown) => { listeners.delete(listener); },
+        };
+        const a = client(fetch, { min_rpi: 100, interval: 1000 }).get("/a", { signal });
+        await until(() => calls.length === 1);
+        signal.aborted = true;
+        for (const listener of listeners) if (typeof listener === "function") listener();
+        await expect(a).rejects.toMatchObject({ code: "ERR_CANCELED" });
+        expect(calls[0]!.signal.aborted).toBe(true);
+        await tick(10);
+        expect(listeners.size).toBe(0);
+        expect(unhandled).not.toHaveBeenCalled();
+      });
     });
 
     describe.each([ "AbortSignal.any", "manual fallback" ])("signal composition via %s", mode => {
@@ -297,8 +385,10 @@ describe("dynamicThrottle", () => {
         const { fetch, calls } = fakeFetch();
         const queue = createThrottledQueue({ min_rpi: 100, interval: 1000, concurrency: 1, retry: 0 });
         const api = client(fetch, { queue });
-        const a = api.get("/a");
-        const b = api.get("/b");
+        // A live caller signal, so the item's abort must reach fetch through the composed signal.
+        const caller = new AbortController();
+        const a = api.get("/a", { signal: caller.signal });
+        const b = api.get("/b", { signal: caller.signal });
         await until(() => calls.length === 1);
         queue.abort();
         for (const request of [ a, b ]) {
@@ -308,17 +398,6 @@ describe("dynamicThrottle", () => {
         }
         expect(calls[0]!.signal.aborted).toBe(true);
         expect(calls).toHaveLength(1);
-      });
-
-      it("maps admission failure to ERR_THROTTLE_REJECTED", async () => {
-        const { fetch } = fakeFetch(ok);
-        const queue = createThrottledQueue({ min_rpi: 1, interval: 1000, retry: 0 });
-        queue.abort();
-        await expect(client(fetch, { queue }).get("/a")).rejects.toMatchObject({ code: ERR_THROTTLE_REJECTED });
-        const full = createThrottledQueue({ min_rpi: 1, interval: 1000, retry: 0, maxQueueSize: 0 });
-        const error = await client(fetch, { queue: full }).get("/a")
-          .catch((e: unknown) => e as FaxiosError);
-        expect(error).toMatchObject({ code: ERR_THROTTLE_REJECTED });
       });
 
       it("removes its listeners from the caller's signal once the request settles", async () => {
@@ -334,12 +413,86 @@ describe("dynamicThrottle", () => {
       });
     });
 
-    it("does not mutate the caller's config", async () => {
+    it("maps admission failure to ERR_THROTTLE_REJECTED", async () => {
+      const { fetch } = fakeFetch(ok);
+      const queue = createThrottledQueue({ min_rpi: 1, interval: 1000, retry: 0 });
+      queue.abort();
+      await expect(client(fetch, { queue }).get("/a")).rejects.toMatchObject({ code: ERR_THROTTLE_REJECTED });
+      const full = createThrottledQueue({ min_rpi: 1, interval: 1000, retry: 0, maxQueueSize: 0 });
+      const error = await client(fetch, { queue: full }).get("/a")
+        .catch((e: unknown) => e as FaxiosError);
+      expect(error).toMatchObject({ code: ERR_THROTTLE_REJECTED });
+    });
+
+    it("gives the next retry attempt the caller's own signal, not the queue's", async () => {
       const { fetch } = fakeFetch(ok);
       const controller = new AbortController();
-      const config = { signal: controller.signal };
-      await client(fetch, { min_rpi: 100, interval: 1000 }).get("/a", config);
-      expect(config).toEqual({ signal: controller.signal });
+      let seen: unknown;
+      const api = faxios.create({ baseURL: "https://api.test", env: { fetch } })
+        .use(async (ctx, next) => {
+          const response = await next(ctx);
+          seen = ctx.config.signal;
+          return response;
+        })
+        .use(dynamicThrottle({ min_rpi: 100, interval: 1000 }));
+      await api.get("/a", { signal: controller.signal });
+      expect(seen).toBe(controller.signal);
+    });
+  });
+
+  describe("with fake timers", () => {
+    beforeEach(() => {
+      vi.useFakeTimers({ toFake: [ "setTimeout", "clearTimeout", "setInterval", "clearInterval", "setImmediate", "clearImmediate", "Date", "performance" ] });
+      // Pacing measures from Date.now(); a clock at 0 would hold the first start for one spacing.
+      vi.setSystemTime(Date.UTC(2026, 0, 1));
+    });
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it("caps a Retry-After cooldown at 5 minutes on a queue it creates", async () => {
+      let n = 0;
+      const { fetch, calls } = fakeFetch(() => (n++ === 0 ? status(429, { "retry-after": "86400" }) : ok()));
+      const api = client(fetch, { min_rpi: 100, interval: 1000 });
+      const a = api.get("/a").catch((e: unknown) => e);
+      await vi.advanceTimersByTimeAsync(10);
+      expect(await a).toMatchObject({ response: { status: 429 } });
+      const b = api.get("/b");
+      await vi.advanceTimersByTimeAsync(299_000);
+      expect(calls).toHaveLength(1);
+      await vi.advanceTimersByTimeAsync(2000);
+      expect(calls).toHaveLength(2);
+      await expect(b).resolves.toMatchObject({ status: 200 });
+    });
+
+    it("rejects the requests of a failed queue with ERR_THROTTLE_REJECTED, caused by the strategy error", async () => {
+      const failure = new Error("strategy broke");
+      const { fetch, calls } = fakeFetch();
+      const queue = createThrottledQueue({ min_rpi: 100, interval: 1000, retry: 0, concurrency: 1, rateStrategy: () => { throw failure; } });
+      const api = client(fetch, { queue });
+      const inFlight = api.get("/a").catch((e: unknown) => e);
+      const queued = api.get("/b").catch((e: unknown) => e);
+      await vi.advanceTimersByTimeAsync(10);
+      expect(calls).toHaveLength(1);
+      // The queue rethrows the strategy error from its timer, as documented for a failed queue.
+      expect(() => vi.advanceTimersByTime(1000)).toThrow(failure);
+      for (const error of [ await inFlight, await queued ]) {
+        expect(error).toMatchObject({ code: ERR_THROTTLE_REJECTED, message: "strategy broke", cause: failure });
+      }
+      await expect(api.get("/c")).rejects.toMatchObject({ code: ERR_THROTTLE_REJECTED, cause: failure });
     });
   });
 });
+
+// Type tests: `pnpm lint` (tsc) checks these calls; the arrows never run.
+// A shared queue can't be combined with queue options, and the queue never retries.
+declare const sharedQueue: ThrottleHandle;
+expectTypeOf(() => dynamicThrottle({ queue: sharedQueue })).toBeFunction();
+expectTypeOf(() => dynamicThrottle({ queue: sharedQueue, retryAfterOn503: true })).toBeFunction();
+expectTypeOf(() => dynamicThrottle({ min_rpi: 5, interval: 1000, concurrency: 2 })).toBeFunction();
+// @ts-expect-error -- queue options can't be combined with a shared queue
+expectTypeOf(() => dynamicThrottle({ queue: sharedQueue, min_rpi: 5 })).toBeFunction();
+// @ts-expect-error -- a shared queue's classifier is set when it is created
+expectTypeOf(() => dynamicThrottle({ queue: sharedQueue, rateOutcomeClassifier: isRateLimited })).toBeFunction();
+// @ts-expect-error -- retries belong to faxios's retry plugin
+expectTypeOf(() => dynamicThrottle({ min_rpi: 5, interval: 1000, retry: 3 })).toBeFunction();

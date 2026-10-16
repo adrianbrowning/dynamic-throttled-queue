@@ -323,7 +323,7 @@ are three independent decisions. Configure each one you need. Source: README
 
 Install `dynamicThrottle` after `retry({ respectRetryAfter: false })`. Before
 `retry`, the retry backoff holds a queue slot. A shared queue must set
-`retry: 0` and `rateOutcomeClassifier: isRateLimited`. Read
+`retry: 0`, `rateOutcomeClassifier: isRateLimited` and a `maxCooldown`. Read
 [the faxios plugin](references/faxios.md). Source: `src/faxios.ts`.
 
 ### HIGH: Unhandled rejections from cancelled or aborted tasks

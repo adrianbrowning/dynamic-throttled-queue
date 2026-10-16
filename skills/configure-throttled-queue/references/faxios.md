@@ -4,6 +4,8 @@ Read this when you throttle a [faxios](https://github.com/adrianbrowning/faxios)
 client. The plugin is `dynamic-throttled-queue/faxios`. It needs
 `@gcmdev/faxios` 0.2.x (peer range `^0.2.0`, checked with 0.2.0 and 0.2.4).
 That package is an optional peer dependency, so install it in the application.
+With npm, a `@gcmdev/faxios` outside 0.2.x anywhere in the tree fails the
+install with `ERESOLVE`, even if nothing imports `dynamic-throttled-queue/faxios`.
 Source: `src/faxios.ts`, README "faxios plugin".
 
 ## 1. Install the plugin after `retry`
@@ -38,12 +40,16 @@ Check: the `.use()` calls are in this order, and `retry` gets
 ## 2. Choose the queue form
 
 The default form gives queue options. The plugin creates one queue for the
-client. That queue never retries (`retry: 0`) and uses `isRateLimited` as its
-`rateOutcomeClassifier`.
+client. That queue never retries (`retry: 0`), uses `isRateLimited` as its
+`rateOutcomeClassifier`, and caps cooldowns at 5 minutes (`maxCooldown`
+defaults to 300 000 ms; pass `maxCooldown` to change it).
 
 Use the `{ queue }` form only when the client must share a queue with other
 work, or when you need the queue handle (for example, to call `abort()`). You
-then must set `retry: 0` and `rateOutcomeClassifier: isRateLimited` yourself:
+then must set `retry: 0` and `rateOutcomeClassifier: isRateLimited` yourself,
+and a `maxCooldown` (the queue default is about 24.8 days). Queue options
+can't be combined with `{ queue }`; TypeScript rejects
+`dynamicThrottle({ queue, rateOutcomeClassifier })`:
 
 ```ts
 import faxios from "@gcmdev/faxios";
@@ -58,6 +64,7 @@ const queue = createThrottledQueue({
   concurrency: 4,
   retry: 0,
   rateOutcomeClassifier: isRateLimited,
+  maxCooldown: 300_000,
 });
 
 const api = faxios
@@ -73,7 +80,9 @@ If you omit `retry: 0`, the queue and the `retry` plugin both retry. If you
 omit `isRateLimited`, every failure (also 401, 404 and cancellations) reduces
 the rate.
 
-Check: a shared queue has `retry: 0` and `rateOutcomeClassifier: isRateLimited`.
+Check: a shared queue has `retry: 0`, `rateOutcomeClassifier: isRateLimited`
+and a `maxCooldown`, and `dynamicThrottle` gets only `{ queue }` plus
+`retryAfterOn503` or `cooldownFrom`.
 
 ## 3. Know what reduces the rate
 
@@ -84,20 +93,27 @@ With `isRateLimited`, only a 429 response reduces the rate. 401, 403, other
 ## 4. Configure cooldowns
 
 The plugin calls `cooldownFor()` for you. Do not call it from your own code
-for faxios responses.
+for faxios responses. A cooldown pauses the whole queue, so every origin the
+client calls waits.
 
 - `Retry-After` accepts delay-seconds and the three RFC 9110 HTTP-date forms:
   IMF-fixdate (`Wed, 21 Oct 2015 07:28:00 GMT`), RFC 850
   (`Wednesday, 21-Oct-15 07:28:00 GMT`) and asctime
-  (`Wed Oct 21 07:28:00 2015`, read as UTC). The faxios `retry` plugin accepts
-  the same forms. A past date gives `0`. The plugin ignores a malformed value,
-  such as `1.5` or `10/21/2015`. The queue's `maxCooldown` clamps long values.
-- By default, only a 429 sets a cooldown. Set `retryAfterOn503: true` to also
-  honour `Retry-After` on 503 responses.
+  (`Wed Oct 21 07:28:00 2015`, read as UTC). A past date gives `0`. The plugin
+  ignores a malformed value, such as `1.5` or `10/21/2015`.
+- `maxCooldown` clamps long values. On a queue the plugin creates, it defaults
+  to 300 000 ms (5 minutes), the same limit as faxios `retry`'s
+  `maxRetryAfter`, which `respectRetryAfter: false` turns off.
+- By default, only a 429's `Retry-After` sets a cooldown. Set
+  `retryAfterOn503: true` to also honour `Retry-After` on 503 responses. With
+  `respectRetryAfter: false` and no `retryAfterOn503`, a 503's `Retry-After`
+  is ignored.
 - To read a vendor header, set `cooldownFrom: (response) => ms | undefined`.
-  It runs for every response, including a response that a rejection carries. A
-  number that it returns takes priority over `Retry-After`. `undefined` falls
-  back to `Retry-After`.
+  It runs for **every** response, including successful ones and a response
+  that a rejection carries. Any number it returns starts a cooldown, so return
+  `undefined` unless the response is rate-limited. A finite number >= 0 takes
+  priority over `Retry-After`. `undefined`, `NaN`, a negative number,
+  `Infinity` or a throw falls back to `Retry-After`.
 
 ```ts
 import faxios from "@gcmdev/faxios";
@@ -112,10 +128,10 @@ const api = faxios
     interval: 1_000,
     maxCooldown: 60_000,
     retryAfterOn503: true,
-    // X-RateLimit-Reset holds epoch seconds.
+    // Only a used-up window is a cooldown; X-RateLimit-Reset holds epoch seconds.
     cooldownFrom: (response) => {
-      const reset = Number(response.headers.get("x-ratelimit-reset"));
-      return Number.isFinite(reset) && reset > 0 ? Math.max(0, reset * 1000 - Date.now()) : undefined;
+      if (response.status !== 429 && response.headers.get("x-ratelimit-remaining") !== "0") return undefined;
+      return Number(response.headers.get("x-ratelimit-reset")) * 1000 - Date.now();
     },
   }));
 ```
@@ -130,16 +146,14 @@ cancelled, or until the request or queue aborts. If you do not read or cancel a
 stream, it keeps its slot. When all slots are held, no other request starts.
 
 ```ts
-const response = await api.get("/export", { responseType: "stream" });
-try {
-  for await (const chunk of response.data) {
-    process(chunk);
-  }
-} finally {
-  // Releases the slot if the loop stopped early.
-  await response.data.cancel().catch(() => {});
+const response = await api.get<ReadableStream<Uint8Array>>("/export", { responseType: "stream" });
+for await (const chunk of response.data) {
+  handle(chunk);
 }
+// Leaving the loop early (break, return or a throw in the body) cancels the stream.
 ```
+
+If you don't read a stream at all, cancel it: `await response.data.cancel()`.
 
 Check: every stream response is read to the end or cancelled.
 
@@ -153,11 +167,14 @@ queue does not count against `timeout`. To limit the total wait, also pass a
 
 | Cause | Rejection | `error.code` |
 | --- | --- | --- |
-| The caller's `signal` aborts, or `queue.abort()` runs | `CanceledError` | `ERR_CANCELED` |
-| The queue refuses to admit the request (queue aborted, or `maxQueueSize` reached) | `FaxiosError` | `ERR_THROTTLE_REJECTED` |
+| The caller's `signal` aborts, or `queue.abort()` runs while the request is queued or in flight | `CanceledError` | `ERR_CANCELED` |
+| The queue refuses to admit the request: it was aborted or has failed, or `maxQueueSize` is reached | `FaxiosError` | `ERR_THROTTLE_REJECTED` |
+| The queue fails (its `rateStrategy` throws) while the request is queued or in flight | `FaxiosError`, `cause` is the strategy error | `ERR_THROTTLE_REJECTED` |
 
-When the request is still queued at cancellation, it is never sent.
-`ERR_THROTTLE_REJECTED` is exported as a constant:
+When the request is still queued at cancellation, it is never sent. A failed
+queue also rethrows the strategy error from its timer (see "Lifecycle" in the
+README); create a new queue to resume. `ERR_THROTTLE_REJECTED` is
+exported as a constant:
 
 ```ts
 import { isFaxiosError } from "@gcmdev/faxios";
@@ -167,7 +184,7 @@ try {
   await api.get("/items");
 } catch (error) {
   if (isFaxiosError(error) && error.code === ERR_THROTTLE_REJECTED) {
-    // The queue is full or aborted. Do not retry immediately.
+    // The queue is full, aborted or failed. Do not retry immediately.
   }
   throw error;
 }

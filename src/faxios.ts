@@ -1,21 +1,38 @@
 import { CanceledError, FaxiosError, isFaxiosError } from "@gcmdev/faxios";
-import type { FaxiosPlugin, FaxiosResponse } from "@gcmdev/faxios";
+import type { FaxiosPlugin, FaxiosRequestConfig, FaxiosResponse, InternalFaxiosRequestConfig } from "@gcmdev/faxios";
 import { definePlugin } from "@gcmdev/faxios/plugins";
 import { createThrottledQueue } from "./dynamic-throttled-queue.ts";
 import type { FailureOutcome, ThrottleHandle, ThrottleOptions } from "./dynamic-throttled-queue.ts";
 
-/** The `FaxiosError` code of a request the queue refused to admit (aborted queue or `maxQueueSize` reached). */
+/**
+ * The `FaxiosError` code of a request the queue refused to admit: the queue was aborted or has
+ * failed, or `maxQueueSize` was reached.
+ */
 export const ERR_THROTTLE_REJECTED = "ERR_THROTTLE_REJECTED";
 
 /** Queue options for a queue the plugin creates. Retries belong to faxios's `retry` plugin, so the queue never retries. */
 export type DynamicThrottleQueueOptions = Omit<ThrottleOptions, "retry" | "retryBackoff" | "retryClassifier">;
 
-export type DynamicThrottleOptions = (DynamicThrottleQueueOptions | { queue: ThrottleHandle; }) & {
-  /** Also honour `Retry-After` on 503 responses. Default `false`: only 429 sets a cooldown. */
+/** The longest server-directed cooldown on a queue the plugin creates: 5 minutes, as faxios `retry`'s `maxRetryAfter`. */
+const defaultMaxCooldown = 300_000;
+
+export type DynamicThrottleOptions = (
+  | (DynamicThrottleQueueOptions & { queue?: never; })
+  | ({
+    /**
+     * An existing queue to share. Create it with `retry: 0` and `rateOutcomeClassifier: isRateLimited`;
+     * queue options can't be combined with it.
+     */
+    queue: ThrottleHandle;
+  } & { [K in keyof DynamicThrottleQueueOptions]?: never; })
+) & {
+  /** Also honour `Retry-After` on 503 responses. Default `false`: only a 429's `Retry-After` sets a cooldown. */
   retryAfterOn503?: boolean;
   /**
-   * Reads a cooldown, in ms, from any response (resolved or carried by a rejection), for vendor
-   * headers such as `X-RateLimit-Reset`. A number wins over `Retry-After`; `undefined` falls back to it.
+   * Reads a cooldown, in ms, from every response, including successful ones and one a rejection
+   * carries, for vendor headers such as `X-RateLimit-Reset`. Any number it returns starts a
+   * cooldown, so return `undefined` unless the response is rate-limited. A finite number >= 0 wins
+   * over `Retry-After`; `undefined`, any other value, or a throw falls back to `Retry-After`.
    */
   cooldownFrom?: (response: FaxiosResponse) => number | undefined;
 };
@@ -52,25 +69,52 @@ export function parseRetryAfter(value: unknown, now = Date.now()): number | unde
 }
 
 type Unlink = () => void;
+type CallerSignal = NonNullable<FaxiosRequestConfig["signal"]>;
+
+/** Calls `onAbort` when `signal` aborts. faxios accepts signal-like objects, which may have no listener methods. */
+function onAbortOf(signal: CallerSignal, onAbort: () => void): Unlink {
+  const { addEventListener: add, removeEventListener: remove } = signal;
+  if (typeof add !== "function") return () => {};
+  add.call(signal, "abort", onAbort, { once: true });
+  return () => remove?.call(signal, "abort", onAbort);
+}
+
+/** The `CanceledError` faxios gives an aborted request: its message and cause come from the abort reason. */
+function canceledBy(signal: CallerSignal, config: InternalFaxiosRequestConfig): CanceledError {
+  const reason = "reason" in signal ? signal.reason : undefined;
+  let message: null | string = null;
+  if (reason instanceof Error) message = reason.message;
+  else if (typeof reason === "string") message = reason;
+  const error = new CanceledError(message, config);
+  if (reason instanceof Error) error.cause = reason;
+  return error;
+}
+
+/** The `ERR_THROTTLE_REJECTED` error for a queue that refused or failed a request; `cause` is the queue's error. */
+function throttleRejected(cause: unknown, config: InternalFaxiosRequestConfig): FaxiosError {
+  const error = new FaxiosError(cause instanceof Error ? cause.message : String(cause), ERR_THROTTLE_REJECTED, config);
+  if (cause instanceof Error) error.cause = cause;
+  return error;
+}
 
 /** A signal that aborts when either input does; `unlink` removes any listeners the fallback added. */
-function linkSignals(caller: AbortSignal | undefined, item: AbortSignal): { signal: AbortSignal; unlink: Unlink; } {
+function linkSignals(caller: CallerSignal | undefined, item: AbortSignal): { signal: AbortSignal; unlink: Unlink; } {
   if (!caller) return { signal: item, unlink: () => {} };
-  // AbortSignal.any only takes real AbortSignals; faxios also accepts signal-like objects.
+  // AbortSignal.any only takes real AbortSignals.
   if (typeof AbortSignal.any === "function" && caller instanceof AbortSignal) {
     return { signal: AbortSignal.any([ caller, item ]), unlink: () => {} };
   }
   const controller = new AbortController();
-  const fromCaller = () => controller.abort(caller.reason);
+  const fromCaller = () => controller.abort("reason" in caller ? caller.reason : undefined);
   const fromItem = () => controller.abort(item.reason);
   if (caller.aborted) fromCaller();
   else if (item.aborted) fromItem();
-  caller.addEventListener("abort", fromCaller, { once: true });
+  const unlinkCaller = onAbortOf(caller, fromCaller);
   item.addEventListener("abort", fromItem, { once: true });
   return {
     signal: controller.signal,
     unlink: () => {
-      caller.removeEventListener("abort", fromCaller);
+      unlinkCaller();
       item.removeEventListener("abort", fromItem);
     },
   };
@@ -125,33 +169,45 @@ function holdUntilDone(stream: ReadableStream, signal: AbortSignal, release: () 
 
 /**
  * Throttles a faxios client through a dynamic-throttled-queue: start pacing, bounded concurrency
- * (held until the body is read, or until a `stream` body ends), adaptive rate and `Retry-After`
- * cooldowns. Install it after `retry({ respectRetryAfter: false })`, so each attempt takes a slot
- * and only the queue honours `Retry-After`.
+ * (held until the body is read; for a `stream` body, until it ends, errors, is cancelled or
+ * aborts), adaptive rate and `Retry-After` cooldowns. If you use `retry`, install it before this
+ * plugin with `retry({ respectRetryAfter: false })`, so each attempt takes a slot and only the
+ * queue honours `Retry-After`.
  */
 export function dynamicThrottle(options: DynamicThrottleOptions): FaxiosPlugin {
   const { retryAfterOn503 = false, cooldownFrom } = options;
-  const queue = "queue" in options
-    ? options.queue
-    : createThrottledQueue({ rateOutcomeClassifier: isRateLimited, ...options, retry: 0 });
+  const queue = options.queue === undefined
+    ? createThrottledQueue({ rateOutcomeClassifier: isRateLimited, maxCooldown: defaultMaxCooldown, ...options, retry: 0 })
+    : options.queue;
+
+  function customCooldown(response: FaxiosResponse): number | undefined {
+    let ms: unknown;
+    try {
+      ms = cooldownFrom?.(response);
+    }
+    catch {
+      return undefined;
+    }
+    return typeof ms === "number" && Number.isFinite(ms) && ms >= 0 ? ms : undefined;
+  }
 
   function applyCooldown(response: FaxiosResponse) {
-    const custom = cooldownFrom?.(response);
+    const custom = customCooldown(response);
     if (custom !== undefined) {
-      if (Number.isFinite(custom) && custom >= 0) queue.cooldownFor(custom);
+      queue.cooldownFor(custom);
       return;
     }
     if (response.status !== 429 && (!retryAfterOn503 || response.status !== 503)) return;
-    const { headers } = response as { headers?: { get?: (name: string) => unknown; }; };
-    const ms = parseRetryAfter(typeof headers?.get === "function" ? headers.get("retry-after") : undefined);
+    const ms = parseRetryAfter(response.headers.get("retry-after"));
     if (ms !== undefined) queue.cooldownFor(ms);
   }
 
   return definePlugin({
     name: "dynamic-throttle",
     middleware: async (ctx, next) => {
-      // faxios settles the caller's promise on abort itself; the plugin only stops the queued work.
-      const caller = ctx.config.signal as AbortSignal | undefined;
+      const caller = ctx.config.signal;
+      // Async middleware before this one can call next() after the caller aborted; queue nothing then.
+      if (caller?.aborted) throw canceledBy(caller, ctx.config);
       const delivered = Promise.withResolvers<FaxiosResponse>();
 
       let handle;
@@ -181,20 +237,24 @@ export function dynamicThrottle(options: DynamicThrottleOptions): FaxiosPlugin {
         });
       }
       catch (error) {
-        throw new FaxiosError(error instanceof Error ? error.message : String(error), ERR_THROTTLE_REJECTED, ctx.config);
+        throw throttleRejected(error, ctx.config);
       }
 
       const { cancel, result } = handle;
-      const onCallerAbort = () => cancel(new CanceledError(null, ctx.config));
-      caller?.addEventListener("abort", onCallerAbort, { once: true });
+      let unlinkCaller: Unlink = () => {};
+      // Handle the result before touching the caller's signal, so nothing can leave it unhandled.
       void result
         .catch((error: unknown) => {
-          // Errors from next() are already faxios errors; anything else is the queue aborting or failing.
+          // A FaxiosError came from the request. Otherwise the queue aborted (its AbortError) or failed.
+          const { state } = queue.getState();
           if (isFaxiosError(error)) delivered.reject(error);
-          else if (queue.getState().state === "aborted") delivered.reject(new CanceledError(null, ctx.config));
+          else if (state === "aborted") delivered.reject(new CanceledError(null, ctx.config));
+          else if (state === "failed") delivered.reject(throttleRejected(error, ctx.config));
           else delivered.reject(error);
         })
-        .finally(() => caller?.removeEventListener("abort", onCallerAbort));
+        .finally(() => unlinkCaller());
+      // faxios settles the caller's promise on abort itself; this only takes the item out of the queue.
+      if (caller) unlinkCaller = onAbortOf(caller, () => cancel(new CanceledError(null, ctx.config)));
       return delivered.promise;
     },
   });

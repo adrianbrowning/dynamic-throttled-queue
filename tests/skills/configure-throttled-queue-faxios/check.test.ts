@@ -1,7 +1,7 @@
 import { isCancel } from "@gcmdev/faxios";
 import { describe, expect, it, vi } from "vitest";
 import { ERR_THROTTLE_REJECTED } from "../../../src/faxios.ts";
-import { createApi, createApiThrottleBeforeRetry, createApiWithQueueRetries } from "./solution.ts";
+import { createApi, createApiThrottleBeforeRetry, createApiWithoutClassifier, createApiWithoutConcurrency, createApiWithQueueRetries } from "./solution.ts";
 
 type Factory = typeof createApi;
 type Call = { path: string; at: number; respond: (response: Response) => void; };
@@ -25,8 +25,8 @@ function fakeFetch(script: Record<string, Array<number | [number, Record<string,
   return { fetch: fetch as unknown as typeof globalThis.fetch, calls };
 }
 
-// Real timers on purpose: faxios's fetch adapter runs end to end, and the queue paces with
-// performance.now(), which fake timers would not drive the same way as the plugin's own tests.
+// Real timers on purpose for the behaviour steps: faxios's fetch adapter runs end to end with no
+// clock control. The pacing steps below switch to fake timers, as they need many seconds of queue time.
 async function until(check: () => boolean) {
   for (let i = 0; i < 400 && !check(); i++) {
     const { promise, resolve } = Promise.withResolvers<void>();
@@ -34,6 +34,57 @@ async function until(check: () => boolean) {
     await promise;
   }
   expect(check()).toBe(true);
+}
+
+/** A fetch that answers every request with `status` after `latency` ms, recording starts and requests in flight. */
+function timedFetch(status: number, latency: number) {
+  const stats = { inFlight: 0, maxInFlight: 0, starts: [] as Array<number> };
+  const fetch = async () => {
+    stats.starts.push(Date.now());
+    stats.inFlight++;
+    stats.maxInFlight = Math.max(stats.maxInFlight, stats.inFlight);
+    const { promise, resolve } = Promise.withResolvers<void>();
+    setTimeout(resolve, latency);
+    await promise;
+    stats.inFlight--;
+    return new Response("{}", { status, headers: { "content-type": "application/json" } });
+  };
+  return { fetch: fetch as unknown as typeof globalThis.fetch, stats };
+}
+
+/** Sends `count` requests through a fresh client and runs the fake clock until they settle. */
+async function burst(factory: Factory, status: number, latency: number, count: number) {
+  const server = timedFetch(status, latency);
+  const { api, shutdown } = factory(server.fetch);
+  const results = Array.from({ length: count }, (_, i) => api.get(`/burst/${i}`).catch(() => undefined));
+  await vi.advanceTimersByTimeAsync(60_000);
+  await Promise.all(results);
+  shutdown();
+  const first = server.stats.starts[0]!;
+  const startsInSecond = (second: number) => server.stats.starts.filter(at => at - first >= second * 1000 && at - first < (second + 1) * 1000).length;
+  return { ...server.stats, startsInSecond };
+}
+
+async function assertPacing(factory: Factory) {
+  vi.useFakeTimers({ toFake: [ "setTimeout", "clearTimeout", "setInterval", "clearInterval", "setImmediate", "clearImmediate", "Date", "performance" ], now: Date.UTC(2026, 0, 1) });
+  try {
+    // At most 10 starts in any second.
+    const fast = await burst(factory, 200, 5, 40);
+    for (const start of fast.starts) {
+      expect(fast.starts.filter(at => at >= start && at < start + 1000).length, "starts per second").toBeLessThanOrEqual(10);
+    }
+
+    // At most 1 request in flight.
+    const slow = await burst(factory, 200, 300, 10);
+    expect(slow.maxInFlight, "requests in flight").toBeLessThanOrEqual(1);
+
+    // Only 429 lowers the rate: after a run of 401s, the rate has not dropped below its start.
+    const denied = await burst(factory, 401, 5, 40);
+    expect(denied.startsInSecond(3), "starts in the 4th second of 401s").toBeGreaterThanOrEqual(denied.startsInSecond(0));
+  }
+  finally {
+    vi.useRealTimers();
+  }
 }
 
 async function assertTaskBehavior(factory: Factory) {
@@ -74,6 +125,8 @@ async function assertTaskBehavior(factory: Factory) {
   expect(isCancel(await queued)).toBe(true);
   await expect(api.get("/later")).rejects.toMatchObject({ code: ERR_THROTTLE_REJECTED });
   expect(slow.calls.map(call => call.path)).toEqual([ "/s" ]);
+
+  await assertPacing(factory);
 }
 
 describe("configure-throttled-queue faxios task check", () => {
@@ -88,5 +141,13 @@ describe("configure-throttled-queue faxios task check", () => {
   it("rejects a shared queue that also retries", async () => {
     // The queue retries the 503s itself, so the 5xx request succeeds instead of failing after 3 tries.
     await expect(assertTaskBehavior(createApiWithQueueRetries)).rejects.toThrow(/resolved .* instead of rejecting/);
+  });
+
+  it("rejects a queue without a concurrency limit", async () => {
+    await expect(assertTaskBehavior(createApiWithoutConcurrency)).rejects.toThrow(/requests in flight/);
+  });
+
+  it("rejects a queue without isRateLimited", async () => {
+    await expect(assertTaskBehavior(createApiWithoutClassifier)).rejects.toThrow(/starts in the 4th second of 401s/);
   });
 });

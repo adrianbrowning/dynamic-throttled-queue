@@ -61,9 +61,18 @@ skills:
         wrong_pattern: |
           faxios.create().use(dynamicThrottle({ queue })).use(retry());
         correct_pattern: |
-          faxios.create().use(retry({ respectRetryAfter: false })).use(dynamicThrottle({ queue })); // queue: retry 0, isRateLimited
+          faxios.create().use(retry({ respectRetryAfter: false })).use(dynamicThrottle({ queue })); // queue: retry 0, isRateLimited, maxCooldown
         source: src/faxios.ts; README.md faxios plugin
         priority: HIGH
+        status: active
+      - mistake: Returning a cooldown from cooldownFrom for every response
+        mechanism: cooldownFrom runs on successful responses too, and any valid number starts a cooldown, so a vendor reset header sent on every response pauses the client after each success.
+        wrong_pattern: |
+          cooldownFrom: (response) => Number(response.headers.get("x-ratelimit-reset")) * 1000 - Date.now()
+        correct_pattern: |
+          cooldownFrom: (response) => response.status === 429 || response.headers.get("x-ratelimit-remaining") === "0" ? Number(response.headers.get("x-ratelimit-reset")) * 1000 - Date.now() : undefined
+        source: src/faxios.ts DynamicThrottleOptions.cooldownFrom; skills/configure-throttled-queue/references/faxios.md
+        priority: MEDIUM
         status: active
       - mistake: Ignoring the abort signal in callbacks
         mechanism: Cancellation is cooperative, so abort() and cancel() cannot stop I/O that ignores signal.

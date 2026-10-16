@@ -148,9 +148,9 @@ used mainly to call rate-limited HTTP APIs.
 - **Change reviewed:** the plugin against published `@gcmdev/faxios` 0.2.4
   (and 0.2.0) instead of the local `link:` build. Types, unit tests and task
   checks pass on both with no plugin change.
-- **Decision: peer range `^0.2.0`, not `>=0.2.0`.** faxios 0.3.0 is breaking
-  for this plugin: its `timeout` covers middleware, so queue time would count
-  against it, and the README and reference say it does not.
+- **Decision: peer range `^0.2.0`, not `>=0.2.0`.** The faxios 0.3.0 changelog
+  (not tested here; 0.3.0 is unpublished) makes `timeout` cover middleware, so
+  queue time would count against it, and the README and reference say it does not.
 - **Behavior change:** `parseRetryAfter` accepts RFC 850 and asctime dates as
   well as IMF-fixdate (RFC 9110 §5.6.7), the same forms faxios 0.2.4 `retry`
   accepts. Before, those headers set no cooldown, and the required
@@ -158,3 +158,30 @@ used mainly to call rate-limited HTTP APIs.
   `Retry-After` bullet and install note are updated; the task check is
   unchanged because it uses delay-seconds.
 - **Remaining work:** re-check the plugin when faxios 0.3.0 publishes.
+
+### PR #89 review fixes — 2026-10-16, unreleased (issue #82)
+
+- **Change reviewed:** the Critical and High findings of the PR #89 review.
+  `src/faxios.ts` now: handles signal-like caller signals without listener
+  methods (they used to crash Node with an unhandled rejection); queues nothing
+  when the caller aborted during earlier async middleware; makes the options
+  union exclusive, so `{ queue, ...queueOptions }` is a type error; falls back
+  to `Retry-After` when `cooldownFrom` returns an invalid number or throws;
+  defaults `maxCooldown` to 300 000 ms on a queue it creates; and rejects the
+  requests of a failed queue with `ERR_THROTTLE_REJECTED` (cause: the strategy
+  error) instead of a raw `Error`.
+- **Decision: a throwing `cooldownFrom` falls back to `Retry-After`.** The other
+  option, rethrowing, replaced the request's `FaxiosError` (so `retry` stopped)
+  and left a stream body open.
+- **Decision: 5-minute default `maxCooldown`.** It matches faxios `retry`'s
+  `maxRetryAfter`, which the required `respectRetryAfter: false` turns off.
+  A shared `{ queue }` sets its own; the reference says so.
+- **Guidance updated:** `references/faxios.md` (npm `ERESOLVE` note, exclusive
+  forms, shared-queue `maxCooldown`, cooldown scope and fallback rules, a
+  `cooldownFrom` example that returns `undefined` unless the window is used
+  up, a stream example that compiles, the failed-queue row in the errors
+  table) and the SKILL.md HIGH mistake (shared queue needs `maxCooldown`).
+- **Task check:** `check.test.ts` now also grades starts per second, requests in
+  flight and the 429-only classifier on fake timers. New mistake factories
+  without `concurrency` and without `isRateLimited` fail the grader.
+- **Not verified:** fresh consumer session and discovery prompts.

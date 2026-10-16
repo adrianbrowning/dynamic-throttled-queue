@@ -3,16 +3,17 @@ import { retry } from "@gcmdev/faxios/plugins/retry";
 import { createThrottledQueue } from "../../../src/dynamic-throttled-queue.ts";
 import { dynamicThrottle, isRateLimited } from "../../../src/faxios.ts";
 
-type Mistakes = { throttleBeforeRetry?: boolean; queueRetries?: boolean; };
+type Mistakes = { throttleBeforeRetry?: boolean; queueRetries?: boolean; noConcurrency?: boolean; noClassifier?: boolean; };
 
 function build(fetch: typeof globalThis.fetch, mistakes: Mistakes = {}) {
   const queue = createThrottledQueue({
     min_rpi: 1,
     max_rpi: 10,
     interval: 1000,
-    concurrency: 1,
+    ...(mistakes.noConcurrency ? {} : { concurrency: 1 }),
     retry: mistakes.queueRetries ? 2 : 0,
-    rateOutcomeClassifier: isRateLimited,
+    ...(mistakes.noClassifier ? {} : { rateOutcomeClassifier: isRateLimited }),
+    maxCooldown: 300_000,
   });
   const client = faxios.create({ baseURL: "https://api.example.com", env: { fetch } });
   const throttle = dynamicThrottle({ queue });
@@ -29,3 +30,9 @@ export const createApiThrottleBeforeRetry = (fetch: typeof globalThis.fetch) => 
 
 /** Mistake: a shared queue that also retries, so each faxios attempt is retried again. */
 export const createApiWithQueueRetries = (fetch: typeof globalThis.fetch) => build(fetch, { queueRetries: true });
+
+/** Mistake: no `concurrency`, so the start rate alone bounds requests in flight. */
+export const createApiWithoutConcurrency = (fetch: typeof globalThis.fetch) => build(fetch, { noConcurrency: true });
+
+/** Mistake: no `isRateLimited`, so every failure, such as a 401, lowers the rate. */
+export const createApiWithoutClassifier = (fetch: typeof globalThis.fetch) => build(fetch, { noClassifier: true });

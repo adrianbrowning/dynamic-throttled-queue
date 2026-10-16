@@ -164,3 +164,7 @@ gaps:
     question: Should the v2 to v3 migration (pending property removed, RateFailureOutcome renamed to FailureOutcome) get its own skill?
     context: The README "Migration" section has two bullets each for v1 and v2; not assessed as an independent task.
     status: open
+  - skill: configure-throttled-queue
+    question: Does the faxios plugin guidance hold on faxios 0.3.0?
+    context: The peer range is ^0.2.0 (checked with 0.2.0 and 0.2.4). The 0.3.0 changelog makes timeout cover middleware, so queue time would count against it, against the reference's timeout claim.
+    status: open

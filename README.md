@@ -313,7 +313,7 @@ console.log({ rate, pending, active, state, failed, retried });
 
 ## faxios plugin
 
-`dynamic-throttled-queue/faxios` throttles a [faxios](https://github.com/adrianbrowning/faxios) client. It needs `@gcmdev/faxios` with `.use()` middleware, which is an optional peer dependency.
+`dynamic-throttled-queue/faxios` throttles a [faxios](https://github.com/adrianbrowning/faxios) client. It needs `@gcmdev/faxios` 0.2.x, which is an optional peer dependency.
 
 ```ts
 import faxios from "@gcmdev/faxios";
@@ -331,7 +331,7 @@ const api = faxios
 - **Install order is required.** Install the plugin after `retry`. Then each attempt takes its own queue slot, and the retry backoff waits outside the queue. Use `retry({ respectRetryAfter: false })` so that only the queue honours `Retry-After`. No other `retry` setup is supported.
 - **Concurrency covers the whole request.** The slot is held until faxios has read the body. For `responseType: "stream"`, the slot is held until the stream ends, errors, or is cancelled, or until the request or queue aborts. If a stream is never read or cancelled, it keeps its slot, so drain or cancel it.
 - **Capacity.** By default, only a 429 response reduces the rate. 401, 403, other 4xx responses and cancellations do not. If you widen `validateStatus` so that a 429 resolves, the cooldown still applies, but the rate does not drop.
-- **`Retry-After`** accepts delay-seconds and the IMF-fixdate HTTP-date. A past date gives `0`. A malformed value is ignored. The queue's `maxCooldown` clamps long values. Only 429 sets a cooldown, unless you pass `retryAfterOn503: true`. To read vendor headers, use `cooldownFrom: (response) => ms | undefined`. It runs for every response, and a number it returns takes priority over `Retry-After`.
+- **`Retry-After`** accepts delay-seconds and the three HTTP-date forms in RFC 9110: IMF-fixdate, RFC 850 and asctime. These are the same forms that the faxios `retry` plugin accepts. A past date gives `0`. A malformed value is ignored. The queue's `maxCooldown` clamps long values. Only 429 sets a cooldown, unless you pass `retryAfterOn503: true`. To read vendor headers, use `cooldownFrom: (response) => ms | undefined`. It runs for every response, and a number it returns takes priority over `Retry-After`.
 - **Errors.** If the caller aborts, or `queue.abort()` runs, the request rejects with a `CanceledError` (`ERR_CANCELED`). When the request was still queued, it is never sent. When the queue refuses to admit the request (the queue was aborted, or `maxQueueSize` is reached), the request rejects with a `FaxiosError` with code `ERR_THROTTLE_REJECTED`.
 - **Timeout.** faxios starts the `timeout` timer when it dispatches the request, so time spent in the queue does not count against the timeout.
 

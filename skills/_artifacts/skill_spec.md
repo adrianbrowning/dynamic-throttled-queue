@@ -142,3 +142,19 @@ used mainly to call rate-limited HTTP APIs.
   installed before `retry` and a shared queue with `retry: 2` both fail the
   grader.
 - **Not verified:** fresh consumer session and discovery prompts.
+
+### faxios 0.2.4 check — 2026-10-16, unreleased (issue #82)
+
+- **Change reviewed:** the plugin against published `@gcmdev/faxios` 0.2.4
+  (and 0.2.0) instead of the local `link:` build. Types, unit tests and task
+  checks pass on both with no plugin change.
+- **Decision: peer range `^0.2.0`, not `>=0.2.0`.** faxios 0.3.0 is breaking
+  for this plugin: its `timeout` covers middleware, so queue time would count
+  against it, and the README and reference say it does not.
+- **Behavior change:** `parseRetryAfter` accepts RFC 850 and asctime dates as
+  well as IMF-fixdate (RFC 9110 §5.6.7), the same forms faxios 0.2.4 `retry`
+  accepts. Before, those headers set no cooldown, and the required
+  `respectRetryAfter: false` meant nothing honoured them. The reference's
+  `Retry-After` bullet and install note are updated; the task check is
+  unchanged because it uses delay-seconds.
+- **Remaining work:** re-check the plugin when faxios 0.3.0 publishes.

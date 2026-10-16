@@ -2,9 +2,9 @@
 
 Read this when you throttle a [faxios](https://github.com/adrianbrowning/faxios)
 client. The plugin is `dynamic-throttled-queue/faxios`. It needs
-`@gcmdev/faxios` with `.use()` middleware. That package is an optional peer
-dependency, so install it in the application. Source: `src/faxios.ts`, README
-"faxios plugin".
+`@gcmdev/faxios` 0.2.x (peer range `^0.2.0`, checked with 0.2.0 and 0.2.4).
+That package is an optional peer dependency, so install it in the application.
+Source: `src/faxios.ts`, README "faxios plugin".
 
 ## 1. Install the plugin after `retry`
 
@@ -86,9 +86,12 @@ With `isRateLimited`, only a 429 response reduces the rate. 401, 403, other
 The plugin calls `cooldownFor()` for you. Do not call it from your own code
 for faxios responses.
 
-- `Retry-After` accepts delay-seconds and the IMF-fixdate HTTP-date
-  (`Wed, 21 Oct 2015 07:28:00 GMT`). A past date gives `0`. The plugin ignores
-  a malformed value. The queue's `maxCooldown` clamps long values.
+- `Retry-After` accepts delay-seconds and the three RFC 9110 HTTP-date forms:
+  IMF-fixdate (`Wed, 21 Oct 2015 07:28:00 GMT`), RFC 850
+  (`Wednesday, 21-Oct-15 07:28:00 GMT`) and asctime
+  (`Wed Oct 21 07:28:00 2015`, read as UTC). The faxios `retry` plugin accepts
+  the same forms. A past date gives `0`. The plugin ignores a malformed value,
+  such as `1.5` or `10/21/2015`. The queue's `maxCooldown` clamps long values.
 - By default, only a 429 sets a cooldown. Set `retryAfterOn503: true` to also
   honour `Retry-After` on 503 responses.
 - To read a vendor header, set `cooldownFrom: (response) => ms | undefined`.

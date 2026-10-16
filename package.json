@@ -52,7 +52,7 @@
   "devDependencies": {
     "@commitlint/cli": "21.2.3",
     "@commitlint/config-conventional": "20.0.0",
-    "@gcmdev/faxios": "link:../../faxios/main/packages/lib",
+    "@gcmdev/faxios": "0.2.4",
     "@gingacodemonkey/config": "^0.0.38",
     "@tanstack/intent": "0.5.0",
     "@types/node": "^24.13.3",
@@ -84,7 +84,7 @@
   },
   "packageManager": "pnpm@10.34.5",
   "peerDependencies": {
-    "@gcmdev/faxios": ">=0.2.0"
+    "@gcmdev/faxios": "^0.2.0"
   },
   "peerDependenciesMeta": {
     "@gcmdev/faxios": {

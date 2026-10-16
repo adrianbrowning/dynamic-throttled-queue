@@ -157,7 +157,8 @@ used mainly to call rate-limited HTTP APIs.
   `respectRetryAfter: false` meant nothing honoured them. The reference's
   `Retry-After` bullet and install note are updated; the task check is
   unchanged because it uses delay-seconds.
-- **Remaining work:** re-check the plugin when faxios 0.3.0 publishes.
+- **Remaining work:** re-check the plugin when faxios 0.3.0 publishes (done; see
+  "faxios 0.3.0 support").
 
 ### PR #89 review fixes — 2026-10-16, unreleased (issue #82)
 
@@ -185,3 +186,26 @@ used mainly to call rate-limited HTTP APIs.
   flight and the 429-only classifier on fake timers. New mistake factories
   without `concurrency` and without `isRateLimited` fail the grader.
 - **Not verified:** fresh consumer session and discovery prompts.
+
+### faxios 0.3.0 support — 2026-10-16, unreleased (issue #82)
+
+- **Change reviewed:** the plugin on published `@gcmdev/faxios` 0.3.0. Only one
+  source change was needed: `onAbortOf` watches a signal when it has
+  `addEventListener` (a type guard) and removes its listener only if the signal
+  has `removeEventListener`, because 0.3 types both as required
+  `(type: "abort", listener) => unknown` and 0.2 as optional. `pnpm lint` and
+  the suite pass on 0.3.0, 0.2.4 and 0.2.0.
+- **Behavior difference (faxios's, not the plugin's):** on 0.3, `timeout` covers
+  the whole request, including time in the queue. A request that times out
+  while queued rejects with `ETIMEDOUT`, leaves the queue and is never sent.
+  0.3 also rejects a signal without listener methods before middleware runs.
+  Each line has its own fixed-expectation tests, run only on that line
+  (`it.runIf` on `VERSION`).
+- **Decision: peer range `^0.2.0 || ^0.3.0`; dev dependency 0.3.0.** CI now
+  tests 0.3.0; 0.2.x was checked locally only.
+- **Decision: `@gcmdev/faxios` joins `minimumReleaseAgeExclude`** in
+  `pnpm-workspace.yaml` (maintainer's choice, as for `@gingacodemonkey/config`),
+  so the dev dependency can follow faxios releases the day they publish.
+- **Guidance updated:** `references/faxios.md` (version support, a timeout
+  section for each faxios line, `attemptTimeout` includes queue wait). Task
+  check unchanged; it passes on 0.3.0.

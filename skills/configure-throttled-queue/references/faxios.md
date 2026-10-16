@@ -2,10 +2,11 @@
 
 Read this when you throttle a [faxios](https://github.com/adrianbrowning/faxios)
 client. The plugin is `dynamic-throttled-queue/faxios`. It needs
-`@gcmdev/faxios` 0.2.x (peer range `^0.2.0`, checked with 0.2.0 and 0.2.4).
-That package is an optional peer dependency, so install it in the application.
-With npm, a `@gcmdev/faxios` outside 0.2.x anywhere in the tree fails the
-install with `ERESOLVE`, even if nothing imports `dynamic-throttled-queue/faxios`.
+`@gcmdev/faxios` 0.2.x or 0.3.x (peer range `^0.2.0 || ^0.3.0`, checked with
+0.2.0, 0.2.4 and 0.3.0). That package is an optional peer dependency, so
+install it in the application. With npm, a `@gcmdev/faxios` outside those
+versions anywhere in the tree fails the install with `ERESOLVE`, even if
+nothing imports `dynamic-throttled-queue/faxios`.
 Source: `src/faxios.ts`, README "faxios plugin".
 
 ## 1. Install the plugin after `retry`
@@ -159,9 +160,20 @@ Check: every stream response is read to the end or cancelled.
 
 ## 6. Timeout
 
-faxios starts the `timeout` timer when it dispatches the request. Time in the
-queue does not count against `timeout`. To limit the total wait, also pass a
-`signal` (for example `AbortSignal.timeout(30_000)`).
+The two faxios lines count `timeout` differently. Check the installed version
+(`VERSION` from `@gcmdev/faxios`, or `package.json`):
+
+- **faxios 0.3:** `timeout` covers the whole request, including time in the
+  queue. A request that times out while queued rejects with `ETIMEDOUT` and is
+  never sent. Set `timeout` to include the longest queue wait you accept.
+  `retry({ attemptTimeout })` limits each try, and also includes that try's
+  wait in the queue.
+- **faxios 0.2:** faxios starts the `timeout` timer when it dispatches the
+  request, so time in the queue does not count. To limit the total wait, also
+  pass a `signal` (for example `AbortSignal.timeout(30_000)`); it rejects with
+  `ERR_CANCELED`, which `retry` does not retry.
+
+Check: the `timeout` value allows for queue wait on faxios 0.3.
 
 ## 7. Handle the errors
 

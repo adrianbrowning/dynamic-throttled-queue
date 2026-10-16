@@ -71,12 +71,22 @@ export function parseRetryAfter(value: unknown, now = Date.now()): number | unde
 type Unlink = () => void;
 type CallerSignal = NonNullable<FaxiosRequestConfig["signal"]>;
 
-/** Calls `onAbort` when `signal` aborts. faxios accepts signal-like objects, which may have no listener methods. */
+type Listenable = {
+  addEventListener: (type: "abort", listener: () => void) => unknown;
+  removeEventListener?: (type: "abort", listener: () => void) => unknown;
+};
+
+/** faxios 0.2 accepts signal-like objects with no listener methods, or only `addEventListener`; 0.3 requires both. */
+function isListenable(signal: CallerSignal): signal is CallerSignal & Listenable {
+  return typeof signal.addEventListener === "function";
+}
+
+/** Calls `onAbort` when `signal` aborts; a signal without `addEventListener` can't be watched. */
 function onAbortOf(signal: CallerSignal, onAbort: () => void): Unlink {
-  const { addEventListener: add, removeEventListener: remove } = signal;
-  if (typeof add !== "function") return () => {};
-  add.call(signal, "abort", onAbort, { once: true });
-  return () => remove?.call(signal, "abort", onAbort);
+  if (!isListenable(signal)) return () => {};
+  const target: Listenable = signal;
+  target.addEventListener("abort", onAbort);
+  return () => target.removeEventListener?.("abort", onAbort);
 }
 
 /** The `CanceledError` faxios gives an aborted request: its message and cause come from the abort reason. */

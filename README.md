@@ -313,7 +313,7 @@ console.log({ rate, pending, active, state, failed, retried });
 
 ## faxios plugin
 
-`dynamic-throttled-queue/faxios` throttles a [faxios](https://github.com/adrianbrowning/faxios) client. It needs `@gcmdev/faxios` 0.2.x, which is an optional peer dependency. With npm, a `@gcmdev/faxios` outside 0.2.x anywhere in your dependency tree fails the install with `ERESOLVE`, even if you don't import `dynamic-throttled-queue/faxios`.
+`dynamic-throttled-queue/faxios` throttles a [faxios](https://github.com/adrianbrowning/faxios) client. It needs `@gcmdev/faxios` 0.2.x or 0.3.x, which is an optional peer dependency. With npm, a `@gcmdev/faxios` outside those versions anywhere in your dependency tree fails the install with `ERESOLVE`, even if you don't import `dynamic-throttled-queue/faxios`.
 
 ```ts
 import faxios from "@gcmdev/faxios";
@@ -334,7 +334,7 @@ const api = faxios
 - **`Retry-After`** accepts delay-seconds and the three HTTP-date forms in RFC 9110: IMF-fixdate, RFC 850 and asctime. A past date gives `0`. A malformed value is ignored. The queue's `maxCooldown` clamps long values. A cooldown pauses the whole queue, for every origin the client calls. Only a 429's `Retry-After` sets a cooldown, unless you pass `retryAfterOn503: true`.
 - **`cooldownFrom: (response) => ms | undefined`** reads vendor headers. It runs for every response, including successful ones, and any number it returns starts a cooldown, so return `undefined` unless the response is rate-limited. A finite number >= 0 takes priority over `Retry-After`. `undefined`, `NaN`, a negative number, `Infinity` or a throw falls back to `Retry-After`.
 - **Errors.** If the caller aborts, or `queue.abort()` runs, the request rejects with a `CanceledError` (`ERR_CANCELED`). When the request was still queued, it is never sent. When the queue refuses to admit the request (the queue was aborted or has failed, or `maxQueueSize` is reached), or fails while the request is queued or in flight, the request rejects with a `FaxiosError` with code `ERR_THROTTLE_REJECTED`, whose `cause` is the queue's error.
-- **Timeout.** faxios starts the `timeout` timer when it dispatches the request, so time spent in the queue does not count against the timeout.
+- **Timeout.** On faxios 0.3, `timeout` covers the whole request, including time in the queue: a request that times out while queued rejects with `ETIMEDOUT` and is never sent, so set `timeout` to include the longest queue wait you accept. `retry({ attemptTimeout })` also includes each try's wait in the queue. On faxios 0.2, faxios starts the `timeout` timer when it dispatches the request, so time in the queue does not count.
 
 ## Options
 

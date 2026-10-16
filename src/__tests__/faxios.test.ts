@@ -1,4 +1,4 @@
-import faxios, { isCancel } from "@gcmdev/faxios";
+import faxios, { isCancel, VERSION } from "@gcmdev/faxios";
 import type { FaxiosError } from "@gcmdev/faxios";
 import { retry } from "@gcmdev/faxios/plugins/retry";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, expectTypeOf, it, vi } from "vitest";
@@ -31,6 +31,8 @@ function client(fetch: ReturnType<typeof fakeFetch>["fetch"], options: DynamicTh
 
 const ok = () => new Response("{}", { status: 200, headers: { "content-type": "application/json" } });
 const status = (code: number, headers: Record<string, string> = {}) => new Response("{}", { status: code, headers });
+/** The peer range covers faxios 0.2 and 0.3; a few tests pin behaviour that differs between them. */
+const faxios02 = VERSION.startsWith("0.2.");
 
 /** A body that streams `chunks` one per `gap` ms. */
 function slowBody(chunks: number, gap: number) {
@@ -333,11 +335,45 @@ describe("dynamicThrottle", () => {
         process.off("unhandledRejection", unhandled);
       });
 
-      it("without listener methods: the request still runs, with no unhandled rejection", async () => {
+      // faxios 0.3's types require listener methods, so this input only type-checks as a cast.
+      const listenerless = { aborted: false, onabort: null } as unknown as AbortSignal;
+
+      it.runIf(faxios02)("faxios 0.2, without listener methods: the request still runs, with no unhandled rejection", async () => {
         const { fetch } = fakeFetch(ok);
         const api = client(fetch, { min_rpi: 100, interval: 1000 });
-        await expect(api.get("/a", { signal: { aborted: false, onabort: null } })).resolves.toMatchObject({ status: 200 });
+        await expect(api.get("/a", { signal: listenerless })).resolves.toMatchObject({ status: 200 });
         await tick(10);
+        expect(unhandled).not.toHaveBeenCalled();
+      });
+
+      it.runIf(!faxios02)("faxios 0.3, without listener methods: faxios rejects the signal, with no unhandled rejection", async () => {
+        const { fetch, calls } = fakeFetch(ok);
+        const api = client(fetch, { min_rpi: 100, interval: 1000 });
+        await expect(api.get("/a", { signal: listenerless })).rejects.toMatchObject({ code: "ERR_BAD_OPTION_VALUE" });
+        await tick(10);
+        expect(calls).toHaveLength(0);
+        expect(unhandled).not.toHaveBeenCalled();
+      });
+
+      it.runIf(faxios02)("faxios 0.2, addEventListener only: an abort still takes a queued request out of the queue", async () => {
+        const { fetch, calls } = fakeFetch();
+        const queue = createThrottledQueue({ min_rpi: 100, interval: 1000, concurrency: 1, retry: 0 });
+        const api = client(fetch, { queue });
+        void api.get("/a").catch(() => {});
+        await until(() => calls.length === 1);
+        const listeners: Array<unknown> = [];
+        // faxios 0.3's types require removeEventListener too, so this input only type-checks as a cast.
+        const signal = { aborted: false, addEventListener: (_type: unknown, listener: unknown) => { listeners.push(listener); } } as unknown as AbortSignal;
+        const b = api.get("/b", { signal });
+        b.catch(() => {});
+        await tick(10);
+        Object.assign(signal, { aborted: true });
+        for (const listener of listeners) if (typeof listener === "function") listener();
+        await expect(b).rejects.toMatchObject({ code: "ERR_CANCELED" });
+        expect(queue.getState().pending).toBe(0);
+        calls[0]!.respond(ok());
+        await tick(30);
+        expect(calls).toHaveLength(1);
         expect(unhandled).not.toHaveBeenCalled();
       });
 
@@ -437,6 +473,39 @@ describe("dynamicThrottle", () => {
         .use(dynamicThrottle({ min_rpi: 100, interval: 1000 }));
       await api.get("/a", { signal: controller.signal });
       expect(seen).toBe(controller.signal);
+    });
+
+    describe("timeout of a request that waits in the queue", () => {
+      /** B (with `timeout: 50`) waits 80 ms behind A, which holds the only slot. */
+      async function queuedBehindA() {
+        const { fetch, calls } = fakeFetch();
+        const queue = createThrottledQueue({ min_rpi: 100, interval: 1000, concurrency: 1, retry: 0 });
+        const api = client(fetch, { queue });
+        const a = api.get("/a");
+        await until(() => calls.length === 1);
+        const b = api.get("/b", { timeout: 50 });
+        // On faxios 0.3, B rejects before the test awaits it; mark it handled.
+        b.catch(() => {});
+        await tick(80);
+        calls[0]!.respond(ok());
+        await a;
+        return { b, calls, queue };
+      }
+
+      it.runIf(!faxios02)("faxios 0.3: queue time counts, so B times out, leaves the queue and is never sent", async () => {
+        const { b, calls, queue } = await queuedBehindA();
+        await expect(b).rejects.toMatchObject({ code: "ETIMEDOUT" });
+        await tick(30);
+        expect(calls).toHaveLength(1);
+        expect(queue.getState().pending).toBe(0);
+      });
+
+      it.runIf(faxios02)("faxios 0.2: queue time does not count, so B is sent after A and succeeds", async () => {
+        const { b, calls } = await queuedBehindA();
+        await until(() => calls.length === 2);
+        calls[1]!.respond(ok());
+        await expect(b).resolves.toMatchObject({ status: 200 });
+      });
     });
   });
 

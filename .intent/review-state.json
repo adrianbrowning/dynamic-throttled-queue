@@ -3,7 +3,7 @@
   "baseline": "6651dc14a0382b3ab007c59f1fcfd882da997d46",
   "items": {
     "skill:skills/configure-throttled-queue/SKILL.md": {
-      "fingerprint": "84f99631b58937f5463e920b0d0b781b1185edcecb025dd772dda597a1b73a86",
+      "fingerprint": "0bc12cbc9f196ba80e091ca2a81b8b164406a270ca09cbc6598a7386300d1695",
       "snapshot": {
         "README.md": "b294caf1cf6172c262ecce302b217346048097adc1847069691b031fb0e45e9a",
         "skills/configure-throttled-queue/SKILL.md": "389f2f102f01dcba67467eb2c0c8726c88da5aa2a0d0431575f62ae9645bce9d",
@@ -15,7 +15,7 @@
         "src/__tests__/adaptive-rate.test.ts": "dcc069a495d9adffe816185524a81f6faec1d2b971d184671742752c18860c4d",
         "src/__tests__/cooldown.test.ts": "1b89b6829f69d73576fc70e0b684e947b0d5ba379c1b72f0f41ce061b1ee3c2b",
         "src/__tests__/dynamic-throttled-queue.test.ts": "257824be5ab73bac1e022f9e2432112d9f5af34cdbdec4f2e394f34aa1835a8e",
-        "src/__tests__/faxios.test.ts": "063ed330670460ae0a68252d7c37a6e7f5e84a9eef2a2cce6dbef20bca8bf29e",
+        "src/__tests__/faxios.test.ts": "5effb8a211861888f4ee1e4ba8b29a2acc0ba97eedfbfbc298bdbcbaf6b019c1",
         "src/__tests__/pending-work.test.ts": "c9094b640e11c1b216b57b38d2cabb2a591dfcb9a943cab1c4c3627a01c7d1c7",
         "src/__tests__/rate-strategies.test.ts": "a92e69707e2988d0826b9cb5b7389054bc1c05be218e92b3b39963349e011065",
         "src/__tests__/retry-after.test.ts": "061736e0630fe82fa6444f4b547513b11adf725812e52b45e355af6da3597751",
@@ -23,7 +23,7 @@
         "src/__tests__/task-handles.test.ts": "7500e5ab4b15b0a4f68ae238cb0cac2682c065ec2c6aedf3ccd96f72a27855f1",
         "src/adaptive-rate.ts": "6f44cca43a1e00b2657e2637c9bfe913435526ed2d97406f540ded2e055aa943",
         "src/dynamic-throttled-queue.ts": "bc3f7beb927bf31c7ab429a65f6241e0c9525840f2e3fd1e7114fb611fc7c440",
-        "src/faxios.ts": "66b2e419923ca9b8e15da595f0882b49ff483481160d78491e1080b7bcb17240",
+        "src/faxios.ts": "a7316971692d1414fe98d321033e786f2624a8c46b5f977b90ad7a1a0e9d333b",
         "src/pending-work.ts": "08e88eea6008d870c4da47c39d50290c9adb5e594b18bbb98bbde6e909af582a",
         "src/retry-after.ts": "b120b25af8166f4eb2a05b1401bfb6adf542e1c54e20f0c1184e687cbd1f0d07",
         "src/retry-policy.ts": "f78315d09829dee1440ad0bcb2272add5d08cb88d78c57981ad145c9f8de381e",
@@ -35,21 +35,21 @@
         "tests/skills/configure-throttled-queue/solution.ts": "9e6a8de1042134cd85563c8ea3fed89805000ddcd46da07c62da9b5e7fce44c5",
         "tests/skills/configure-throttled-queue/task.md": "5537a9c2c3bd4a0e3ccbb169f5e414a36716f3393d18a24a44a7f8ac39ad3299"
       },
-      "head": "bd1b54c9ff22c0e6f09811fb5a3fa08f28151714",
-      "outcome": "updated",
-      "reason": "references/faxios.md: retry is optional (rules apply if you use it), 503 Retry-After caveat, rejected stream caveat, AbortError row for a delivered stream after queue.abort(), parseRetryAfter no longer advertised (now internal), stale checked-versions list dropped. SKILL.md: retry optional and { queue } exception. task.md lists faxios retry's default statuses. Description unchanged.",
+      "head": "fdd1bf01d4b29a95d555689757e4e9e2987cf8a6",
+      "outcome": "no-change",
+      "reason": "The fix restores the documented behaviour (a timeout surfaces as ETIMEDOUT; the README and references/faxios.md say a timed-out request rejects with ETIMEDOUT on faxios 0.3). SKILL.md and references need no edit.",
       "evidence": [
-        "Source: src/faxios.ts (linkSignals removed; plugin named dynamicThrottle; ?? defaults for rateOutcomeClassifier and maxCooldown; stream wrapper highWaterMark 0; dead ReadableStream guard removed), src/retry-after.ts (internal parser, provenance comment), plugin tests, the parser test file and the skill fixture. A lint:fix pass only reordered a union type and bracket spacing in src/__tests__/faxios.test.ts.",
-        "Checks: pnpm lint and pnpm vitest run pass on faxios 0.2.0 and 0.2.4 (321 passed, 2 skipped) and 0.3.0 (320 passed, 3 skipped); pnpm test after the style fix: 11 files, 320 passed, 3 skipped. Mutants for the wrapper's already-aborted guard, the classifier and maxCooldown defaults, and forced retry: 0 are each killed. New in-flight timeout test: ETIMEDOUT and native fetch aborted on all three versions. intent validate skills: 1 skill passed. Task check 5/5.",
-        "Fresh consumer session and discovery prompts: not run (unverified); the description is unchanged."
+        "Source: src/faxios.ts: the caller-abort listener cancels the queue item with the caller signal's reason instead of a new CanceledError (with linkSignals removed, the item signal is what next() and the stream wrapper watch).",
+        "Checks: new test 'timeout while a delivered stream is read' fails on faxios 0.3.0 with the previous cancel (ERR_CANCELED) and passes with the fix (ETIMEDOUT, native fetch aborted, slot freed). pnpm lint and pnpm vitest run pass on faxios 0.2.0 and 0.2.4 (322 passed, 2 skipped) and 0.3.0 (321 passed, 3 skipped); lint:s passes. intent validate skills: 1 skill passed.",
+        "Fresh consumer session and discovery prompts: not run (unverified); guidance text unchanged by this fix."
       ]
     },
     "planning:skills/_artifacts": {
-      "fingerprint": "16d07f11d109d279211813edb8ef719dd5611c5a6eaab7805b16ced9bdc3b4b6",
+      "fingerprint": "209ff2d5a4fd3204c7ffb70478302ed6fc9edd982b1463b8373767cb1f7c9f16",
       "snapshot": {
         "README.md": "b294caf1cf6172c262ecce302b217346048097adc1847069691b031fb0e45e9a",
         "skills/_artifacts/domain_map.yaml": "d34fc6cb15affae27b67d98619415ed12ddb6acf032281f9d039441ca289ac06",
-        "skills/_artifacts/skill_spec.md": "deefccc54b5686e3def2b42fa0715a57fd6dfa546ec2cb758d9b06a25c74b066",
+        "skills/_artifacts/skill_spec.md": "8a86269ba62451d307470ed065cba8087150941f04ba1c42823555be3fe6cfd1",
         "skills/_artifacts/skill_tree.yaml": "60dafec76830763a54a3f77e2805ba974d2f442e2f9beab89e6e70fc84e82153",
         "skills/configure-throttled-queue/SKILL.md": "389f2f102f01dcba67467eb2c0c8726c88da5aa2a0d0431575f62ae9645bce9d",
         "skills/configure-throttled-queue/references/faxios.md": "65bddf9ac08cb3cfe39f13c2576a4d46868db374f3a4030b8ed33a1111af27c3",
@@ -60,7 +60,7 @@
         "src/__tests__/adaptive-rate.test.ts": "dcc069a495d9adffe816185524a81f6faec1d2b971d184671742752c18860c4d",
         "src/__tests__/cooldown.test.ts": "1b89b6829f69d73576fc70e0b684e947b0d5ba379c1b72f0f41ce061b1ee3c2b",
         "src/__tests__/dynamic-throttled-queue.test.ts": "257824be5ab73bac1e022f9e2432112d9f5af34cdbdec4f2e394f34aa1835a8e",
-        "src/__tests__/faxios.test.ts": "063ed330670460ae0a68252d7c37a6e7f5e84a9eef2a2cce6dbef20bca8bf29e",
+        "src/__tests__/faxios.test.ts": "5effb8a211861888f4ee1e4ba8b29a2acc0ba97eedfbfbc298bdbcbaf6b019c1",
         "src/__tests__/pending-work.test.ts": "c9094b640e11c1b216b57b38d2cabb2a591dfcb9a943cab1c4c3627a01c7d1c7",
         "src/__tests__/rate-strategies.test.ts": "a92e69707e2988d0826b9cb5b7389054bc1c05be218e92b3b39963349e011065",
         "src/__tests__/retry-after.test.ts": "061736e0630fe82fa6444f4b547513b11adf725812e52b45e355af6da3597751",
@@ -68,7 +68,7 @@
         "src/__tests__/task-handles.test.ts": "7500e5ab4b15b0a4f68ae238cb0cac2682c065ec2c6aedf3ccd96f72a27855f1",
         "src/adaptive-rate.ts": "6f44cca43a1e00b2657e2637c9bfe913435526ed2d97406f540ded2e055aa943",
         "src/dynamic-throttled-queue.ts": "bc3f7beb927bf31c7ab429a65f6241e0c9525840f2e3fd1e7114fb611fc7c440",
-        "src/faxios.ts": "66b2e419923ca9b8e15da595f0882b49ff483481160d78491e1080b7bcb17240",
+        "src/faxios.ts": "a7316971692d1414fe98d321033e786f2624a8c46b5f977b90ad7a1a0e9d333b",
         "src/pending-work.ts": "08e88eea6008d870c4da47c39d50290c9adb5e594b18bbb98bbde6e909af582a",
         "src/retry-after.ts": "b120b25af8166f4eb2a05b1401bfb6adf542e1c54e20f0c1184e687cbd1f0d07",
         "src/retry-policy.ts": "f78315d09829dee1440ad0bcb2272add5d08cb88d78c57981ad145c9f8de381e",
@@ -80,13 +80,13 @@
         "tests/skills/configure-throttled-queue/solution.ts": "9e6a8de1042134cd85563c8ea3fed89805000ddcd46da07c62da9b5e7fce44c5",
         "tests/skills/configure-throttled-queue/task.md": "5537a9c2c3bd4a0e3ccbb169f5e414a36716f3393d18a24a44a7f8ac39ad3299"
       },
-      "head": "bd1b54c9ff22c0e6f09811fb5a3fa08f28151714",
+      "head": "fdd1bf01d4b29a95d555689757e4e9e2987cf8a6",
       "outcome": "updated",
-      "reason": "skill_spec.md: new 'PR #89 review observations' history entry (code changes, parseRetryAfter-internal decision, guidance changes, task-check timeout, CI matrix and Dependabot, issue #93 as remaining work). domain_map.yaml: faxios export list drops parseRetryAfter. skill_tree.yaml unchanged: src/*.ts already covers src/retry-after.ts.",
+      "reason": "skill_spec.md: the 'PR #89 review observations' entry now records that the caller's abort cancels the item with the caller signal's reason, the ERR_CANCELED regression it fixes, and its test. domain_map.yaml and skill_tree.yaml unchanged and accurate.",
       "evidence": [
-        "Source: src/faxios.ts (linkSignals removed; plugin named dynamicThrottle; ?? defaults for rateOutcomeClassifier and maxCooldown; stream wrapper highWaterMark 0; dead ReadableStream guard removed), src/retry-after.ts (internal parser, provenance comment), plugin tests, the parser test file and the skill fixture. A lint:fix pass only reordered a union type and bracket spacing in src/__tests__/faxios.test.ts.",
-        "Checks: pnpm lint and pnpm vitest run pass on faxios 0.2.0 and 0.2.4 (321 passed, 2 skipped) and 0.3.0 (320 passed, 3 skipped); pnpm test after the style fix: 11 files, 320 passed, 3 skipped. Mutants for the wrapper's already-aborted guard, the classifier and maxCooldown defaults, and forced retry: 0 are each killed. New in-flight timeout test: ETIMEDOUT and native fetch aborted on all three versions. intent validate skills: 1 skill passed. Task check 5/5.",
-        "Fresh consumer session and discovery prompts: not run (unverified); the description is unchanged."
+        "Source: src/faxios.ts: the caller-abort listener cancels the queue item with the caller signal's reason instead of a new CanceledError (with linkSignals removed, the item signal is what next() and the stream wrapper watch).",
+        "Checks: new test 'timeout while a delivered stream is read' fails on faxios 0.3.0 with the previous cancel (ERR_CANCELED) and passes with the fix (ETIMEDOUT, native fetch aborted, slot freed). pnpm lint and pnpm vitest run pass on faxios 0.2.0 and 0.2.4 (322 passed, 2 skipped) and 0.3.0 (321 passed, 3 skipped); lint:s passes. intent validate skills: 1 skill passed.",
+        "Fresh consumer session and discovery prompts: not run (unverified); guidance text unchanged by this fix."
       ]
     },
     "source:tsconfig.config.json": {

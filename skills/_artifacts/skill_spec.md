@@ -214,7 +214,11 @@ used mainly to call rate-limited HTTP APIs.
 
 - **Change reviewed:** the 15 Observations of the PR #89 review.
   - `src/faxios.ts`: `linkSignals` is removed, so `next()` gets the queue item's
-    signal; the caller's abort (including faxios 0.3's deadline) cancels the item.
+    signal; the caller's abort (including faxios 0.3's deadline) cancels the item
+    with the caller signal's own reason. A first version cancelled with a
+    `CanceledError`, so on faxios 0.3 a delivered stream that timed out errored
+    with `ERR_CANCELED` instead of `ETIMEDOUT`; a regression test now pins
+    `ETIMEDOUT` on both faxios lines.
   - The plugin is named `dynamicThrottle`, as faxios names its plugins.
   - An explicit `undefined` no longer turns off the default classifier or
     `maxCooldown`.

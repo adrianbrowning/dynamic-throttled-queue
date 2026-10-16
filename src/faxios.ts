@@ -218,8 +218,10 @@ export function dynamicThrottle(options: DynamicThrottleOptions): FaxiosPlugin {
           else delivered.reject(error);
         })
         .finally(() => unlinkCaller());
-      // faxios settles the caller's promise on abort itself; this only takes the item out of the queue.
-      if (caller) unlinkCaller = onAbortOf(caller, () => cancel(new CanceledError(null, ctx.config)));
+      // faxios settles the caller's promise on abort itself; this takes the item out of the queue, and
+      // aborts its signal with the caller's reason, so a delivered stream errors with it (on faxios 0.3,
+      // a timeout's ETIMEDOUT).
+      if (caller) unlinkCaller = onAbortOf(caller, () => cancel("reason" in caller ? caller.reason : undefined));
       return delivered.promise;
     },
   });

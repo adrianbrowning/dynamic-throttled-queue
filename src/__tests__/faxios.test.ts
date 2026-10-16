@@ -433,6 +433,27 @@ describe("dynamicThrottle", () => {
         await until(() => queue.getState().active === 0, "the slot to be freed");
       });
 
+      it("timeout while a delivered stream is read: the read rejects with ETIMEDOUT, native fetch aborted, slot freed", async () => {
+        const { fetch, calls } = fakeFetch();
+        const queue = ownQueue({ min_rpi: 100, interval: 1000, concurrency: 1, retry: 0 });
+        const api = client(fetch, { queue });
+        const a = api.get<ReadableStream>("/a", { responseType: "stream", timeout: 80 });
+        await until(() => calls.length === 1, "A to start");
+        const { signal } = calls[0]!;
+        // Like a real fetch body: it errors when the request's signal aborts.
+        calls[0]!.respond(new Response(new ReadableStream<Uint8Array>({
+          start(c) {
+            c.enqueue(new Uint8Array([ 1 ]));
+            signal.addEventListener("abort", () => c.error(signal.reason), { once: true });
+          },
+        })));
+        const reader = (await a).data.getReader();
+        await reader.read();
+        expect(await settled(reader.read())).toMatchObject({ error: { code: "ETIMEDOUT" } });
+        expect(signal.aborted).toBe(true);
+        await until(() => queue.getState().active === 0, "the slot to be freed");
+      });
+
       it("queue.abort() while pending or in flight: ERR_CANCELED, native fetch aborted", async () => {
         const { fetch, calls } = fakeFetch();
         const queue = ownQueue({ min_rpi: 100, interval: 1000, concurrency: 1, retry: 0 });

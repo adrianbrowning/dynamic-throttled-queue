@@ -170,6 +170,7 @@ describe("dynamicThrottle", () => {
     [ "does not retry a 401", 401, {}, 1, rejectsWith(401) ],
     [ "does not retry a 403", 403, {}, 1, rejectsWith(403) ],
     [ "retries a 401 listed in statuses, each attempt in its own slot", 401, { statuses: [ 401 ] }, 2, resolvesOk ],
+    [ "retries a 403 listed in statuses, each attempt in its own slot", 403, { statuses: [ 403 ] }, 2, resolvesOk ],
     [ "retries a 500, each attempt in its own slot", 500, {}, 2, resolvesOk ],
     [ "retries a 502, each attempt in its own slot", 502, {}, 2, resolvesOk ],
     [ "retries a 503, each attempt in its own slot", 503, {}, 2, resolvesOk ],

@@ -164,6 +164,29 @@ describe("dynamicThrottle", () => {
     expect(calls[1]!.at - calls[0]!.at).toBeGreaterThanOrEqual(950);
   });
 
+  const rejectsWith = (code: number) => ({ error: { response: { status: code } } });
+  const resolvesOk = { value: { status: 200 } };
+  it.each<[string, number, Parameters<typeof retry>[0], number, object]>([
+    [ "does not retry a 401", 401, {}, 1, rejectsWith(401) ],
+    [ "does not retry a 403", 403, {}, 1, rejectsWith(403) ],
+    [ "retries a 401 listed in statuses, each attempt in its own slot", 401, { statuses: [ 401 ] }, 2, resolvesOk ],
+    [ "retries a 500, each attempt in its own slot", 500, {}, 2, resolvesOk ],
+    [ "retries a 502, each attempt in its own slot", 502, {}, 2, resolvesOk ],
+    [ "retries a 503, each attempt in its own slot", 503, {}, 2, resolvesOk ],
+    [ "retries a 504, each attempt in its own slot", 504, {}, 2, resolvesOk ],
+  ])("with retry installed first, faxios %s", async (_name, code, options, expectedCalls, outcome) => {
+    let n = 0;
+    const { fetch, calls } = fakeFetch(() => (n++ === 0 ? status(code) : ok()));
+    const queue = ownQueue({ min_rpi: 100, interval: 1000, retry: 0, rateOutcomeClassifier: isRateLimited });
+    const api = faxios.create({ baseURL: "https://api.test", env: { fetch } })
+      .use(retry({ respectRetryAfter: false, attempts: 2, delay: 1, ...options }))
+      .use(dynamicThrottle({ queue }));
+    expect(await settled(api.get("/a"))).toMatchObject(outcome);
+    expect(calls).toHaveLength(expectedCalls);
+    // Only faxios's retry repeats the request: every attempt is one queue item, and none is retried in the queue.
+    expect(queue.getState()).toMatchObject({ started: expectedCalls, retried: 0, cooldowns: 0 });
+  });
+
   /** Answers the requests a test held, in order, so the queue drains and its timers stop. */
   async function answerHeld(calls: Array<Call>, from: number, total: number) {
     for (let i = from; i < total; i++) {
@@ -177,6 +200,10 @@ describe("dynamicThrottle", () => {
     [ 401, false ],
     [ 403, false ],
     [ 400, false ],
+    [ 500, false ],
+    [ 502, false ],
+    [ 503, false ],
+    [ 504, false ],
   ])("status %i reduces capacity: %s", async (code, reduces) => {
     // /a answers with `code`; the rest wait, so work stays queued and the queue decides each interval.
     const { fetch, calls } = fakeFetch(url => (url.endsWith("/a") ? status(code) : undefined));

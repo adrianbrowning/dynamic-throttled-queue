@@ -3,7 +3,7 @@
   "baseline": "6651dc14a0382b3ab007c59f1fcfd882da997d46",
   "items": {
     "skill:skills/configure-throttled-queue/SKILL.md": {
-      "fingerprint": "0bc12cbc9f196ba80e091ca2a81b8b164406a270ca09cbc6598a7386300d1695",
+      "fingerprint": "e3d72e9643c5270b7f56b72a259a4b64a46f2c296822fadb39d0e438caab3fa8",
       "snapshot": {
         "README.md": "b294caf1cf6172c262ecce302b217346048097adc1847069691b031fb0e45e9a",
         "skills/configure-throttled-queue/SKILL.md": "389f2f102f01dcba67467eb2c0c8726c88da5aa2a0d0431575f62ae9645bce9d",
@@ -15,7 +15,7 @@
         "src/__tests__/adaptive-rate.test.ts": "dcc069a495d9adffe816185524a81f6faec1d2b971d184671742752c18860c4d",
         "src/__tests__/cooldown.test.ts": "1b89b6829f69d73576fc70e0b684e947b0d5ba379c1b72f0f41ce061b1ee3c2b",
         "src/__tests__/dynamic-throttled-queue.test.ts": "257824be5ab73bac1e022f9e2432112d9f5af34cdbdec4f2e394f34aa1835a8e",
-        "src/__tests__/faxios.test.ts": "5effb8a211861888f4ee1e4ba8b29a2acc0ba97eedfbfbc298bdbcbaf6b019c1",
+        "src/__tests__/faxios.test.ts": "ca694b3f1f4ae1b58b9078a66132b36e4909e87f833bc5309651b22247c1e0de",
         "src/__tests__/pending-work.test.ts": "c9094b640e11c1b216b57b38d2cabb2a591dfcb9a943cab1c4c3627a01c7d1c7",
         "src/__tests__/rate-strategies.test.ts": "a92e69707e2988d0826b9cb5b7389054bc1c05be218e92b3b39963349e011065",
         "src/__tests__/retry-after.test.ts": "061736e0630fe82fa6444f4b547513b11adf725812e52b45e355af6da3597751",
@@ -35,17 +35,15 @@
         "tests/skills/configure-throttled-queue/solution.ts": "9e6a8de1042134cd85563c8ea3fed89805000ddcd46da07c62da9b5e7fce44c5",
         "tests/skills/configure-throttled-queue/task.md": "5537a9c2c3bd4a0e3ccbb169f5e414a36716f3393d18a24a44a7f8ac39ad3299"
       },
-      "head": "fdd1bf01d4b29a95d555689757e4e9e2987cf8a6",
+      "head": "c075c0d8e17c6df3bb2e5a0ccc0fc1ae24262344",
       "outcome": "no-change",
-      "reason": "The fix restores the documented behaviour (a timeout surfaces as ETIMEDOUT; the README and references/faxios.md say a timed-out request rejects with ETIMEDOUT on faxios 0.3). SKILL.md and references need no edit.",
+      "reason": "Test-only change: adds 5xx rows to the capacity table and a retry()-first table (401/403 not retried by default, 401 retried when listed in statuses, 500/502/503/504 retried, each attempt one queue item, no queue retries or cooldowns). README, SKILL.md and references/faxios.md already state only a 429 reduces the rate and retries belong to faxios retry installed first; behaviour unchanged, so guidance is accurate.",
       "evidence": [
-        "Source: src/faxios.ts: the caller-abort listener cancels the queue item with the caller signal's reason instead of a new CanceledError (with linkSignals removed, the item signal is what next() and the stream wrapper watch).",
-        "Checks: new test 'timeout while a delivered stream is read' fails on faxios 0.3.0 with the previous cancel (ERR_CANCELED) and passes with the fix (ETIMEDOUT, native fetch aborted, slot freed). pnpm lint and pnpm vitest run pass on faxios 0.2.0 and 0.2.4 (322 passed, 2 skipped) and 0.3.0 (321 passed, 3 skipped); lint:s passes. intent validate skills: 1 skill passed.",
-        "Fresh consumer session and discovery prompts: not run (unverified); guidance text unchanged by this fix."
+        "src/__tests__/faxios.test.ts at c075c0d+working tree; pnpm lint, pnpm lint:esl pass; vitest faxios.test.ts 61 passed/3 skipped on faxios 0.3.0; full pnpm test 332 passed/3 skipped; mutation (isRateLimited counting >=500) fails the 4 new 5xx capacity rows. faxios 0.2 matrix not run locally (CI job covers it)."
       ]
     },
     "planning:skills/_artifacts": {
-      "fingerprint": "209ff2d5a4fd3204c7ffb70478302ed6fc9edd982b1463b8373767cb1f7c9f16",
+      "fingerprint": "8641ed188dfde310c9421f638d5abfaf01ab0736ffd0baca84f46ba310d6115a",
       "snapshot": {
         "README.md": "b294caf1cf6172c262ecce302b217346048097adc1847069691b031fb0e45e9a",
         "skills/_artifacts/domain_map.yaml": "d34fc6cb15affae27b67d98619415ed12ddb6acf032281f9d039441ca289ac06",
@@ -60,7 +58,7 @@
         "src/__tests__/adaptive-rate.test.ts": "dcc069a495d9adffe816185524a81f6faec1d2b971d184671742752c18860c4d",
         "src/__tests__/cooldown.test.ts": "1b89b6829f69d73576fc70e0b684e947b0d5ba379c1b72f0f41ce061b1ee3c2b",
         "src/__tests__/dynamic-throttled-queue.test.ts": "257824be5ab73bac1e022f9e2432112d9f5af34cdbdec4f2e394f34aa1835a8e",
-        "src/__tests__/faxios.test.ts": "5effb8a211861888f4ee1e4ba8b29a2acc0ba97eedfbfbc298bdbcbaf6b019c1",
+        "src/__tests__/faxios.test.ts": "ca694b3f1f4ae1b58b9078a66132b36e4909e87f833bc5309651b22247c1e0de",
         "src/__tests__/pending-work.test.ts": "c9094b640e11c1b216b57b38d2cabb2a591dfcb9a943cab1c4c3627a01c7d1c7",
         "src/__tests__/rate-strategies.test.ts": "a92e69707e2988d0826b9cb5b7389054bc1c05be218e92b3b39963349e011065",
         "src/__tests__/retry-after.test.ts": "061736e0630fe82fa6444f4b547513b11adf725812e52b45e355af6da3597751",
@@ -80,13 +78,11 @@
         "tests/skills/configure-throttled-queue/solution.ts": "9e6a8de1042134cd85563c8ea3fed89805000ddcd46da07c62da9b5e7fce44c5",
         "tests/skills/configure-throttled-queue/task.md": "5537a9c2c3bd4a0e3ccbb169f5e414a36716f3393d18a24a44a7f8ac39ad3299"
       },
-      "head": "fdd1bf01d4b29a95d555689757e4e9e2987cf8a6",
-      "outcome": "updated",
-      "reason": "skill_spec.md: the 'PR #89 review observations' entry now records that the caller's abort cancels the item with the caller signal's reason, the ERR_CANCELED regression it fixes, and its test. domain_map.yaml and skill_tree.yaml unchanged and accurate.",
+      "head": "c075c0d8e17c6df3bb2e5a0ccc0fc1ae24262344",
+      "outcome": "no-change",
+      "reason": "Test-only change; domain_map.yaml, skill_spec.md and skill_tree.yaml describe the same faxios contract (429-only capacity, retry before the plugin, retry: 0 on the queue) and need no edit.",
       "evidence": [
-        "Source: src/faxios.ts: the caller-abort listener cancels the queue item with the caller signal's reason instead of a new CanceledError (with linkSignals removed, the item signal is what next() and the stream wrapper watch).",
-        "Checks: new test 'timeout while a delivered stream is read' fails on faxios 0.3.0 with the previous cancel (ERR_CANCELED) and passes with the fix (ETIMEDOUT, native fetch aborted, slot freed). pnpm lint and pnpm vitest run pass on faxios 0.2.0 and 0.2.4 (322 passed, 2 skipped) and 0.3.0 (321 passed, 3 skipped); lint:s passes. intent validate skills: 1 skill passed.",
-        "Fresh consumer session and discovery prompts: not run (unverified); guidance text unchanged by this fix."
+        "src/__tests__/faxios.test.ts at c075c0d+working tree; pnpm lint, pnpm lint:esl pass; vitest faxios.test.ts 61 passed/3 skipped on faxios 0.3.0; full pnpm test 332 passed/3 skipped; mutation (isRateLimited counting >=500) fails the 4 new 5xx capacity rows. faxios 0.2 matrix not run locally (CI job covers it)."
       ]
     },
     "source:tsconfig.config.json": {

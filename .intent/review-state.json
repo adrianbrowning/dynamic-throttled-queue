@@ -3,7 +3,7 @@
   "baseline": "6651dc14a0382b3ab007c59f1fcfd882da997d46",
   "items": {
     "skill:skills/configure-throttled-queue/SKILL.md": {
-      "fingerprint": "2294219175d56bd17cd178d7f3b1feb896bbcb4f4db526ac66633698aeae5924",
+      "fingerprint": "dd10365780f378d1b591ae601d88b3e58257f67e41363aafdc7227866e3b5c8e",
       "snapshot": {
         "README.md": "b294caf1cf6172c262ecce302b217346048097adc1847069691b031fb0e45e9a",
         "skills/configure-throttled-queue/SKILL.md": "389f2f102f01dcba67467eb2c0c8726c88da5aa2a0d0431575f62ae9645bce9d",
@@ -15,7 +15,7 @@
         "src/__tests__/adaptive-rate.test.ts": "dcc069a495d9adffe816185524a81f6faec1d2b971d184671742752c18860c4d",
         "src/__tests__/cooldown.test.ts": "1b89b6829f69d73576fc70e0b684e947b0d5ba379c1b72f0f41ce061b1ee3c2b",
         "src/__tests__/dynamic-throttled-queue.test.ts": "257824be5ab73bac1e022f9e2432112d9f5af34cdbdec4f2e394f34aa1835a8e",
-        "src/__tests__/faxios.test.ts": "220582267b7b6886298224c20a538a86337ad9e6e972999499949e37ba6714a9",
+        "src/__tests__/faxios.test.ts": "168ebdf6c971a5618302515ae51c8224c78a2b985ea35e5d02be60a34d0bf7ab",
         "src/__tests__/pending-work.test.ts": "c9094b640e11c1b216b57b38d2cabb2a591dfcb9a943cab1c4c3627a01c7d1c7",
         "src/__tests__/rate-strategies.test.ts": "a92e69707e2988d0826b9cb5b7389054bc1c05be218e92b3b39963349e011065",
         "src/__tests__/retry-after.test.ts": "061736e0630fe82fa6444f4b547513b11adf725812e52b45e355af6da3597751",
@@ -23,7 +23,7 @@
         "src/__tests__/task-handles.test.ts": "7500e5ab4b15b0a4f68ae238cb0cac2682c065ec2c6aedf3ccd96f72a27855f1",
         "src/adaptive-rate.ts": "6f44cca43a1e00b2657e2637c9bfe913435526ed2d97406f540ded2e055aa943",
         "src/dynamic-throttled-queue.ts": "bc3f7beb927bf31c7ab429a65f6241e0c9525840f2e3fd1e7114fb611fc7c440",
-        "src/faxios.ts": "a7316971692d1414fe98d321033e786f2624a8c46b5f977b90ad7a1a0e9d333b",
+        "src/faxios.ts": "6170cd09d83a1220265812fa233e35c4cdab4afe4d111d098037e23b2f44347d",
         "src/pending-work.ts": "08e88eea6008d870c4da47c39d50290c9adb5e594b18bbb98bbde6e909af582a",
         "src/retry-after.ts": "b120b25af8166f4eb2a05b1401bfb6adf542e1c54e20f0c1184e687cbd1f0d07",
         "src/retry-policy.ts": "f78315d09829dee1440ad0bcb2272add5d08cb88d78c57981ad145c9f8de381e",
@@ -35,15 +35,15 @@
         "tests/skills/configure-throttled-queue/solution.ts": "9e6a8de1042134cd85563c8ea3fed89805000ddcd46da07c62da9b5e7fce44c5",
         "tests/skills/configure-throttled-queue/task.md": "5537a9c2c3bd4a0e3ccbb169f5e414a36716f3393d18a24a44a7f8ac39ad3299"
       },
-      "head": "ba3f1b5bccd91409d0fa02ed1f7f7590fdbebdba",
+      "head": "9af0d8237d54820dc9f372ea85b2074a98de94ff",
       "outcome": "no-change",
-      "reason": "Test-only change: 5xx capacity rows and a retry()-first table (401/403 not retried by default, retried when listed in statuses, 500/502/503/504 retried; each attempt one queue item, no queue retries or cooldowns). README, SKILL.md and references/faxios.md already state this contract; guidance is accurate.",
+      "reason": "Bug fix restores the documented contract: README Errors bullet and references/faxios.md §7 already say a caller abort rejects with CanceledError (ERR_CANCELED). Delivered-stream behaviour (item signal carries the caller's reason) is unchanged. Guidance is accurate, so no edit.",
       "evidence": [
-        "src/__tests__/faxios.test.ts at c075c0d+working tree; pnpm lint, pnpm lint:esl pass; vitest faxios.test.ts 62 passed/3 skipped on faxios 0.3.0; full pnpm test 333 passed/3 skipped; mutation (isRateLimited counting >=500) fails the 4 new 5xx capacity rows. faxios 0.2 matrix not run locally (CI job covers it). Adds a 403 opt-in row (statuses: [403])."
+        "src/faxios.ts result catch now maps a caller abort to canceledBy(caller) before the queue-state checks; new test 'caller abort while queued/in flight: middleware before the plugin sees a CanceledError' failed before the fix (2 failed) and passes after. pnpm lint, lint:esl, lint:s, knip, build pass; pnpm test 335 passed/3 skipped on faxios 0.3.0; faxios 0.2.0 and 0.2.4: plugin + skill tests 70 passed/2 skipped."
       ]
     },
     "planning:skills/_artifacts": {
-      "fingerprint": "39a66040b69fbec69fa42a2f6379e0430a9e605543e7bb19c8bedad4f4ff6ab6",
+      "fingerprint": "7e2f7e55ad132ea1f2198055d9140961eba8e70a121fdcbfe444b3165cf078ae",
       "snapshot": {
         "README.md": "b294caf1cf6172c262ecce302b217346048097adc1847069691b031fb0e45e9a",
         "skills/_artifacts/domain_map.yaml": "d34fc6cb15affae27b67d98619415ed12ddb6acf032281f9d039441ca289ac06",
@@ -58,7 +58,7 @@
         "src/__tests__/adaptive-rate.test.ts": "dcc069a495d9adffe816185524a81f6faec1d2b971d184671742752c18860c4d",
         "src/__tests__/cooldown.test.ts": "1b89b6829f69d73576fc70e0b684e947b0d5ba379c1b72f0f41ce061b1ee3c2b",
         "src/__tests__/dynamic-throttled-queue.test.ts": "257824be5ab73bac1e022f9e2432112d9f5af34cdbdec4f2e394f34aa1835a8e",
-        "src/__tests__/faxios.test.ts": "220582267b7b6886298224c20a538a86337ad9e6e972999499949e37ba6714a9",
+        "src/__tests__/faxios.test.ts": "168ebdf6c971a5618302515ae51c8224c78a2b985ea35e5d02be60a34d0bf7ab",
         "src/__tests__/pending-work.test.ts": "c9094b640e11c1b216b57b38d2cabb2a591dfcb9a943cab1c4c3627a01c7d1c7",
         "src/__tests__/rate-strategies.test.ts": "a92e69707e2988d0826b9cb5b7389054bc1c05be218e92b3b39963349e011065",
         "src/__tests__/retry-after.test.ts": "061736e0630fe82fa6444f4b547513b11adf725812e52b45e355af6da3597751",
@@ -66,7 +66,7 @@
         "src/__tests__/task-handles.test.ts": "7500e5ab4b15b0a4f68ae238cb0cac2682c065ec2c6aedf3ccd96f72a27855f1",
         "src/adaptive-rate.ts": "6f44cca43a1e00b2657e2637c9bfe913435526ed2d97406f540ded2e055aa943",
         "src/dynamic-throttled-queue.ts": "bc3f7beb927bf31c7ab429a65f6241e0c9525840f2e3fd1e7114fb611fc7c440",
-        "src/faxios.ts": "a7316971692d1414fe98d321033e786f2624a8c46b5f977b90ad7a1a0e9d333b",
+        "src/faxios.ts": "6170cd09d83a1220265812fa233e35c4cdab4afe4d111d098037e23b2f44347d",
         "src/pending-work.ts": "08e88eea6008d870c4da47c39d50290c9adb5e594b18bbb98bbde6e909af582a",
         "src/retry-after.ts": "b120b25af8166f4eb2a05b1401bfb6adf542e1c54e20f0c1184e687cbd1f0d07",
         "src/retry-policy.ts": "f78315d09829dee1440ad0bcb2272add5d08cb88d78c57981ad145c9f8de381e",
@@ -78,11 +78,11 @@
         "tests/skills/configure-throttled-queue/solution.ts": "9e6a8de1042134cd85563c8ea3fed89805000ddcd46da07c62da9b5e7fce44c5",
         "tests/skills/configure-throttled-queue/task.md": "5537a9c2c3bd4a0e3ccbb169f5e414a36716f3393d18a24a44a7f8ac39ad3299"
       },
-      "head": "ba3f1b5bccd91409d0fa02ed1f7f7590fdbebdba",
+      "head": "9af0d8237d54820dc9f372ea85b2074a98de94ff",
       "outcome": "no-change",
-      "reason": "Test-only change; domain_map.yaml, skill_spec.md and skill_tree.yaml describe the same faxios contract and need no edit.",
+      "reason": "Bug fix to documented behaviour; domain_map.yaml, skill_spec.md and skill_tree.yaml describe the same caller-abort contract and need no edit.",
       "evidence": [
-        "src/__tests__/faxios.test.ts at c075c0d+working tree; pnpm lint, pnpm lint:esl pass; vitest faxios.test.ts 62 passed/3 skipped on faxios 0.3.0; full pnpm test 333 passed/3 skipped; mutation (isRateLimited counting >=500) fails the 4 new 5xx capacity rows. faxios 0.2 matrix not run locally (CI job covers it). Adds a 403 opt-in row (statuses: [403])."
+        "src/faxios.ts result catch now maps a caller abort to canceledBy(caller) before the queue-state checks; new test 'caller abort while queued/in flight: middleware before the plugin sees a CanceledError' failed before the fix (2 failed) and passes after. pnpm lint, lint:esl, lint:s, knip, build pass; pnpm test 335 passed/3 skipped on faxios 0.3.0; faxios 0.2.0 and 0.2.4: plugin + skill tests 70 passed/2 skipped."
       ]
     },
     "source:tsconfig.config.json": {

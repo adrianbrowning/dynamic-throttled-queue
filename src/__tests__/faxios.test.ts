@@ -348,6 +348,33 @@ describe("dynamicThrottle", () => {
       expect(queue.getState().started).toBe(1);
     });
 
+    it.each([ "queued", "in flight" ])("caller abort while %s: middleware before the plugin sees a CanceledError", async when => {
+      const { fetch, calls } = fakeFetch();
+      const queue = ownQueue({ min_rpi: 100, interval: 1000, concurrency: 1, retry: 0 });
+      let seen: unknown;
+      const api = faxios.create({ baseURL: "https://api.test", env: { fetch } })
+        .use(async (ctx, next) => {
+          try {
+            return await next(ctx);
+          }
+          catch (error) {
+            seen = error;
+            throw error;
+          }
+        })
+        .use(dynamicThrottle({ queue }));
+      if (when === "queued") void api.get("/a").catch(() => {});
+      const controller = new AbortController();
+      const b = settled(api.get("/b", { signal: controller.signal }));
+      await until(() => calls.length === 1, "the first request to start");
+      controller.abort();
+      await b;
+      await until(() => seen !== undefined, "the outer middleware to settle");
+      expect(isCancel(seen)).toBe(true);
+      expect(seen).toMatchObject({ code: "ERR_CANCELED" });
+      calls[0]!.respond(ok());
+    });
+
     it("queues nothing when the caller aborted during earlier async middleware", async () => {
       const { fetch, calls } = fakeFetch(ok);
       const queue = ownQueue({ min_rpi: 100, interval: 1000, retry: 0, maxQueueSize: 1 });

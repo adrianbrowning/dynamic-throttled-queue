@@ -210,9 +210,11 @@ export function dynamicThrottle(options: DynamicThrottleOptions): FaxiosPlugin {
       // Handle the result before touching the caller's signal, so nothing can leave it unhandled.
       void result
         .catch((error: unknown) => {
-          // A FaxiosError came from the request. Otherwise the queue aborted (its AbortError) or failed.
+          // A FaxiosError came from the request (on faxios 0.3, also a timeout's ETIMEDOUT). Otherwise
+          // the caller's abort cancelled the item, or the queue aborted (its AbortError) or failed.
           const { state } = queue.getState();
           if (isFaxiosError(error)) delivered.reject(error);
+          else if (caller?.aborted) delivered.reject(canceledBy(caller, ctx.config));
           else if (state === "aborted") delivered.reject(new CanceledError(null, ctx.config));
           else if (state === "failed") delivered.reject(throttleRejected(error, ctx.config));
           else delivered.reject(error);

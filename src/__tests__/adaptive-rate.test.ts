@@ -69,7 +69,7 @@ const dueTimes = (due: Array<{ at: number; }>) => due.map(({ at }) => at);
 
 describe("adaptive rate", () => {
   describe("start clock", () => {
-    it("makes no start due until work is pending, then the first one spacing after observing begins", () => {
+    it("makes no start due until work is pending, then makes the first due at once", () => {
       const { adaptive, work, due } = observe({ interval: 1200 }, { queued: 0 });
 
       expect(adaptive.rate).toBe(3);
@@ -79,8 +79,8 @@ describe("adaptive rate", () => {
 
       work.queued = Infinity;
       adaptive.start();
-      vi.advanceTimersByTime(400);
-      expect(due).toEqual([{ at: 5400, limit: 1 }]);
+      vi.advanceTimersByTime(0);
+      expect(due).toEqual([{ at: 5000, limit: 1 }]);
     });
 
     it("makes one start due every spacing while starts happen", () => {
@@ -88,7 +88,7 @@ describe("adaptive rate", () => {
 
       vi.advanceTimersByTime(1000);
 
-      expect(due).toEqual([ 250, 500, 750, 1000 ].map(at => ({ at, limit: 1 })));
+      expect(due).toEqual([ 0, 250, 500, 750, 1000 ].map(at => ({ at, limit: 1 })));
     });
 
     it("makes the whole rate due once per interval when not evenly spaced", () => {
@@ -96,7 +96,7 @@ describe("adaptive rate", () => {
 
       vi.advanceTimersByTime(2000);
 
-      expect(due).toEqual([{ at: 1000, limit: 3 }, { at: 2000, limit: 4 }]);
+      expect(due).toEqual([{ at: 0, limit: 3 }, { at: 1000, limit: 4 }, { at: 2000, limit: 5 }]);
     });
 
     it("waits for the longer spacing when the rate falls before the next start is due", () => {
@@ -106,42 +106,42 @@ describe("adaptive rate", () => {
       vi.advanceTimersByTime(2000);
 
       expect(adaptive.rate).toBe(1);
-      expect(dueTimes(due)).toEqual([ 400, 800, 2000 ]);
+      expect(dueTimes(due)).toEqual([ 0, 400, 800, 2000 ]);
     });
 
     it("makes no further start due once a batch fills concurrency, until start() reports a freed slot", () => {
       const { adaptive, work, due } = observe({ evenlySpaced: false }, { slots: 1 });
 
       vi.advanceTimersByTime(5000);
-      expect(due).toEqual([{ at: 1000, limit: 3 }]);
+      expect(due).toEqual([{ at: 0, limit: 3 }]);
 
       work.slots = 1;
       adaptive.start();
-      expect(dueTimes(due)).toEqual([ 1000, 5000 ]);
+      expect(dueTimes(due)).toEqual([ 0, 5000 ]);
     });
 
     it("waits out the rest of the spacing when start() reports a freed slot early", () => {
       const { adaptive, work, due } = observe({ evenlySpaced: false }, { slots: 1 });
 
-      vi.advanceTimersByTime(1500);
+      vi.advanceTimersByTime(500);
       work.slots = 1;
       adaptive.start();
-      expect(dueTimes(due)).toEqual([ 1000 ]);
+      expect(dueTimes(due)).toEqual([ 0 ]);
 
       vi.advanceTimersByTime(500);
-      expect(dueTimes(due)).toEqual([ 1000, 2000 ]);
+      expect(dueTimes(due)).toEqual([ 0, 1000 ]);
     });
 
     it("leaves a scheduled start in place when start() reports a freed slot", () => {
       const { adaptive, work, due } = observe({ minRate: 4, maxRate: 4 }, { slots: 2 });
 
-      vi.advanceTimersByTime(300);
+      vi.advanceTimersByTime(100);
       work.slots = 2;
       adaptive.start();
-      expect(dueTimes(due)).toEqual([ 250 ]);
+      expect(dueTimes(due)).toEqual([ 0 ]);
 
-      vi.advanceTimersByTime(200);
-      expect(dueTimes(due)).toEqual([ 250, 500 ]);
+      vi.advanceTimersByTime(150);
+      expect(dueTimes(due)).toEqual([ 0, 250 ]);
     });
 
     it("goes idle when a batch leaves nothing pending, and observes again on the next start()", () => {
@@ -153,7 +153,7 @@ describe("adaptive rate", () => {
       work.queued = 1;
       adaptive.start();
       vi.advanceTimersByTime(250);
-      expect(dueTimes(due)).toEqual([ 250, 500 ]);
+      expect(dueTimes(due)).toEqual([ 0, 250 ]);
     });
 
     it("makes no nested batch when start() is called during startsDue", () => {
@@ -161,7 +161,7 @@ describe("adaptive rate", () => {
 
       vi.advanceTimersByTime(500);
 
-      expect(dueTimes(due)).toEqual([ 250, 500 ]);
+      expect(dueTimes(due)).toEqual([ 0, 250, 500 ]);
     });
 
     it("makes no further start due after a pause during startsDue", () => {
@@ -169,7 +169,7 @@ describe("adaptive rate", () => {
 
       vi.advanceTimersByTime(5000);
 
-      expect(dueTimes(due)).toEqual([ 250 ]);
+      expect(dueTimes(due)).toEqual([ 0 ]);
       expect(vi.getTimerCount()).toBe(0);
     });
 
@@ -187,7 +187,7 @@ describe("adaptive rate", () => {
 
       vi.advanceTimersByTime(1000);
 
-      expect(dueTimes(due)).toEqual([ 250, 500, 750, 1000 ]);
+      expect(dueTimes(due)).toEqual([ 0, 250, 500, 750, 1000 ]);
       expect(adaptive.rate).toBe(4);
     });
   });
@@ -340,10 +340,10 @@ describe("adaptive rate", () => {
       adaptive.start();
       vi.advanceTimersByTime(900);
       expect(adaptive.rate).toBe(1);
-      expect(dueTimes(due)).toEqual([ 400 ]);
+      expect(dueTimes(due)).toEqual([ 0 ]);
 
       vi.advanceTimersByTime(1200);
-      expect(dueTimes(due)).toEqual([ 400, 3600 ]);
+      expect(dueTimes(due)).toEqual([ 0, 3600 ]);
       expect(adaptive.rate).toBe(2);
     });
   });
@@ -380,24 +380,24 @@ describe("adaptive rate", () => {
       settleStarts(adaptive, 1);
       vi.advanceTimersByTime(6000);
       expect(adaptive.rate).toBe(3);
-      expect(dueTimes(due)).toEqual([ 400 ]);
+      expect(dueTimes(due)).toEqual([ 0 ]);
 
       slow(returnedFalse);
       expect(adaptive.rate).toBe(1);
       vi.advanceTimersByTime(1200);
-      expect(dueTimes(due)).toEqual([ 400, 7200 ]);
+      expect(dueTimes(due)).toEqual([ 0, 7200 ]);
     });
 
     it("keeps making starts due every spacing while a window is open with nothing queued", () => {
       const { adaptive, work, due } = observe({ adjustmentTiming: "settled", minRate: 4, maxRate: 4 }, { queued: 1, slots: Infinity });
 
       vi.advanceTimersByTime(600);
-      expect(dueTimes(due)).toEqual([ 250, 500 ]);
+      expect(dueTimes(due)).toEqual([ 0, 250, 500 ]);
 
       work.queued = 1;
       adaptive.start();
       vi.advanceTimersByTime(150);
-      expect(dueTimes(due)).toEqual([ 250, 500, 750 ]);
+      expect(dueTimes(due)).toEqual([ 0, 250, 500, 750 ]);
       expect(work.queued).toBe(0);
     });
 
@@ -420,9 +420,9 @@ describe("adaptive rate", () => {
       expect(adaptive.rate).toBe(1);
 
       vi.advanceTimersByTime(2399);
-      expect(dueTimes(due)).toEqual([ 400 ]);
+      expect(dueTimes(due)).toEqual([ 0 ]);
       vi.advanceTimersByTime(1);
-      expect(dueTimes(due)).toEqual([ 400, 3600 ]);
+      expect(dueTimes(due)).toEqual([ 0, 3600 ]);
     });
 
     it("holds the rate steady in the window collected right after a backoff", () => {
@@ -451,7 +451,7 @@ describe("adaptive rate", () => {
       work.queued = Infinity;
       adaptive.start();
       vi.advanceTimersByTime(1000);
-      expect(due.at(-1)?.at).toBe(3000);
+      expect(due.at(-1)?.at).toBe(2000);
     });
 
     it("makes no decision for a collection interval in which nothing started", () => {

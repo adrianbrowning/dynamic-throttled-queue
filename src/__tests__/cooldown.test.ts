@@ -33,7 +33,7 @@ describe("cooldownFor", () => {
       throttle(async () => slow.promise);
       add(2);
 
-      vi.advanceTimersByTime(100);
+      vi.advanceTimersByTime(0);
       throttle.cooldownFor(500);
       await vi.advanceTimersByTimeAsync(499);
       expect(starts).toEqual([]);
@@ -44,11 +44,11 @@ describe("cooldownFor", () => {
       expect(throttle.getState()).toMatchObject({ succeeded: 1, active: 0 });
       expect(starts).toEqual([]);
 
-      // Expires at 600; the first start is due one spacing later, as after any fresh start.
+      // Expires at 500; the first start is due one spacing later, as after any cooldown.
       await vi.advanceTimersByTimeAsync(1);
       expect(throttle.getState().cooldownRemaining).toBe(0);
       await vi.advanceTimersByTimeAsync(200);
-      expect(starts).toEqual([ 700, 800 ]);
+      expect(starts).toEqual([ 600, 700 ]);
     });
 
     it("extends to the latest deadline, never shortens it, and counts only actual extensions", () => {
@@ -79,7 +79,7 @@ describe("cooldownFor", () => {
       throttle.cooldownFor(0);
       vi.advanceTimersByTime(100);
 
-      expect(starts).toEqual([ 100 ]);
+      expect(starts).toEqual([ 0 ]);
       expect(throttle.getState()).toMatchObject({ cooldownRemaining: 0, cooldowns: 0, cooldownTotal: 0 });
     });
 
@@ -90,7 +90,7 @@ describe("cooldownFor", () => {
       throttle(() => { ran++; });
       throttle(() => { ran++; });
 
-      vi.advanceTimersByTime(1000);
+      vi.advanceTimersByTime(0);
 
       expect(ran).toBe(1);
       expect(throttle.getState()).toMatchObject({ pending: 2, cooldownRemaining: 5000 });
@@ -117,7 +117,7 @@ describe("cooldownFor", () => {
       const { throttle } = queue();
 
       const task = throttle.submit(() => { throttle.cooldownFor(60_000); return "done"; });
-      await vi.advanceTimersByTimeAsync(100);
+      await vi.advanceTimersByTimeAsync(0);
 
       await expect(task.result).resolves.toBe("done");
       await expect(throttle.waitForIdle()).resolves.toBeUndefined();
@@ -131,7 +131,7 @@ describe("cooldownFor", () => {
 
       throttle.submit(async () => { throttle.cooldownFor(60_000); return slow.promise; });
       const waiting = throttle.submit(() => {});
-      await vi.advanceTimersByTimeAsync(100);
+      await vi.advanceTimersByTimeAsync(0);
       expect(throttle.getState()).toMatchObject({ active: 1, pending: 1, cooldownRemaining: 60_000 });
 
       waiting.cancel();

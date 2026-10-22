@@ -168,9 +168,7 @@ The two faxios lines count `timeout` differently. Check the installed version
 
 - **faxios 0.3:** `timeout` covers the whole request, including time in the
   queue. A request that times out while queued rejects with `ETIMEDOUT` and is
-  never sent. Set `timeout` to include the longest queue wait you accept,
-  including the first start of a new or idle queue: it waits one spacing
-  (`interval / rate`), or a full `interval` with `evenly_spaced: false`.
+  never sent. Set `timeout` to include the longest queue wait you accept.
   `retry({ attemptTimeout })` limits each try, and also includes that try's
   wait in the queue.
 - **faxios 0.2:** faxios starts the `timeout` timer when it dispatches the

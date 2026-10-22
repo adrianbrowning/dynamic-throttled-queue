@@ -179,5 +179,5 @@ gaps:
     status: resolved
   - skill: configure-throttled-queue
     question: Should a fresh or idle queue start its first item at once (issue #93)?
-    context: Resolved 2026-10-22. Kept as is and documented, because an immediate first start would change existing timing (breaking). The README and references/faxios.md §6 say the first start waits one spacing (a full interval with evenly_spaced false), and that on faxios 0.3 the wait counts against timeout.
+    context: "Resolved 2026-10-22: a new or drained queue starts at once, paced from its last real start; stop() restarts, pause/resume, backoffs with work waiting and cooldowns keep one spacing. Tested in src/__tests__/dynamic-throttled-queue.test.ts (first start). The faxios timeout guidance no longer needs a first-start caveat."
     status: resolved

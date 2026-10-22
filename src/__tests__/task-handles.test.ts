@@ -43,7 +43,7 @@ describe("submit()", () => {
     });
     const outcome = task.result.catch((error: unknown) => error).finally(() => { settled = true; });
 
-    await vi.advanceTimersByTimeAsync(2000);
+    await vi.advanceTimersByTimeAsync(1000);
     expect(settled).toBe(false);
     await vi.advanceTimersByTimeAsync(10_000);
 
@@ -221,7 +221,7 @@ describe("queue-wide termination", () => {
     const active = queue.submit(async ({ signal }) => { activeSignal = signal; return finish.promise; });
     const delayed = queue.submit(() => { throw new Error("retry me"); });
     const queued = queue.submit(() => "never");
-    await vi.advanceTimersByTimeAsync(2000);
+    await vi.advanceTimersByTimeAsync(1000);
     expect(queue.getState()).toMatchObject({ active: 1, pending: 2, retried: 1 });
 
     const outcomes = Promise.allSettled([ active, delayed, queued ].map(async task => task.result));

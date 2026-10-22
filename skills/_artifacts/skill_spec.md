@@ -247,14 +247,18 @@ used mainly to call rate-limited HTTP APIs.
   queue that fails while a request is queued or in flight. The plugin tests add
   401/403/5xx retry rows, 5xx capacity rows, tighter `cooldownFrom` priority
   rows with upper bounds, and test-owned queues.
-- **Decision on #93: keep the first-start wait and document it.** Starting
-  the first item at once changes the timing of existing users, so it would be
-  a breaking change, and this release is a minor. The README (pacing example,
-  burst example, cooldown scheduling, faxios Timeout bullet) and
-  `references/faxios.md` §6 now say that a new or idle queue starts its first
-  item one spacing after work arrives (a full `interval` with
-  `evenly_spaced: false`), and that on faxios 0.3 this wait counts against
-  `timeout`. A queue test pins the wait for a fresh and a drained, idle queue.
-- **Guidance updated:** `references/faxios.md` §6 (timeout). SKILL.md needs no
-  edit: it sends faxios readers to `references/faxios.md` first (line 51-52).
+- **Decision on #93 (maintainer, 2026-10-22): start a new or drained queue at
+  once, in this PR.** This supersedes an earlier same-day decision to keep the
+  wait and document it. `src/adaptive-rate.ts` paces the next start of a
+  drained or never-started queue from its last real start (at once if one
+  spacing has passed). After `stop()` and a restart, `pause()`/`resume()`, a
+  backoff with work waiting, or a cooldown, the next start is still due one
+  spacing after pacing reopens. The rate guarantee is unchanged: tests now check
+  that at most `rate` starts fall in any `[s, s + interval)`. A separate minor
+  bump file (`.bumpy/start-drained-queue-at-once.md`) describes the timing
+  change.
+- **Guidance updated:** README (pacing and burst examples, cooldown scheduling).
+  `references/faxios.md` §6 and the README faxios Timeout bullet no longer
+  mention a first-start wait. SKILL.md needs no edit: it makes no first-start
+  claim, and sends faxios readers to `references/faxios.md` (lines 51-52).
 - **Not verified:** fresh consumer session and discovery prompts.

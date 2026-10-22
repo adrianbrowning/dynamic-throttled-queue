@@ -3,25 +3,25 @@
   "baseline": "6651dc14a0382b3ab007c59f1fcfd882da997d46",
   "items": {
     "skill:skills/configure-throttled-queue/SKILL.md": {
-      "fingerprint": "10c0f05cb857d8318d7af965aad2a0db4942824cafd308b632a931d827f57e75",
+      "fingerprint": "7791829f7ee619622de1381875ff41f4289977c5d906bc06f0b6d8e3eca48165",
       "snapshot": {
-        "README.md": "f6cd69b6d6a90e274082696b391755b0e622b7faf8a5768d4b3b8b29a78325c8",
+        "README.md": "232a9e732c12464a1229d04733fdf9359f76897d7af2383364478b1a1be4f421",
         "skills/configure-throttled-queue/SKILL.md": "389f2f102f01dcba67467eb2c0c8726c88da5aa2a0d0431575f62ae9645bce9d",
-        "skills/configure-throttled-queue/references/faxios.md": "73f4c9fe818310c3e7f0e71b2032fbba178325e5575b4d6656123a16f25cef4c",
+        "skills/configure-throttled-queue/references/faxios.md": "65bddf9ac08cb3cfe39f13c2576a4d46868db374f3a4030b8ed33a1111af27c3",
         "skills/configure-throttled-queue/references/lifecycle.md": "50414cc38fc0bcea2fb8e12414f28b6878e66af373163e36848dd3896ed94620",
         "skills/configure-throttled-queue/references/rate-strategies.md": "bd29e5b2b178e622ecad079fd21ff6e65bfcd49a296f61348477af9b918b3628",
         "skills/configure-throttled-queue/references/retries.md": "06cabadcb4baafd78c8cf43affdbe860643e0782acaeea473a9c98340cbc14a8",
         "skills/configure-throttled-queue/references/state-and-idle.md": "83232fc45f99d344860b079044bdca975156d6550edf5145bdb88cf4bd612f05",
-        "src/__tests__/adaptive-rate.test.ts": "dcc069a495d9adffe816185524a81f6faec1d2b971d184671742752c18860c4d",
-        "src/__tests__/cooldown.test.ts": "1b89b6829f69d73576fc70e0b684e947b0d5ba379c1b72f0f41ce061b1ee3c2b",
-        "src/__tests__/dynamic-throttled-queue.test.ts": "1e4d74ad9db4e6cea5c9e845703cf60fa3d3586e33119e5670184b5a3a3e07b4",
+        "src/__tests__/adaptive-rate.test.ts": "ff9b0b58b6d134f88fb1f7d9e121f951c7f9c1331e91832b7247c9aa25c8181e",
+        "src/__tests__/cooldown.test.ts": "ef81ccefe64a0191fc1ac808a32e55c161bfbb9a737a6fcc205eb2b29050228b",
+        "src/__tests__/dynamic-throttled-queue.test.ts": "44321ad0cc4bce30faab64833588d1a0393cd4e281ab4c21e34865b01cda9829",
         "src/__tests__/faxios.test.ts": "76a17935b96031e44f314c31d56af89cb69acc6446e897fac1b91f9a66e61fd7",
         "src/__tests__/pending-work.test.ts": "c9094b640e11c1b216b57b38d2cabb2a591dfcb9a943cab1c4c3627a01c7d1c7",
         "src/__tests__/rate-strategies.test.ts": "a92e69707e2988d0826b9cb5b7389054bc1c05be218e92b3b39963349e011065",
         "src/__tests__/retry-after.test.ts": "061736e0630fe82fa6444f4b547513b11adf725812e52b45e355af6da3597751",
         "src/__tests__/retry-policy.test.ts": "077e51ce73ba02b32fe85d7dcf03d9469a933a18683589a7508a7569fc456dd2",
-        "src/__tests__/task-handles.test.ts": "7500e5ab4b15b0a4f68ae238cb0cac2682c065ec2c6aedf3ccd96f72a27855f1",
-        "src/adaptive-rate.ts": "6f44cca43a1e00b2657e2637c9bfe913435526ed2d97406f540ded2e055aa943",
+        "src/__tests__/task-handles.test.ts": "6edaa5de63371cb92f9e3d1a892dfe29e6c0e1f1eadce11f1c375b3219f30fab",
+        "src/adaptive-rate.ts": "3eaea717f68fb645fd4cfc6e00bfd4e08a835ec5968de988311b451c6b0378bb",
         "src/dynamic-throttled-queue.ts": "bc3f7beb927bf31c7ab429a65f6241e0c9525840f2e3fd1e7114fb611fc7c440",
         "src/faxios.ts": "45205367a623bf675d01311ebe8709facf7bba5eb9fdbb00611e31dd75b6e214",
         "src/pending-work.ts": "08e88eea6008d870c4da47c39d50290c9adb5e594b18bbb98bbde6e909af582a",
@@ -35,36 +35,36 @@
         "tests/skills/configure-throttled-queue/solution.ts": "9e6a8de1042134cd85563c8ea3fed89805000ddcd46da07c62da9b5e7fce44c5",
         "tests/skills/configure-throttled-queue/task.md": "5537a9c2c3bd4a0e3ccbb169f5e414a36716f3393d18a24a44a7f8ac39ad3299"
       },
-      "head": "6b623ae1b745c98af7a346fef2b90e9782187fe4",
+      "head": "abdfb0568224808c1cfefce5f6679e9094e83597",
       "outcome": "updated",
-      "reason": "references/faxios.md §6 now says the first start of a new or idle queue waits one spacing (a full interval with evenly_spaced: false) and counts against faxios 0.3 timeout, matching src/adaptive-rate.ts resume() and the new queue test (issue #93, option 1). SKILL.md already routes faxios readers to the reference; other test-only changes need no guidance edit.",
+      "reason": "Issue #93 fixed in core: a new or drained queue now starts at once. references/faxios.md §6 drops the first-start caveat added earlier on this branch, since the wait no longer exists; README pacing/burst/cooldown text states the new rule and its exceptions (stop restart, pause/resume, backoff with work waiting, cooldown). SKILL.md makes no first-start claim and routes faxios readers to the reference, so it needs no edit.",
       "evidence": [
-        "Working tree on 6b623ae: pnpm lint, lint:esl, lint:s, knip, jscpd, build pass; pnpm test 341 passed/3 skipped on faxios 0.3.0; intent validate skills passes. New queue test 'a fresh or idle queue waits one spacing / a full interval' passes (fake timers, drained via waitForIdle). cooldownFrom mutations (drop return after custom cooldown; ms > 0) now fail 2 and 1 tests. Fresh consumer session not run."
+        "Working tree on abdfb05. src/adaptive-rate.ts: resume() paces a drained/never-started queue from its last real start; stop(), pause(), suspend() keep one spacing. pnpm lint, lint:esl, lint:s, knip, jscpd, build pass; pnpm test 344 passed/3 skipped (faxios 0.3.0); faxios 0.2.0 and 0.2.4 plugin+skill tests 74 passed/2 skipped; tests/skills 7 passed; intent validate skills passes. Rate-limit tests assert at most rate starts in any [s, s+interval). Smoke (real timers, built dist, faxios 0.3): single request timeout 120 ms, 80 ms fetch, 10/s queue: before ETIMEDOUT at 123 ms, after status 200 at 88 ms; 4 follow-ups still 100 ms apart. Fresh consumer session not run."
       ]
     },
     "planning:skills/_artifacts": {
-      "fingerprint": "c80067e5766e46667d783793cd3ec92afd81cf202152cea2341ad2849d064c6b",
+      "fingerprint": "2497c5dc5d6ec408a3ce8eaad69a4d33d2040961c64f1d095c9b88264d42b68c",
       "snapshot": {
-        "README.md": "f6cd69b6d6a90e274082696b391755b0e622b7faf8a5768d4b3b8b29a78325c8",
-        "skills/_artifacts/domain_map.yaml": "d4847fa0c6b4ad60face700eede6efccd2c8d2cc45030a6e8ed531f87a83d13d",
-        "skills/_artifacts/skill_spec.md": "ea0078e0b6eeae0c6a8868c7dac397650dab1dec95f761b998f619653bb21871",
+        "README.md": "232a9e732c12464a1229d04733fdf9359f76897d7af2383364478b1a1be4f421",
+        "skills/_artifacts/domain_map.yaml": "653b0387c2111661739c3d391e6a8a3eef7b50d08250b240f3fa0e51664df387",
+        "skills/_artifacts/skill_spec.md": "d68067aea268fb06757ac3556ec8fca17c377dcbc4e5255b86f92364e4071df0",
         "skills/_artifacts/skill_tree.yaml": "60dafec76830763a54a3f77e2805ba974d2f442e2f9beab89e6e70fc84e82153",
         "skills/configure-throttled-queue/SKILL.md": "389f2f102f01dcba67467eb2c0c8726c88da5aa2a0d0431575f62ae9645bce9d",
-        "skills/configure-throttled-queue/references/faxios.md": "73f4c9fe818310c3e7f0e71b2032fbba178325e5575b4d6656123a16f25cef4c",
+        "skills/configure-throttled-queue/references/faxios.md": "65bddf9ac08cb3cfe39f13c2576a4d46868db374f3a4030b8ed33a1111af27c3",
         "skills/configure-throttled-queue/references/lifecycle.md": "50414cc38fc0bcea2fb8e12414f28b6878e66af373163e36848dd3896ed94620",
         "skills/configure-throttled-queue/references/rate-strategies.md": "bd29e5b2b178e622ecad079fd21ff6e65bfcd49a296f61348477af9b918b3628",
         "skills/configure-throttled-queue/references/retries.md": "06cabadcb4baafd78c8cf43affdbe860643e0782acaeea473a9c98340cbc14a8",
         "skills/configure-throttled-queue/references/state-and-idle.md": "83232fc45f99d344860b079044bdca975156d6550edf5145bdb88cf4bd612f05",
-        "src/__tests__/adaptive-rate.test.ts": "dcc069a495d9adffe816185524a81f6faec1d2b971d184671742752c18860c4d",
-        "src/__tests__/cooldown.test.ts": "1b89b6829f69d73576fc70e0b684e947b0d5ba379c1b72f0f41ce061b1ee3c2b",
-        "src/__tests__/dynamic-throttled-queue.test.ts": "1e4d74ad9db4e6cea5c9e845703cf60fa3d3586e33119e5670184b5a3a3e07b4",
+        "src/__tests__/adaptive-rate.test.ts": "ff9b0b58b6d134f88fb1f7d9e121f951c7f9c1331e91832b7247c9aa25c8181e",
+        "src/__tests__/cooldown.test.ts": "ef81ccefe64a0191fc1ac808a32e55c161bfbb9a737a6fcc205eb2b29050228b",
+        "src/__tests__/dynamic-throttled-queue.test.ts": "44321ad0cc4bce30faab64833588d1a0393cd4e281ab4c21e34865b01cda9829",
         "src/__tests__/faxios.test.ts": "76a17935b96031e44f314c31d56af89cb69acc6446e897fac1b91f9a66e61fd7",
         "src/__tests__/pending-work.test.ts": "c9094b640e11c1b216b57b38d2cabb2a591dfcb9a943cab1c4c3627a01c7d1c7",
         "src/__tests__/rate-strategies.test.ts": "a92e69707e2988d0826b9cb5b7389054bc1c05be218e92b3b39963349e011065",
         "src/__tests__/retry-after.test.ts": "061736e0630fe82fa6444f4b547513b11adf725812e52b45e355af6da3597751",
         "src/__tests__/retry-policy.test.ts": "077e51ce73ba02b32fe85d7dcf03d9469a933a18683589a7508a7569fc456dd2",
-        "src/__tests__/task-handles.test.ts": "7500e5ab4b15b0a4f68ae238cb0cac2682c065ec2c6aedf3ccd96f72a27855f1",
-        "src/adaptive-rate.ts": "6f44cca43a1e00b2657e2637c9bfe913435526ed2d97406f540ded2e055aa943",
+        "src/__tests__/task-handles.test.ts": "6edaa5de63371cb92f9e3d1a892dfe29e6c0e1f1eadce11f1c375b3219f30fab",
+        "src/adaptive-rate.ts": "3eaea717f68fb645fd4cfc6e00bfd4e08a835ec5968de988311b451c6b0378bb",
         "src/dynamic-throttled-queue.ts": "bc3f7beb927bf31c7ab429a65f6241e0c9525840f2e3fd1e7114fb611fc7c440",
         "src/faxios.ts": "45205367a623bf675d01311ebe8709facf7bba5eb9fdbb00611e31dd75b6e214",
         "src/pending-work.ts": "08e88eea6008d870c4da47c39d50290c9adb5e594b18bbb98bbde6e909af582a",
@@ -78,11 +78,11 @@
         "tests/skills/configure-throttled-queue/solution.ts": "9e6a8de1042134cd85563c8ea3fed89805000ddcd46da07c62da9b5e7fce44c5",
         "tests/skills/configure-throttled-queue/task.md": "5537a9c2c3bd4a0e3ccbb169f5e414a36716f3393d18a24a44a7f8ac39ad3299"
       },
-      "head": "6b623ae1b745c98af7a346fef2b90e9782187fe4",
+      "head": "abdfb0568224808c1cfefce5f6679e9094e83597",
       "outcome": "updated",
-      "reason": "skill_spec.md adds the 2026-10-22 release-fixes entry with the #93 decision; domain_map.yaml adds the resolved #93 gap; skill_tree.yaml is unchanged because no skill or reference was added or renamed.",
+      "reason": "skill_spec.md records the reversed #93 decision (start at once, exceptions, rate guarantee, separate bump file); domain_map.yaml updates the resolved #93 gap with the new behaviour and test path; skill_tree.yaml unchanged because no skill or reference was added, removed or renamed.",
       "evidence": [
-        "Working tree on 6b623ae: pnpm lint, lint:esl, lint:s, knip, jscpd, build pass; pnpm test 341 passed/3 skipped on faxios 0.3.0; intent validate skills passes. New queue test 'a fresh or idle queue waits one spacing / a full interval' passes (fake timers, drained via waitForIdle). cooldownFrom mutations (drop return after custom cooldown; ms > 0) now fail 2 and 1 tests. Fresh consumer session not run."
+        "Working tree on abdfb05. src/adaptive-rate.ts: resume() paces a drained/never-started queue from its last real start; stop(), pause(), suspend() keep one spacing. pnpm lint, lint:esl, lint:s, knip, jscpd, build pass; pnpm test 344 passed/3 skipped (faxios 0.3.0); faxios 0.2.0 and 0.2.4 plugin+skill tests 74 passed/2 skipped; tests/skills 7 passed; intent validate skills passes. Rate-limit tests assert at most rate starts in any [s, s+interval). Smoke (real timers, built dist, faxios 0.3): single request timeout 120 ms, 80 ms fetch, 10/s queue: before ETIMEDOUT at 123 ms, after status 200 at 88 ms; 4 follow-ups still 100 ms apart. Fresh consumer session not run."
       ]
     },
     "source:tsconfig.config.json": {

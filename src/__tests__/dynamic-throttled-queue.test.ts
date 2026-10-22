@@ -85,35 +85,38 @@ describe("createThrottledQueue", () => {
       expect(count).toBe(10);
     });
 
+    /** Asserts that at most `rate` of `starts` fall in any half-open window `[s, s + interval)` from a start `s`. */
+    function expectAtMostRatePerInterval(starts: Array<number>, rate: number, interval: number) {
+      for (const s of starts) {
+        expect(starts.filter(t => t >= s && t < s + interval).length).toBeLessThanOrEqual(rate);
+      }
+    }
+
     it("respects rate limit with evenly_spaced (default)", () => {
       const throttle = createThrottledQueue({ min_rpi: 2, interval: 1000 });
-      let count = 0;
+      const begin = Date.now();
+      const starts: Array<number> = [];
       for (let i = 0; i < 10; i++) {
-        throttle(() => { count++; });
+        throttle(() => { starts.push(Date.now() - begin); });
       }
 
-      // evenly_spaced: interval/rpi = 500ms per request
-      vi.advanceTimersByTime(500);
-      expect(count).toBe(1);
-      vi.advanceTimersByTime(500);
-      expect(count).toBe(2);
-      vi.advanceTimersByTime(4000);
-      expect(count).toBe(10);
+      // evenly_spaced: interval/rpi = 500ms per request, the first at once
+      vi.advanceTimersByTime(5000);
+      expect(starts).toEqual([ 0, 500, 1000, 1500, 2000, 2500, 3000, 3500, 4000, 4500 ]);
+      expectAtMostRatePerInterval(starts, 2, 1000);
     });
 
     it("respects rate limit with evenly_spaced: false (batch mode)", () => {
       const throttle = createThrottledQueue({ min_rpi: 3, interval: 1000, evenly_spaced: false });
-      let count = 0;
+      const begin = Date.now();
+      const starts: Array<number> = [];
       for (let i = 0; i < 9; i++) {
-        throttle(() => { count++; });
+        throttle(() => { starts.push(Date.now() - begin); });
       }
 
-      vi.advanceTimersByTime(1000);
-      expect(count).toBe(3);
-      vi.advanceTimersByTime(1000);
-      expect(count).toBe(6);
-      vi.advanceTimersByTime(1000);
-      expect(count).toBe(9);
+      vi.advanceTimersByTime(3000);
+      expect(starts).toEqual([ 0, 0, 0, 1000, 1000, 1000, 2000, 2000, 2000 ]);
+      expectAtMostRatePerInterval(starts, 3, 1000);
     });
   });
 
@@ -172,7 +175,7 @@ describe("createThrottledQueue", () => {
         attempts++;
         return attempts === 1 ? false : undefined;
       });
-      vi.advanceTimersByTime(1000);
+      vi.advanceTimersByTime(0);
       expect(() => throttle(() => {})).toThrow("maxQueueSize");
 
       vi.advanceTimersByTime(1000);
@@ -201,7 +204,7 @@ describe("createThrottledQueue", () => {
       });
 
       throttle(() => false);
-      vi.advanceTimersByTime(1000);
+      vi.advanceTimersByTime(0);
 
       expect(seen).toEqual([{ active: 0, admitted: false }]);
       expect(throttle.getState().pending).toBe(1);
@@ -252,7 +255,7 @@ describe("createThrottledQueue", () => {
       throttle(() => { executedIds.push(id); });
     }
 
-    vi.advanceTimersByTime(500);
+    vi.advanceTimersByTime(0);
     expect(executedIds).toEqual([ "first" ]);
     vi.advanceTimersByTime(2000);
 
@@ -271,7 +274,7 @@ describe("createThrottledQueue", () => {
         throttle(() => { executedIds.push(id); });
       }
 
-      vi.advanceTimersByTime(1000);
+      vi.advanceTimersByTime(0);
       expect(executedIds).toEqual([ "first", "second", "third" ]);
       vi.advanceTimersByTime(1000);
 
@@ -459,7 +462,7 @@ describe("createThrottledQueue", () => {
 
         throttle(async () => new Promise<boolean>(resolve => {
           started.push("slow");
-          setTimeout(() => resolve(false), 500);
+          setTimeout(() => resolve(false), 1500);
         }));
         throttle(() => { started.push("fast"); });
         throttle(() => { started.push("next-window"); });
@@ -637,13 +640,13 @@ describe("createThrottledQueue", () => {
       }
 
       vi.advanceTimersByTime(1000);
-      expect(starts).toEqual([ 1000, 1000, 1000 ]);
+      expect(starts).toEqual([ 0, 0, 0 ]);
 
       vi.advanceTimersByTime(1999);
-      expect(starts).toEqual([ 1000, 1000, 1000 ]);
+      expect(starts).toEqual([ 0, 0, 0 ]);
 
       vi.advanceTimersByTime(1);
-      expect(starts).toEqual([ 1000, 1000, 1000, 3000, 3000 ]);
+      expect(starts).toEqual([ 0, 0, 0, 3000, 3000 ]);
     });
   });
 
@@ -782,11 +785,12 @@ describe("createThrottledQueue", () => {
         return starts.length === 1 ? false : undefined;
       });
 
-      vi.advanceTimersByTime(2499);
-      expect(starts).toEqual([ 1000 ]);
+      // The retry is ready at 500, then waits for the next paced start, one interval after the first.
+      vi.advanceTimersByTime(999);
+      expect(starts).toEqual([ 0 ]);
 
       vi.advanceTimersByTime(1);
-      expect(starts).toEqual([ 1000, 2500 ]);
+      expect(starts).toEqual([ 0, 1000 ]);
     });
 
     it("counts a delayed retry as pending work", () => {
@@ -799,7 +803,7 @@ describe("createThrottledQueue", () => {
       });
 
       throttle(() => false);
-      vi.advanceTimersByTime(1000);
+      vi.advanceTimersByTime(0);
 
       expect(throttle.getState().pending).toBe(1);
     });
@@ -815,7 +819,7 @@ describe("createThrottledQueue", () => {
       let attempts = 0;
 
       throttle(() => { attempts++; return attempts === 1 ? false : undefined; });
-      vi.advanceTimersByTime(1400);
+      vi.advanceTimersByTime(400);
       throttle.pause();
       vi.advanceTimersByTime(1000);
       throttle.resume();
@@ -839,7 +843,7 @@ describe("createThrottledQueue", () => {
 
       throttle(() => { started.push("first"); return false; });
       throttle(() => { started.push("second"); return false; });
-      vi.advanceTimersByTime(1000);
+      vi.advanceTimersByTime(0);
       throttle(() => { started.push("new"); });
       vi.advanceTimersByTime(1000);
 
@@ -857,7 +861,7 @@ describe("createThrottledQueue", () => {
       let attempts = 0;
 
       throttle(() => { attempts++; return false; });
-      vi.advanceTimersByTime(1000);
+      vi.advanceTimersByTime(0);
       throttle.abort();
       vi.advanceTimersByTime(10_000);
 
@@ -1060,16 +1064,16 @@ describe("createThrottledQueue", () => {
         return attempts === 1 ? firstResult.promise.then(() => false) : undefined;
       });
 
-      await vi.advanceTimersByTimeAsync(1000);
-      expect(starts).toEqual([ 1000 ]);
+      await vi.advanceTimersByTimeAsync(400);
+      expect(starts).toEqual([ 0 ]);
 
       firstResult.resolve();
       await vi.advanceTimersByTimeAsync(0);
-      await vi.advanceTimersByTimeAsync(999);
-      expect(starts).toEqual([ 1000 ]);
+      await vi.advanceTimersByTimeAsync(599);
+      expect(starts).toEqual([ 0 ]);
 
       await vi.advanceTimersByTimeAsync(1);
-      expect(starts).toEqual([ 1000, 2000 ]);
+      expect(starts).toEqual([ 0, 1000 ]);
     });
   });
 
@@ -1092,7 +1096,7 @@ describe("createThrottledQueue", () => {
       throttle(async () => { started++; return inFlight; });
       throttle(() => { started++; });
 
-      await vi.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(0);
       expect(started).toBe(1);
 
       throttle.stop();
@@ -1119,7 +1123,7 @@ describe("createThrottledQueue", () => {
       }
 
       // Let some items process
-      vi.advanceTimersByTime(1000);
+      vi.advanceTimersByTime(0);
       throttle.stop();
       const countAtStop = count;
       expect(countAtStop).toBe(2);
@@ -1148,7 +1152,7 @@ describe("createThrottledQueue", () => {
     it("pending reflects count after partial processing", () => {
       const throttle = createThrottledQueue({ min_rpi: 2, interval: 1000, evenly_spaced: false });
       for (let i = 0; i < 5; i++) throttle(() => {});
-      vi.advanceTimersByTime(1000);
+      vi.advanceTimersByTime(0);
       expect(throttle.getState().pending).toBe(3);
     });
 
@@ -1165,7 +1169,7 @@ describe("createThrottledQueue", () => {
 
       expect(throttle.getState().pending).toBe(10);
 
-      vi.advanceTimersByTime(1000);
+      vi.advanceTimersByTime(0);
       expect(throttle.getState().pending).toBe(7);
 
       vi.advanceTimersByTime(1000);
@@ -1190,8 +1194,7 @@ describe("createThrottledQueue", () => {
         throttle(() => { count++; });
       }
 
-      vi.advanceTimersByTime(500);
-      expect(count).toBe(0); // batch mode: first dequeue at 1000ms, nothing fired yet
+      expect(count).toBe(0); // the first batch is due on the next timer turn, nothing fired yet
       throttle.stop();
 
       // Enqueue more — should resume
@@ -1325,7 +1328,7 @@ describe("createThrottledQueue", () => {
 
       throttle(async () => { started++; return active.promise; });
       throttle(() => { started++; });
-      await vi.advanceTimersByTimeAsync(1000);
+      await vi.advanceTimersByTimeAsync(0);
       expect(started).toBe(1);
 
       throttle.abort();
@@ -1622,7 +1625,7 @@ describe("createThrottledQueue", () => {
         retryBackoff: { strategy: "fixed", baseDelay: 500 },
       });
       q(() => false);
-      vi.advanceTimersByTime(1000);
+      vi.advanceTimersByTime(0);
       expect(q.getState().pending).toBe(1);
     });
   });
@@ -1776,6 +1779,72 @@ describe("createThrottledQueue", () => {
       await vi.runAllTimersAsync();
       await second;
       expect(secondCount).toBe(1); // second waiter resolved exactly once for the new work
+    });
+  });
+
+  describe("first start", () => {
+    it.each([
+      [ "evenly spaced", { min_rpi: 10, interval: 1000 }],
+      [ "batch", { min_rpi: 10, interval: 1000, evenly_spaced: false }],
+    ])("a fresh queue, and one drained and idle for over one spacing, start at once (%s)", async (_name, options) => {
+      const q = createThrottledQueue(options);
+      const begin = Date.now();
+      const starts: Array<number> = [];
+      const add = () => q(() => { starts.push(Date.now() - begin); });
+      add();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(starts).toEqual([ 0 ]);
+
+      // Drained, then idle for several intervals: new work starts at once.
+      await q.waitForIdle();
+      expect(q.getState()).toMatchObject({ pending: 0, active: 0 });
+      await vi.advanceTimersByTimeAsync(5000);
+      const idleAt = Date.now() - begin;
+      add();
+      await vi.advanceTimersByTimeAsync(0);
+      expect(starts).toEqual([ 0, idleAt ]);
+      q.abort();
+    });
+
+    it.each([
+      [ "evenly spaced", { min_rpi: 10, interval: 1000 }, 100 ],
+      [ "batch", { min_rpi: 10, interval: 1000, evenly_spaced: false }, 1000 ],
+    ])("a drained queue given work within one spacing of its last start waits only the rest of it (%s)", async (_name, options, spacing) => {
+      const q = createThrottledQueue(options);
+      const begin = Date.now();
+      const starts: Array<number> = [];
+      const add = () => q(() => { starts.push(Date.now() - begin); });
+      add();
+      await vi.advanceTimersByTimeAsync(0);
+      await q.waitForIdle();
+
+      await vi.advanceTimersByTimeAsync(spacing / 2);
+      add();
+      await vi.advanceTimersByTimeAsync(spacing / 2 - 1);
+      expect(starts).toEqual([ 0 ]);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(starts).toEqual([ 0, spacing ]);
+      q.abort();
+    });
+
+    it("waits one spacing after a cooldown ends, even when the last start was long before", async () => {
+      const q = createThrottledQueue({ min_rpi: 10, interval: 1000 });
+      const begin = Date.now();
+      const starts: Array<number> = [];
+      const add = () => q(() => { starts.push(Date.now() - begin); });
+      add();
+      await vi.advanceTimersByTimeAsync(0);
+      await q.waitForIdle();
+      await vi.advanceTimersByTimeAsync(1000);
+
+      // Expires at 1500; the next start is due one spacing (100 ms) later.
+      q.cooldownFor(500);
+      add();
+      await vi.advanceTimersByTimeAsync(599);
+      expect(starts).toEqual([ 0 ]);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(starts).toEqual([ 0, 1600 ]);
+      q.abort();
     });
   });
 });

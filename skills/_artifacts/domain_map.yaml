@@ -1,7 +1,7 @@
 # domain_map.yaml
 # Library: dynamic-throttled-queue
 # Version: 3.0.0
-# Date: 2026-10-04
+# Date: 2026-10-09
 # Status: reviewed
 
 library:
@@ -33,6 +33,7 @@ skills:
       - submit, TaskHandle (result, cancel), ExecutionContext (signal, attempt)
       - pause, resume, stop, abort, failed state
       - waitForIdle, getState, pending
+      - "dynamic-throttled-queue/faxios: dynamicThrottle, isRateLimited, ERR_THROTTLE_REJECTED"
     tasks:
       - "Choose min_rpi, max_rpi, interval, and evenly_spaced for an API rate limit"
       - Bound in-flight async work with concurrency separately from the start rate
@@ -42,6 +43,7 @@ skills:
       - Submit work and cancel it with task handles
       - "Pause, resume, stop, or abort a queue safely"
       - Wait for the queue to drain and inspect its state
+      - Throttle a faxios client with the dynamic-throttled-queue/faxios plugin
     reference_candidates:
       - topic: rate strategies and adjustment timing
         reason: linear/aimd formulas, custom strategy contract, interval vs settled windows
@@ -51,7 +53,27 @@ skills:
         reason: five states with distinct pending/active/enqueue rules and cooldown interactions
       - topic: state and idle
         reason: thirteen getState fields and waitForIdle edge cases
+      - topic: faxios plugin
+        reason: install order after retry, shared-queue settings, stream slots, timeout, Retry-After options, error codes
     failure_modes:
+      - mistake: Installing the faxios plugin before retry, or giving its queue retries
+        mechanism: Before retry, the retry backoff holds a queue slot; a queue with retry > 0 retries each faxios attempt again.
+        wrong_pattern: |
+          faxios.create().use(dynamicThrottle({ queue })).use(retry());
+        correct_pattern: |
+          faxios.create().use(retry({ respectRetryAfter: false })).use(dynamicThrottle({ queue })); // queue: retry 0, isRateLimited, maxCooldown
+        source: src/faxios.ts; README.md faxios plugin
+        priority: HIGH
+        status: active
+      - mistake: Returning a cooldown from cooldownFrom for every response
+        mechanism: cooldownFrom runs on successful responses too, and any valid number starts a cooldown, so a vendor reset header sent on every response pauses the client after each success.
+        wrong_pattern: |
+          cooldownFrom: (response) => Number(response.headers.get("x-ratelimit-reset")) * 1000 - Date.now()
+        correct_pattern: |
+          cooldownFrom: (response) => response.status === 429 || response.headers.get("x-ratelimit-remaining") === "0" ? Number(response.headers.get("x-ratelimit-reset")) * 1000 - Date.now() : undefined
+        source: src/faxios.ts DynamicThrottleOptions.cooldownFrom; skills/configure-throttled-queue/references/faxios.md
+        priority: MEDIUM
+        status: active
       - mistake: Ignoring the abort signal in callbacks
         mechanism: Cancellation is cooperative, so abort() and cancel() cannot stop I/O that ignores signal.
         wrong_pattern: |
@@ -151,3 +173,11 @@ gaps:
     question: Should the v2 to v3 migration (pending property removed, RateFailureOutcome renamed to FailureOutcome) get its own skill?
     context: The README "Migration" section has two bullets each for v1 and v2; not assessed as an independent task.
     status: open
+  - skill: configure-throttled-queue
+    question: Does the faxios plugin guidance hold on faxios 0.3.0?
+    context: Resolved 2026-10-16. Checked with 0.3.0; the peer range is ^0.2.0 || ^0.3.0. On 0.3, timeout covers time in the queue (a timed-out queued request is never sent); the reference's timeout section now covers both lines.
+    status: resolved
+  - skill: configure-throttled-queue
+    question: Should a fresh or idle queue start its first item at once (issue #93)?
+    context: "Resolved 2026-10-22: a new or drained queue starts at once, paced from its last real start; stop() restarts, pause/resume, backoffs with work waiting and cooldowns keep one spacing. Tested in src/__tests__/dynamic-throttled-queue.test.ts (first start). The faxios timeout guidance no longer needs a first-start caveat."
+    status: resolved

@@ -4,6 +4,7 @@ trustPolicy: no-downgrade
 trustPolicyIgnoreAfter: 43200
 minimumReleaseAgeExclude:
   - '@gingacodemonkey/config'
+  - '@gcmdev/faxios'
 strictDepBuilds: true
 allowBuilds:
   'esbuild': true

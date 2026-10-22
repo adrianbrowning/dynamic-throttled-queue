@@ -14,6 +14,9 @@ importers:
       '@commitlint/config-conventional':
         specifier: 21.2.0
         version: 21.2.0
+      '@gcmdev/faxios':
+        specifier: 0.3.0
+        version: 0.3.0
       '@gingacodemonkey/config':
         specifier: ^0.1.0
         version: 0.1.0(@commitlint/cli@21.2.3(@types/node@24.13.3)(conventional-commits-parser@7.1.2)(typescript@6.0.3))(@commitlint/config-conventional@21.2.0)(@typescript-eslint/eslint-plugin@8.71.0(@typescript-eslint/parser@8.71.0(eslint@9.39.5(jiti@2.7.0))(typescript@6.0.3))(eslint@9.39.5(jiti@2.7.0))(typescript@6.0.3))(@varlock/bumpy@1.18.1)(eslint@9.39.5(jiti@2.7.0))(husky@9.1.7)(jscpd@5.4.0)(knip@6.26.0)(lint-staged@17.6.0)(typescript@6.0.3)(vitest@5.0.2(@types/node@24.13.3)(vite@7.3.6(@types/node@24.13.3)(jiti@2.7.0)(yaml@2.9.1)))
@@ -569,6 +572,10 @@ packages:
   '@eslint/plugin-kit@0.7.3':
     resolution: {integrity: sha512-IkO+/KEUvwbVpiURZg+P7zF74z5Jxe0UgJxVni+RtoHQ6IZieXaO02kmadomap/q+l6bc/jdPGGqTjhuZnuz1Q==}
     engines: {node: ^20.19.0 || ^22.13.0 || >=24}
+
+  '@gcmdev/faxios@0.3.0':
+    resolution: {integrity: sha512-2CnDdQ9o7DQU7g3yaZNV2YK81xnw8xw17J3rCdZm3+XPzKRK6CK05OZ/sZl3NQf779lsa8ctXM4RGq61UGRFjw==}
+    engines: {node: '>=24.0.0'}
 
   '@gingacodemonkey/config@0.1.0':
     resolution: {integrity: sha512-2u65uLpPGNtJCkZ9jsNCZWZD/hmmFJVsLmsehlXeWnzPaQ100FJAE2EFNETYQozoVFtIcSEZcWzVjSWR6mb0Dg==}
@@ -3656,6 +3663,8 @@ snapshots:
     dependencies:
       '@eslint/core': 1.2.1
       levn: 0.4.1
+
+  '@gcmdev/faxios@0.3.0': {}
 
   '@gingacodemonkey/config@0.1.0(@commitlint/cli@21.2.3(@types/node@24.13.3)(conventional-commits-parser@7.1.2)(typescript@6.0.3))(@commitlint/config-conventional@21.2.0)(@typescript-eslint/eslint-plugin@8.71.0(@typescript-eslint/parser@8.71.0(eslint@9.39.5(jiti@2.7.0))(typescript@6.0.3))(eslint@9.39.5(jiti@2.7.0))(typescript@6.0.3))(@varlock/bumpy@1.18.1)(eslint@9.39.5(jiti@2.7.0))(husky@9.1.7)(jscpd@5.4.0)(knip@6.26.0)(lint-staged@17.6.0)(typescript@6.0.3)(vitest@5.0.2(@types/node@24.13.3)(vite@7.3.6(@types/node@24.13.3)(jiti@2.7.0)(yaml@2.9.1)))':
     dependencies:

@@ -142,7 +142,10 @@ type TimingContext = {
   record: SettlementReporter;
   /** Makes one rate decision and returns whether starts must be held for a backoff. */
   decide: () => boolean;
-  /** Opens starts with fresh pacing: the next start is due one spacing from now. */
+  /**
+   * Opens starts. After the work drained (or before the first start), the next start is due once one
+   * spacing has passed since the last start, at once if it has. Otherwise it is due one spacing from now.
+   */
   resume: () => void;
   /** Holds starts; `deferBy` keeps the next start due `deferBy` ms beyond one spacing from now. */
   hold: (deferBy?: number) => void;
@@ -314,7 +317,12 @@ export function createAdaptiveRate(options: AdaptiveRateOptions, host: AdaptiveR
   let wasBackedOff = false;
   let ignoringSettlements = false;
   let pacing: Pacing = "idle";
-  let lastStart = 0;
+  let lastStart = -Infinity;
+  /**
+   * Pacing is idle because the work drained (or the module never started). The shared `idle()` sets it;
+   * `stop()`, `pause()` and `suspend()` (a cooldown) clear it right after, so they keep fresh pacing.
+   */
+  let drained = true;
   let startTimer: ReturnType<typeof setTimeout> | undefined;
   let dispatching = false;
   let batchStarts = 0;
@@ -408,8 +416,11 @@ export function createAdaptiveRate(options: AdaptiveRateOptions, host: AdaptiveR
     decide,
     resume() {
       pacing = "open";
-      lastStart = Date.now();
-      scheduleStart(spacing());
+      // After a drain, pace from the last real start; otherwise (a cooldown, backoff, pause or a settled
+      // window's decision) the next start is due one spacing from now, as if one had just happened.
+      if (!drained) lastStart = Date.now();
+      drained = false;
+      scheduleStart(Math.max(0, lastStart + spacing() - Date.now()));
     },
     hold(deferBy) {
       pacing = "held";
@@ -422,6 +433,7 @@ export function createAdaptiveRate(options: AdaptiveRateOptions, host: AdaptiveR
     idle() {
       wasBackedOff = false;
       pacing = "idle";
+      drained = true;
       cancelStart();
     },
   };
@@ -451,15 +463,18 @@ export function createAdaptiveRate(options: AdaptiveRateOptions, host: AdaptiveR
     stop() {
       ignoringSettlements = false;
       timing.stop();
+      drained = false;
     },
     pause() {
       timing.stop();
+      drained = false;
       errorCount = 0;
       ignoringSettlements = true;
     },
     suspend() {
       ignoringSettlements = false;
       timing.suspend();
+      drained = false;
     },
     started() {
       if (dispatching && batchStarts++ === 0) lastStart = Date.now();

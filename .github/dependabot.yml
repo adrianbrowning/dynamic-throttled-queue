@@ -7,9 +7,14 @@ updates:
     # Matches pnpm's minimumReleaseAge (4320 minutes) in pnpm-workspace.yaml.
     cooldown:
       default-days: 3
-    # Today every dependency is a devDependency, so updates don't change the published package.
+    # Every dependency is a devDependency, so updates don't change the published package. The
+    # exception is @gcmdev/faxios, which is also an optional peer: a new faxios minor (0.x) must
+    # come with a deliberate peer-range change, so only its patches update here.
     # If a runtime dependency is added, remove `no-bump` from its update PRs and add a bump file.
     labels: [no-bump]
+    ignore:
+      - dependency-name: "@gcmdev/faxios"
+        update-types: [ "version-update:semver-minor", "version-update:semver-major" ]
     commit-message:
       prefix: chore
       include: scope

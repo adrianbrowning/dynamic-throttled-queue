@@ -32,8 +32,9 @@ skills:
       (createThrottledQueue): pacing calls to a rate-limited API, choosing
       min_rpi/max_rpi/interval/concurrency, adapting the rate to errors or HTTP
       429s, retrying failed work, honoring Retry-After, getting results back
-      with submit() and cancelling them, or pausing, stopping, aborting, and
-      draining the queue.
+      with submit() and cancelling them, pausing, stopping, aborting, and
+      draining the queue, or throttling a faxios HTTP client with the
+      dynamic-throttled-queue/faxios plugin.
     sources:
       - src/*.ts
       - src/__tests__/*.test.ts

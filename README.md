@@ -66,9 +66,11 @@ for (let i = 0; i < 100; i++) {
 }
 ```
 
+A new queue, or one whose work has drained, starts the next callback at once. Later starts are paced one spacing (`interval / rate`) apart; work that arrives sooner than one spacing after the last start waits only the rest of that spacing. After `stop()` and a restart, `pause()` and `resume()`, a backoff that ends with work waiting, or a cooldown (even one that ended while nothing was queued), the next start is due one spacing later.
+
 ### Burst instead of spacing
 
-`evenly_spaced: false` starts up to `min_rpi` callbacks together at the start of each interval.
+`evenly_spaced: false` starts up to `min_rpi` callbacks together, then the next batch one `interval` later. A new or drained queue starts its first batch at once.
 
 ```ts
 const throttle = createThrottledQueue({ min_rpi: 10, interval: 1000, evenly_spaced: false });
@@ -311,6 +313,31 @@ const { rate, pending, active, state, failed, retried } = throttle.getState();
 console.log({ rate, pending, active, state, failed, retried });
 ```
 
+## faxios plugin
+
+`dynamic-throttled-queue/faxios` throttles a [faxios](https://github.com/adrianbrowning/faxios) client. It needs `@gcmdev/faxios` 0.2.x or 0.3.x, which is an optional peer dependency. With npm, a `@gcmdev/faxios` outside those versions anywhere in your dependency tree fails the install with `ERESOLVE`, even if you don't import `dynamic-throttled-queue/faxios`.
+
+```ts
+import faxios from "@gcmdev/faxios";
+import { retry } from "@gcmdev/faxios/plugins/retry";
+import { dynamicThrottle } from "dynamic-throttled-queue/faxios";
+
+const api = faxios
+  .create({ baseURL: "https://api.example.com" })
+  .use(retry({ respectRetryAfter: false }))
+  .use(dynamicThrottle({ min_rpi: 5, max_rpi: 20, interval: 1_000, concurrency: 4 }));
+```
+
+`dynamicThrottle` accepts queue options (it creates one queue for the client) or an existing queue: `dynamicThrottle({ queue })`. The two forms can't be combined: TypeScript rejects queue options next to `queue`. A queue the plugin creates never retries (`retry: 0`), uses `isRateLimited` as its `rateOutcomeClassifier`, and defaults `maxCooldown` to 300 000 ms (5 minutes). If you pass your own queue, set those yourself.
+
+- **Install order.** If you use faxios's `retry` plugin, `.use()` it before `dynamicThrottle`, with `retry({ respectRetryAfter: false })`. Then each attempt takes its own queue slot, the retry backoff waits outside the queue, and only the queue honours `Retry-After`; a 503's `Retry-After` is then ignored unless you pass `retryAfterOn503: true`. No other `retry` setup is supported.
+- **Concurrency covers the whole request.** The slot is held until faxios has read the body. For `responseType: "stream"`, the slot is held until the stream ends, errors, or is cancelled, or until the request or queue aborts. If a stream is never read or cancelled, it keeps its slot, so drain or cancel it. A stream request that rejects (for example a 4xx or 5xx) frees its slot at once; if `error.response.data` is a stream, read or cancel it too.
+- **Capacity.** By default, only a 429 response reduces the rate. 401, 403, other 4xx responses and cancellations do not. If you widen `validateStatus` so that a 429 resolves, the cooldown still applies, but the rate does not drop.
+- **`Retry-After`** accepts delay-seconds and the three HTTP-date forms in RFC 9110: IMF-fixdate, RFC 850 and asctime. A past date gives `0`. A malformed value is ignored. The queue's `maxCooldown` clamps long values. A cooldown pauses the whole queue, for every origin the client calls. Only a 429's `Retry-After` sets a cooldown, unless you pass `retryAfterOn503: true`.
+- **`cooldownFrom: (response) => ms | undefined`** reads vendor headers. It runs for every response, including successful ones, and any number it returns starts a cooldown, so return `undefined` unless the response is rate-limited. A finite number >= 0 takes priority over `Retry-After`. `undefined`, `NaN`, a negative number, `Infinity` or a throw falls back to `Retry-After`.
+- **Errors.** If the caller aborts, or `queue.abort()` runs, the request rejects with a `CanceledError` (`ERR_CANCELED`). When the request was still queued, it is never sent. After a stream response is delivered, `queue.abort()` errors the stream with the abort's `AbortError`. When the queue refuses to admit the request (the queue was aborted or has failed, or `maxQueueSize` is reached), or fails while the request is queued or in flight, the request rejects with a `FaxiosError` with code `ERR_THROTTLE_REJECTED`, whose `cause` is the queue's error.
+- **Timeout.** On faxios 0.3, `timeout` covers the whole request, including time in the queue: a request that times out while queued rejects with `ETIMEDOUT` and is never sent, so set `timeout` to include the longest queue wait you accept. `retry({ attemptTimeout })` also includes each try's wait in the queue. On faxios 0.2, faxios starts the `timeout` timer when it dispatches the request, so time in the queue does not count.
+
 ## Options
 
 ### Rate
@@ -437,7 +464,7 @@ Strategies must return a finite integer `nextRate` and a boolean `shouldBackOff`
 
 `cooldownFor(delay)` stops the queue from starting anything new for `delay` milliseconds. See [Honour `Retry-After` on HTTP 429](#honour-retry-after-on-http-429) for a full example.
 
-- **Scheduling.** Pending work, newly queued work, and retries are kept and do not start. Active callbacks keep running and settle normally. When the cooldown ends, starts resume without new work being queued; the first one is due one spacing later, as after any fresh start. Delayed retries keep counting down and join the queue when due. While nothing is queued, the cooldown holds no timer, so it does not keep a Node.js process alive after `waitForIdle()` resolves.
+- **Scheduling.** Pending work, newly queued work, and retries are kept and do not start. Active callbacks keep running and settle normally. When the cooldown ends, starts resume without new work being queued; the first one is due one spacing later. Delayed retries keep counting down and join the queue when due. While nothing is queued, the cooldown holds no timer, so it does not keep a Node.js process alive after `waitForIdle()` resolves.
 - **Overlaps.** Each call asks for "nothing before now + `delay`". A later deadline replaces the current one; an earlier one is ignored. Two 60-second hints that arrive together give one 60-second cooldown, not two.
 - **Validation.** `NaN`, negative, and infinite delays throw a `RangeError` in every lifecycle state, including after `abort()` or a strategy failure. Delays above `maxCooldown` are clamped to it. `0` does nothing.
 - **Lifecycle.** `pause()` and cooldown are separate: a cooldown keeps elapsing while paused, its end does not resume a paused queue, and `resume()` does not end it. `stop()` clears the cooldown timer but keeps the deadline, so the work that restarts the queue still waits for it. `abort()` and a strategy failure clear the cooldown; later valid calls do nothing.

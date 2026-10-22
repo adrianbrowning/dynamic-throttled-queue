@@ -46,8 +46,8 @@ function slowBody(chunks: number, gap: number) {
   });
 }
 
-// Real timers on purpose: these run faxios's fetch adapter and web streams end to end, and the
-// queue paces with performance.now(); short real waits keep that path unfaked.
+// Real timers on purpose: these run faxios's fetch adapter and web streams end to end. The queue
+// paces with Date.now() and times cooldowns with performance.now(); short real waits leave both unfaked.
 async function tick(ms = 0) {
   const { promise, resolve } = Promise.withResolvers<void>();
   setTimeout(resolve, ms);
@@ -209,7 +209,8 @@ describe("dynamicThrottle", () => {
     // /a answers with `code`; the rest wait, so work stays queued and the queue decides each interval.
     const { fetch, calls } = fakeFetch(url => (url.endsWith("/a") ? status(code) : undefined));
     const rateStrategy = vi.fn(linear);
-    const api = client(fetch, { min_rpi: 1, max_rpi: 10, interval: 50, concurrency: 2, rateStrategy });
+    const queue = ownQueue({ min_rpi: 1, max_rpi: 10, interval: 50, concurrency: 2, rateStrategy, retry: 0, rateOutcomeClassifier: isRateLimited });
+    const api = client(fetch, { queue });
     const [ a, ...rest ] = [ "/a", "/b", "/c", "/d" ].map(async path => settled(api.get(path)));
     expect(await a).toMatchObject({ error: { response: { status: code } } });
     await until(() => rateStrategy.mock.calls.length > 0, "a rate decision");
@@ -218,10 +219,11 @@ describe("dynamicThrottle", () => {
     await Promise.all(rest);
   });
 
-  it("does not reduce capacity on cancellation (end to end; the queue ignores cancellations too)", async () => {
+  it("does not reduce capacity on cancellation, with isRateLimited as the classifier", async () => {
     const { fetch, calls } = fakeFetch();
     const rateStrategy = vi.fn(linear);
-    const api = client(fetch, { min_rpi: 1, max_rpi: 10, interval: 50, concurrency: 2, rateStrategy });
+    const queue = ownQueue({ min_rpi: 1, max_rpi: 10, interval: 50, concurrency: 2, rateStrategy, retry: 0, rateOutcomeClassifier: isRateLimited });
+    const api = client(fetch, { queue });
     const controller = new AbortController();
     const a = settled(api.get("/a", { signal: controller.signal }));
     const rest = [ "/b", "/c", "/d" ].map(async path => settled(api.get(path)));
@@ -271,12 +273,14 @@ describe("dynamicThrottle", () => {
       return queue.getState().cooldownRemaining;
     }
 
-    it.each<[string, () => Response, Pick<DynamicThrottleOptions, "retryAfterOn503">, number]>([
-      [ "a 429 with delay-seconds", () => status(429, { "retry-after": "2" }), {}, 1900 ],
-      [ "a 429 with an HTTP-date", () => status(429, { "retry-after": new Date(Date.now() + 5000).toUTCString() }), {}, 3500 ],
-      [ "a 503 when retryAfterOn503 is set", () => status(503, { "retry-after": "2" }), { retryAfterOn503: true }, 1900 ],
-    ])("sets a cooldown for %s", async (_name, response, options, atLeast) => {
-      expect(await cooldownAfter(response, options)).toBeGreaterThan(atLeast);
+    it.each<[string, () => Response, Pick<DynamicThrottleOptions, "retryAfterOn503">, number, number]>([
+      [ "a 429 with delay-seconds", () => status(429, { "retry-after": "2" }), {}, 1900, 2000 ],
+      [ "a 429 with an HTTP-date", () => status(429, { "retry-after": new Date(Date.now() + 5000).toUTCString() }), {}, 3500, 5000 ],
+      [ "a 503 when retryAfterOn503 is set", () => status(503, { "retry-after": "2" }), { retryAfterOn503: true }, 1900, 2000 ],
+    ])("sets a cooldown for %s", async (_name, response, options, atLeast, atMost) => {
+      const ms = await cooldownAfter(response, options);
+      expect(ms).toBeGreaterThan(atLeast);
+      expect(ms).toBeLessThanOrEqual(atMost);
     });
 
     it.each<[string, () => Response, Pick<DynamicThrottleOptions, "retryAfterOn503">]>([
@@ -302,26 +306,35 @@ describe("dynamicThrottle", () => {
       expect(await cooldownAfter(() => status(200, { "x-ratelimit-reset": "3" }), { cooldownFrom })).toBeGreaterThan(2900);
     });
 
-    it.each<[string, () => Response, () => number | undefined, number]>([
-      [ "a number wins over Retry-After", () => status(429, { "retry-after": "1" }), () => 3000, 2900 ],
-      [ "undefined falls back to Retry-After", () => status(429, { "retry-after": "2" }), () => undefined, 1900 ],
-      [ "NaN falls back to Retry-After", () => status(429, { "retry-after": "2" }), () => NaN, 1900 ],
-      [ "a negative number falls back to Retry-After", () => status(429, { "retry-after": "2" }), () => -1, 1900 ],
-      [ "Infinity falls back to Retry-After", () => status(429, { "retry-after": "2" }), () => Infinity, 1900 ],
-      [ "a throw falls back to Retry-After", () => status(429, { "retry-after": "2" }), () => { throw new Error("bad header"); }, 1900 ],
-      [ "it also reads a rejected non-429 response", () => status(500), () => 3000, 2900 ],
-    ])("cooldownFrom: %s", async (_name, response, cooldownFrom, atLeast) => {
-      expect(await cooldownAfter(response, { cooldownFrom })).toBeGreaterThan(atLeast);
+    it.each<[string, () => Response, () => number | undefined, number, number]>([
+      [ "a longer number wins over Retry-After", () => status(429, { "retry-after": "1" }), () => 3000, 2900, 3000 ],
+      [ "a shorter number wins over Retry-After", () => status(429, { "retry-after": "5" }), () => 1000, 900, 1000 ],
+      [ "0 wins over Retry-After", () => status(429, { "retry-after": "5" }), () => 0, 0, 0 ],
+      [ "undefined falls back to Retry-After", () => status(429, { "retry-after": "2" }), () => undefined, 1900, 2000 ],
+      [ "NaN falls back to Retry-After", () => status(429, { "retry-after": "2" }), () => NaN, 1900, 2000 ],
+      [ "a negative number falls back to Retry-After", () => status(429, { "retry-after": "2" }), () => -1, 1900, 2000 ],
+      [ "Infinity falls back to Retry-After", () => status(429, { "retry-after": "2" }), () => Infinity, 1900, 2000 ],
+      [ "a throw falls back to Retry-After", () => status(429, { "retry-after": "2" }), () => { throw new Error("bad header"); }, 1900, 2000 ],
+      [ "it also reads a rejected non-429 response", () => status(500), () => 3000, 2900, 3000 ],
+    ])("cooldownFrom: %s", async (_name, response, cooldownFrom, atLeast, atMost) => {
+      const ms = await cooldownAfter(response, { cooldownFrom });
+      expect(ms).toBeGreaterThanOrEqual(atLeast);
+      expect(ms).toBeLessThanOrEqual(atMost);
     });
 
-    it("keeps a successful response and the original error when cooldownFrom is invalid or throws", async () => {
+    const throwing = () => { throw new Error("bad header"); };
+    it.each<[string, () => number]>([
+      [ "returns NaN", () => NaN ],
+      [ "throws", throwing ],
+    ])("keeps a successful response when cooldownFrom %s", async (_name, cooldownFrom) => {
       const { fetch } = fakeFetch(() => status(200));
-      for (const cooldownFrom of [ () => NaN, () => { throw new Error("bad header"); } ]) {
-        await expect(client(fetch, { min_rpi: 100, interval: 1000, cooldownFrom }).get("/a")).resolves.toMatchObject({ status: 200 });
-      }
-      const limited = fakeFetch(() => status(429));
-      const throwing = () => { throw new Error("bad header"); };
-      await expect(client(limited.fetch, { min_rpi: 100, interval: 1000, cooldownFrom: throwing }).get("/a"))
+      await expect(client(fetch, { queue: ownQueue({ min_rpi: 100, interval: 1000, retry: 0 }), cooldownFrom }).get("/a"))
+        .resolves.toMatchObject({ status: 200 });
+    });
+
+    it("keeps the original FaxiosError of a 429 when cooldownFrom throws", async () => {
+      const { fetch } = fakeFetch(() => status(429));
+      await expect(client(fetch, { queue: ownQueue({ min_rpi: 100, interval: 1000, retry: 0 }), cooldownFrom: throwing }).get("/a"))
         .rejects.toMatchObject({ isFaxiosError: true, response: { status: 429 } });
     });
 

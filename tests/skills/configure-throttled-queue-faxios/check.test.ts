@@ -30,13 +30,13 @@ function fakeFetch(script: Record<string, Array<number | [number, Record<string,
 
 // Real timers on purpose for the behaviour steps: faxios's fetch adapter runs end to end with no
 // clock control. The pacing steps below switch to fake timers, as they need many seconds of queue time.
-async function until(check: () => boolean) {
+async function until(check: () => boolean, waitingFor: string) {
   for (let i = 0; i < 400 && !check(); i++) {
     const { promise, resolve } = Promise.withResolvers<void>();
     setTimeout(resolve, 5);
     await promise;
   }
-  expect(check()).toBe(true);
+  expect(check(), `timed out waiting for ${waitingFor}`).toBe(true);
 }
 
 /** A fetch that answers every request with `status` after `latency` ms, recording starts and requests in flight. */
@@ -96,7 +96,7 @@ async function assertTaskBehavior(factory: Factory) {
   const { api: backoffApi } = factory(backoff.fetch);
   const a = backoffApi.get("/a");
   const b = backoffApi.get("/b");
-  await until(() => backoff.calls.length >= 2);
+  await until(() => backoff.calls.length >= 2, "both requests to start");
   expect(backoff.calls.map(call => call.path).slice(0, 2)).toEqual([ "/a", "/b" ]);
   backoff.calls[1]!.respond(new Response("{}", { status: 200 }));
   await expect(Promise.all([ a, b ])).resolves.toHaveLength(2);
@@ -122,7 +122,7 @@ async function assertTaskBehavior(factory: Factory) {
   const { api, shutdown } = factory(slow.fetch);
   const inFlight = api.get("/s").catch((error: unknown) => error);
   const queued = api.get("/q").catch((error: unknown) => error);
-  await until(() => slow.calls.length === 1);
+  await until(() => slow.calls.length === 1, "the first request to start");
   shutdown();
   expect(isCancel(await inFlight)).toBe(true);
   expect(isCancel(await queued)).toBe(true);

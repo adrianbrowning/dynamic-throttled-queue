@@ -6,8 +6,9 @@ import type { FailureOutcome, ThrottleHandle, ThrottleOptions } from "./dynamic-
 import { parseRetryAfter } from "./retry-after.ts";
 
 /**
- * The `FaxiosError` code of a request the queue refused to admit: the queue was aborted or has
- * failed, or `maxQueueSize` was reached.
+ * The `FaxiosError` code of a request the queue refused to admit (the queue was aborted or has
+ * failed, or `maxQueueSize` was reached), or one the queue failed while it was queued or in flight.
+ * `cause` is the queue's error.
  */
 export const ERR_THROTTLE_REJECTED = "ERR_THROTTLE_REJECTED";
 

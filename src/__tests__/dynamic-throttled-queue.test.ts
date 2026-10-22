@@ -1778,4 +1778,33 @@ describe("createThrottledQueue", () => {
       expect(secondCount).toBe(1); // second waiter resolved exactly once for the new work
     });
   });
+
+  describe("first start", () => {
+    it.each([
+      [ "one spacing", { min_rpi: 10, interval: 1000 }, 100 ],
+      [ "a full interval with evenly_spaced: false", { min_rpi: 10, interval: 1000, evenly_spaced: false }, 1000 ],
+    ])("a fresh or idle queue waits %s before its first start", async (_name, options, wait) => {
+      const q = createThrottledQueue(options);
+      const begin = Date.now();
+      const starts: Array<number> = [];
+      const add = () => q(() => { starts.push(Date.now() - begin); });
+      add();
+      await vi.advanceTimersByTimeAsync(wait - 1);
+      expect(starts).toEqual([]);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(starts).toEqual([ wait ]);
+
+      // Drained, then idle for several intervals: the next start again waits from when work arrives.
+      await q.waitForIdle();
+      expect(q.getState()).toMatchObject({ pending: 0, active: 0 });
+      await vi.advanceTimersByTimeAsync(5000);
+      const idleAt = Date.now() - begin;
+      add();
+      await vi.advanceTimersByTimeAsync(wait - 1);
+      expect(starts).toHaveLength(1);
+      await vi.advanceTimersByTimeAsync(1);
+      expect(starts).toEqual([ wait, idleAt + wait ]);
+      q.abort();
+    });
+  });
 });

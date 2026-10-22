@@ -177,3 +177,7 @@ gaps:
     question: Does the faxios plugin guidance hold on faxios 0.3.0?
     context: Resolved 2026-10-16. Checked with 0.3.0; the peer range is ^0.2.0 || ^0.3.0. On 0.3, timeout covers time in the queue (a timed-out queued request is never sent); the reference's timeout section now covers both lines.
     status: resolved
+  - skill: configure-throttled-queue
+    question: Should a fresh or idle queue start its first item at once (issue #93)?
+    context: Resolved 2026-10-22. Kept as is and documented, because an immediate first start would change existing timing (breaking). The README and references/faxios.md §6 say the first start waits one spacing (a full interval with evenly_spaced false), and that on faxios 0.3 the wait counts against timeout.
+    status: resolved

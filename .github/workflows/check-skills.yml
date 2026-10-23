@@ -33,7 +33,7 @@ jobs:
     if: github.event_name == 'pull_request'
     permissions:
       contents: read
-    uses: TanStack/intent/.github/workflows/check-skills.yml@ab9877c50888913e45afea92a0a87169de9c7d84 # v0.5.0
+    uses: TanStack/intent/.github/workflows/check-skills.yml@248c6f02605b12f9a31be069fabd945361f701bf # v0.5.0
     with:
       artifacts: 'skills/_artifacts'
       repair: true
@@ -44,7 +44,7 @@ jobs:
     if: github.event_name != 'pull_request'
     permissions:
       contents: read
-    uses: TanStack/intent/.github/workflows/review-skills.yml@ab9877c50888913e45afea92a0a87169de9c7d84 # v0.5.0
+    uses: TanStack/intent/.github/workflows/review-skills.yml@248c6f02605b12f9a31be069fabd945361f701bf # v0.5.0
     with:
       package-label: 'dynamic-throttled-queue'
       node-version: '26'
@@ -55,4 +55,4 @@ jobs:
     permissions:
       contents: write
       pull-requests: write
-    uses: TanStack/intent/.github/workflows/publish-skill-review.yml@ab9877c50888913e45afea92a0a87169de9c7d84 # v0.5.0
+    uses: TanStack/intent/.github/workflows/publish-skill-review.yml@248c6f02605b12f9a31be069fabd945361f701bf # v0.5.0
